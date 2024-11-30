@@ -1,0 +1,3 @@
+[workspace]
+members = ["knaster_core", "knaster_primitives", "knaster_graph"]
+resolver = "2"

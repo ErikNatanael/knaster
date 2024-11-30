@@ -1,0 +1,17 @@
+[package]
+name = "knaster_primitives"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+# Enables core::alloc for heap allocated datastructures
+alloc = []
+# Use libm for floating point maths, incompatible with the std feature
+libm = ["num-traits/libm"]
+# Use std for floating point maths, incompatible with the libm feature
+std = ["num-traits/std"]
+deafault = ["alloc"]
+
+[dependencies]
+num-traits = { version = "0.2", default-features = false, features = ["libm"] }
+numeric-array = { version = "0.6.1", default-features = false }
