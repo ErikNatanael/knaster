@@ -1,17 +1,35 @@
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
+// ^ enables no_std if the `std` features isn't enabled
+
 //! # Knaster Core
 //!
 //! Knaster Core contains everything you need to implement the Knaster traits for your own types.
 //!
 //! ## Re-exports
 //! knaster_core re-exports all of knaster_primitives. This makes it easier to keep knaster_primitives versions consistent among implementors of the traits in knaster_core and the graph in knaster_graph.
+//!
+//! # Features
+//!
+//! - `alloc`: Enables alloc in `knaster_primitives` and heap based data structures
+#[cfg(feature = "alloc")]
+extern crate alloc;
 
+// Switches between std and core based on features. This reduces boilerplate when importing.
+mod core {
+    #[cfg(not(feature = "std"))]
+    pub use core::*;
+    #[cfg(feature = "std")]
+    pub use std::*;
+}
+
+pub mod dsp;
 mod gen;
 mod parameters;
 pub mod wrappers;
 
 pub use gen::*;
 pub use knaster_primitives::*;
+pub use parameters::*;
 
 /// Rate determines the speed at which something is running. Something running
 /// at block rate is only calculated once per block, whereas something running

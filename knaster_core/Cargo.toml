@@ -4,8 +4,21 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
+default = ["std"]
+# Enables the alloc in no_std. `alloc` does nothing if `std` is enabled.
 alloc = ["knaster_primitives/alloc"]
+# Enables the standard library. `alloc` does nothing if `std` is enabled.
+std = ["knaster_primitives/std"]
 
 [dependencies]
 knaster_primitives = { path = "../knaster_primitives" }
 thiserror = { version = "2.0.3", default-features = false }
+
+[dev-dependencies]
+anyhow = "1.0.94"
+
+
+[[example]]
+name = "implement_gen"
+path = "examples/implement_gen.rs"
+required-features = ["alloc"]

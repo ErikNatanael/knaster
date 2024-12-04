@@ -1,5 +1,6 @@
-use core::ops::{
-    Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign,
+use crate::core::{
+    f32, f64,
+    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign},
 };
 
 pub trait Float:
@@ -9,6 +10,7 @@ pub trait Float:
     + Sub
     + Mul
     + Div
+    + Div<Self>
     + AddAssign
     + SubAssign
     + MulAssign
@@ -21,6 +23,8 @@ pub trait Float:
 {
     const ZERO: Self;
     const ONE: Self;
+    const PI: Self;
+    const TAU: Self;
     fn from_usize(i: usize) -> Self;
     fn new<F: Float>(v: F) -> Self;
     fn to_f32(self) -> f32;
@@ -29,6 +33,8 @@ pub trait Float:
 impl Float for f32 {
     const ZERO: Self = 0.;
     const ONE: Self = 1.0;
+    const PI: Self = f32::consts::PI;
+    const TAU: Self = f32::consts::TAU;
 
     fn from_usize(i: usize) -> Self {
         i as Self
@@ -50,6 +56,8 @@ impl Float for f32 {
 impl Float for f64 {
     const ZERO: Self = 0.;
     const ONE: Self = 1.0;
+    const PI: Self = f64::consts::PI;
+    const TAU: Self = f64::consts::TAU;
 
     fn from_usize(i: usize) -> Self {
         i as Self

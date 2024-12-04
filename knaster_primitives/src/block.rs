@@ -1,8 +1,8 @@
+use crate::core::{marker::PhantomData, ops::Mul, slice};
 use crate::{float::Float, Size};
-use core::{marker::PhantomData, ops::Mul, slice};
 
 use numeric_array::{typenum::Prod, NumericArray};
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "std"))]
 pub use vec_block::VecBlock;
 
 /// Trait which corresponds to some block of data with the correct sample type.
@@ -367,13 +367,19 @@ pub fn empty_block<F: Float>() -> EmptyBlock<F> {
     EmptyBlock::new()
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "std"))]
 mod vec_block {
-    use alloc::vec;
-    use alloc::vec::Vec;
-
     use super::Block;
     use crate::Float;
+    #[cfg(all(feature = "alloc", not(feature = "std")))]
+    use alloc::vec;
+    #[cfg(all(feature = "alloc", not(feature = "std")))]
+    use alloc::vec::Vec;
+
+    #[cfg(feature = "std")]
+    use std::vec;
+    #[cfg(feature = "std")]
+    use std::vec::Vec;
 
     /// A Block backed by a Vec heap allocation
     pub struct VecBlock<F> {

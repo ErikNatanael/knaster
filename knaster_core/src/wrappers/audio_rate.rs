@@ -1,4 +1,4 @@
-use core::{marker::PhantomData, ops::Add};
+use crate::core::{marker::PhantomData, ops::Add};
 
 use knaster_primitives::{
     numeric_array::NumericArray,

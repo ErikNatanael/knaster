@@ -1,3 +1,5 @@
+pub mod osc;
+
 use knaster_primitives::{typenum::*, Block, BlockRead, Float, Frame, Size};
 
 /// Contains basic metadata about the context in which an audio process is

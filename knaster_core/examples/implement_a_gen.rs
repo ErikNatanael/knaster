@@ -1,15 +1,41 @@
-//! We implement a naive implementation of a cosine wave oscillator.
+//! We implement a naive implementation of a cosine wave oscillator, similar to `CosMath`
 
-use knaster_core::BlockAudioCtx;
-fn main() {
+use core::f32;
+
+use anyhow::Result;
+use knaster_core::{
+    empty_block,
+    numeric_array::NumericArray,
+    typenum::{Unsigned, U0, U1, U3},
+    AudioCtx, Block, BlockAudioCtx, Float, Frame, Gen, PFloat, Param, ParameterError,
+    ParameterRange, ParameterType, ParameterValue, Parameterable, VecBlock,
+};
+fn main() -> Result<()> {
     // Let's pretend we're running an audio backend at 48kHz with a block size of 64.
-    let ctx = BlockAudioCtx::new(48000, 64);
+    let mut ctx = BlockAudioCtx::new(48000, 64);
+    // A &mut BlockAudioCtx plays better with the `.into()` typecasting
+    let ctx = &mut ctx;
     let mut osc = Osc::new();
     // Since we own the Osc directly and it isn't wrapped in anything, we can
     // set the frequency directly:
-    osc.freq(200., ctx.sample_rate);
+    osc.freq(200., ctx.sample_rate() as f32);
     // We can also use the Parameterable trait interface
-    osc.param(ctx.into(), "freq", 200.);
+    osc.param(ctx.into(), "freq", 200.)?;
+
+    // # Generating audio
+    // We can generate frames one by one:
+    let output = osc.process(ctx.into(), [].into());
+    assert_eq!(output[0], 0.0);
+    // Or in blocks
+    let mut output_block = VecBlock::new(1, 64);
+    osc.process_block(ctx, &&empty_block(), &mut output_block);
+    assert!(
+        (output_block.read(0, 63)
+            - ((200.0 / ctx.sample_rate() as f32) * f32::consts::TAU * 64.).sin())
+        .abs()
+            < f32::EPSILON
+    );
+    Ok(())
 }
 
 pub struct Osc<F> {
@@ -44,13 +70,13 @@ impl<F: Float> Gen for Osc<F> {
     type Inputs = U0;
     type Outputs = U1;
 
-    fn init(&mut self, ctx: GraphContext) {}
+    fn init(&mut self, _ctx: &AudioCtx) {}
 
     fn process(
         &mut self,
-        _ctx: GraphContext,
-        _input: crate::frame::Frame<Self::Sample, Self::Inputs>,
-    ) -> crate::frame::Frame<Self::Sample, Self::Outputs> {
+        _ctx: &mut AudioCtx,
+        _input: Frame<Self::Sample, Self::Inputs>,
+    ) -> Frame<Self::Sample, Self::Outputs> {
         let out = (self.phase * F::from(std::f32::consts::TAU).unwrap()).sin();
         self.phase += self.phase_increment;
         if self.phase > F::ONE {
@@ -61,7 +87,7 @@ impl<F: Float> Gen for Osc<F> {
 }
 
 impl<F: Float> Parameterable<F> for Osc<F> {
-    type Parameters = typenum::U3;
+    type Parameters = U3;
 
     fn param_types() -> NumericArray<ParameterType, Self::Parameters> {
         NumericArray::from([
@@ -87,11 +113,11 @@ impl<F: Float> Parameterable<F> for Osc<F> {
         todo!()
     }
 
-    fn param_apply(&mut self, ctx: GraphContext, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: &AudioCtx, index: usize, value: ParameterValue) {
         match index {
             0 => self.freq(
                 F::from(value.float().unwrap()).unwrap(),
-                F::from(ctx.sample_rate).unwrap(),
+                F::from(ctx.sample_rate()).unwrap(),
             ),
             1 => self.phase_offset(F::from(value.float().unwrap()).unwrap()),
             2 => self.phase_offset(F::ZERO),
@@ -101,7 +127,7 @@ impl<F: Float> Parameterable<F> for Osc<F> {
 
     fn param(
         &mut self,
-        ctx: impl Into<GraphContext>,
+        ctx: &AudioCtx,
         param: impl Into<Param>,
         value: impl Into<ParameterValue>,
     ) -> Result<(), ParameterError> {
@@ -125,70 +151,5 @@ impl<F: Float> Parameterable<F> for Osc<F> {
             }
         };
         var_name
-    }
-}
-
-pub struct DecayingImpulse<F> {
-    phase: F,
-    phase_increment: F,
-}
-impl<F: Float> Default for DecayingImpulse<F> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<F: Float> DecayingImpulse<F> {
-    pub fn new() -> Self {
-        Self {
-            phase: F::ZERO,
-            phase_increment: F::ZERO,
-        }
-    }
-    pub fn freq(&mut self, freq: F, sample_rate: F) {
-        self.phase_increment = freq / sample_rate;
-    }
-}
-impl<F: Float + std::ops::AddAssign<F>> Gen for DecayingImpulse<F> {
-    type Sample = F;
-    type Inputs = U0;
-    type Outputs = U1;
-
-    fn init(&mut self, _ctx: GraphContext) {}
-
-    fn process(
-        &mut self,
-        ctx: GraphContext,
-        _input: crate::frame::Frame<Self::Sample, Self::Inputs>,
-    ) -> crate::frame::Frame<Self::Sample, Self::Outputs> {
-        self.phase -= self.phase_increment;
-        if self.phase <= F::ZERO {
-            self.phase += F::ONE;
-        }
-        NumericArray::from([self.phase * self.phase * self.phase])
-    }
-}
-impl<F: Float> Parameterable<F> for DecayingImpulse<F> {
-    type Parameters = U1;
-
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
-        NumericArray::from(["freq"])
-    }
-
-    fn param_default_values() -> NumericArray<ParameterValue, Self::Parameters> {
-        NumericArray::from([ParameterValue::Float(1.)])
-    }
-
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
-        NumericArray::from([ParameterRange::Float(0., PFloat::INFINITY)])
-    }
-
-    fn param_apply(&mut self, ctx: GraphContext, index: usize, value: ParameterValue) {
-        if index == 0 {
-            self.freq(
-                F::from(value.float().unwrap()).unwrap(),
-                F::from(ctx.sample_rate).unwrap(),
-            )
-        }
     }
 }

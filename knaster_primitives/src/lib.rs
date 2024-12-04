@@ -1,4 +1,6 @@
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
+// ^ enables no_std if the `std` features isn't enabled
+
 //! # Knaster Primitives
 //!
 //! This crate contains the building blocks for the knaster audio framework.
@@ -13,6 +15,14 @@
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
+
+// Switches between std and core based on features. This reduces boilerplate when importing.
+mod core {
+    #[cfg(not(feature = "std"))]
+    pub use core::*;
+    #[cfg(feature = "std")]
+    pub use std::*;
+}
 
 // Reexport to not make the structure part of the public API and to reduce noise in paths.
 mod block;
