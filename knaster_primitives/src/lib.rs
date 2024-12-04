@@ -19,7 +19,8 @@ mod block;
 pub use block::*;
 mod float;
 pub use float::*;
-// Reexport typenum because we need to keep it consistent within everything that touches knaster
+// Reexport typenum and numeric_array because we need to keep it consistent within everything that touches knaster
+pub use numeric_array;
 pub use numeric_array::typenum;
 
 pub trait Size: ArrayLength + Clone + Sync + Send {}
