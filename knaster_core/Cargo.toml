@@ -1,0 +1,11 @@
+[package]
+name = "knaster_core"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+alloc = ["knaster_primitives/alloc"]
+
+[dependencies]
+knaster_primitives = { path = "../knaster_primitives" }
+thiserror = { version = "2.0.3", default-features = false }
