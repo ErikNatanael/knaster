@@ -97,6 +97,11 @@ impl BlockAudioCtx {
         self.block_start_offset = 0;
         self.frames_to_process = self.block_size();
     }
+    /// Substitute the frame clock time with your own. You almost never want to
+    /// do this inside the graph.
+    pub fn set_frame_clock(&mut self, new_frame_time: u64) {
+        self.frame_clock = new_frame_time
+    }
     pub fn frame_clock(&self) -> u64 {
         self.frame_clock
     }
@@ -171,6 +176,41 @@ pub struct GenFlags {
     /// The frame at which the graph should be freed. From (including) that
     /// frame, the graph output will be 0 until it is removed.
     remove_graph_from_frame_in_block: u32,
+}
+impl GenFlags {
+    /// If the graph should be removed this returns Some(u32) where the u32 is
+    /// the frame in the current block from which the graph should output 0. The
+    /// frame number may be larger than the current block, in which case the
+    /// whole block should be output as usual.
+    pub fn remove_graph(&self) -> Option<u32> {
+        if self.remove_graph {
+            Some(self.remove_graph_from_frame_in_block)
+        } else {
+            None
+        }
+    }
+    pub fn remove_self(&self) -> bool {
+        self.remove_self
+    }
+    pub fn set_remove_self(&mut self) {
+        if self.remove_self_supported {
+            self.remove_self = true;
+        } else {
+            // TODO: report error
+        }
+    }
+    pub fn set_remove_graph(&mut self, from_frame: u32) {
+        self.remove_graph = true;
+        self.remove_graph_from_frame_in_block = from_frame;
+    }
+    pub fn clear_graph_flags(&mut self) {
+        self.remove_graph = false;
+        self.remove_graph_from_frame_in_block = u32::MAX;
+    }
+    pub fn clear_node_flags(&mut self) {
+        self.remove_self = false;
+        self.remove_self_supported = false;
+    }
 }
 impl Default for GenFlags {
     fn default() -> Self {

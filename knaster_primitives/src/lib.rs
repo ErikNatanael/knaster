@@ -12,6 +12,7 @@
 //! ## Features
 //!
 //! - `alloc`: Enables a heap based implementation of [`Block`]: [`VecBlock`]
+//! - `std`: Enables std, disabling no_std. Takes precedence over `alloc`
 
 #[cfg(feature = "alloc")]
 extern crate alloc;

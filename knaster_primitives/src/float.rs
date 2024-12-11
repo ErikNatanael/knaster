@@ -20,6 +20,7 @@ pub trait Float:
     + Rem
     + RemAssign
     + core::fmt::Debug
+    + 'static
 {
     const ZERO: Self;
     const ONE: Self;

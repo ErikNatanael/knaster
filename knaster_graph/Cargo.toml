@@ -1,0 +1,21 @@
+[package]
+name = "knaster_graph"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["std", "cpal"]
+std = ["knaster_core/std", "slotmap/std", "thiserror/std"]
+jack = ["dep:jack"]
+
+[dependencies]
+cpal = { version = "0.15.3", default-features = false, optional = true }
+jack = { version = "0.13.0", optional = true }
+knaster_core = { path = "../knaster_core" }
+paste = "1.0.15"
+rtrb = { version = "0.3.1", default-features = false }
+slotmap = { version = "1.0", default-features = false }
+thiserror = { version = "2.0.4", default-features = false }
+
+[dev-dependencies]
+anyhow = "1.0.94"

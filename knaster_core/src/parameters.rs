@@ -85,6 +85,7 @@ pub enum ParameterError {
     #[error("The parameter index is out of bounds.")]
     ParameterIndexOutOfBounds,
 }
+#[derive(Debug, Clone, Copy)]
 pub enum Param {
     Index(usize),
     Desc(&'static str),
