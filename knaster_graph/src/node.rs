@@ -21,11 +21,15 @@ pub(crate) struct Node<F> {
     pub(crate) inputs: usize,
     pub(crate) outputs: usize,
     pub(crate) parameters: usize,
+    // TODO: Should this by NonNull<*const F> ??
     pub(crate) node_inputs: Vec<*const F>,
     pub(crate) node_output: NodeOutput<F>,
     /// If this node can signal its own removal from the audio thread, it will
     /// do so by setting this AtomicBool to true.
     pub(crate) remove_me: Option<Arc<AtomicBool>>,
+    /// true if the node was not pushed manually to the Graph. Such nodes may
+    /// also be removed automatically.
+    pub(crate) auto_added: bool,
 }
 impl<F: Float> Node<F> {
     pub fn new<T: DynGen<F> + 'static>(name: String, gen: T) -> Self {
@@ -44,6 +48,7 @@ impl<F: Float> Node<F> {
             node_inputs: vec![crate::core::ptr::null_mut(); inputs],
             node_output: NodeOutput::Offset(0),
             remove_me: None,
+            auto_added: false,
         }
     }
     pub fn init(&mut self, ctx: &AudioCtx) {

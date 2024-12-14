@@ -49,6 +49,7 @@ pub enum SchedulingError {
 /// send the token to the outermost graph that is affected. Use the top level
 /// graph if in doubt. None of the changes will be applied until the token is
 /// activated.
+#[derive(Clone, Debug)]
 pub struct SchedulingToken {
     token: Arc<AtomicBool>,
 }

@@ -1,3 +1,4 @@
+pub mod math;
 pub mod osc;
 
 use knaster_primitives::{typenum::*, Block, BlockRead, Float, Frame, Size};

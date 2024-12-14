@@ -15,23 +15,29 @@ pub(crate) enum NodeKeyOrGraph {
 
 #[derive(Clone, Debug, Copy)]
 pub(crate) enum EdgeKind {
-    /// Audio edge connection from the output of one node to the input of another
+    /// Audio edge connection from the output of one node to the input of another. Always one channel per edge.
     Audio {
-        /// number of channels to pipe from source
-        channels: usize,
-        /// what the first channel to input into is in the si
-        channel_offset_in_sink: usize,
-        /// what the first channel to pipe is in the source
-        channel_offset_in_source: usize,
+        /// what the channel to connect is in the source
+        channel_in_source: usize,
     },
-    /// Parameter edge connection from one channel of output from a node to control a parameter of another node.
-    ///
-    /// Always only one channel of audio
-    Parameter {
-        /// what the first channel to pipe is in the source
-        channel_offset_in_source: usize,
-        parameter_index: usize,
+    Feedback {
+        channel_in_source: usize,
     },
+    // /// Parameter edge connection from one channel of output from a node to control a parameter of another node.
+    // ///
+    // /// Always only one channel of audio
+    // Parameter {
+    //     /// what the first channel to pipe is in the source
+    //     channel_in_source: usize,
+    //     parameter_index: usize,
+    // },
+}
+
+pub(crate) struct ParameterEdge {
+    pub(crate) source: NodeKey,
+    /// what the first channel to pipe is in the source
+    pub(crate) channel_in_source: usize,
+    pub(crate) parameter_index: usize,
 }
 
 #[derive(Clone, Debug, Copy)]

@@ -5,10 +5,12 @@
 
 use crate::{
     core::marker::PhantomData,
-    graph::{GraphId, NodeKey},
+    graph::{GraphId, NodeId, NodeKey},
+    SchedulingEvent, SchedulingToken,
 };
 use knaster_core::{
-    numeric_array, typenum::Unsigned, AudioCtx, Gen, ParameterRange, ParameterValue, Parameterable,
+    numeric_array, typenum::Unsigned, AudioCtx, Gen, Param, ParameterRange, ParameterSmoothing,
+    ParameterValue, Parameterable, Trigger,
 };
 
 #[cfg(not(feature = "std"))]
@@ -21,32 +23,16 @@ use crate::SchedulingChannelProducer;
 /// Handle to a node with its type erased. This allows a less safe interaction with the node, but the handle can easily be stored.
 #[derive(Clone)]
 pub struct UntypedHandle {
-    pub(crate) node: NodeKey,
-    graph: GraphId,
+    pub(crate) node: NodeId,
     /// Allows us to send parameter changes straight to the audio thread
     sender: Arc<Mutex<SchedulingChannelProducer>>,
 }
 impl UntypedHandle {
-    pub fn new(
-        identifier: NodeKey,
-        graph: GraphId,
-        sender: Arc<Mutex<SchedulingChannelProducer>>,
-    ) -> Self {
-        Self {
-            node: identifier,
-            graph,
-            sender,
-        }
+    pub fn new(node: NodeId, sender: Arc<Mutex<SchedulingChannelProducer>>) -> Self {
+        Self { node, sender }
     }
 }
 
-// test function
-pub fn give_handle<T: Gen + Handleable + Parameterable<T::Sample>>(gen: T) -> T::HandleType {
-    let (tx, rx) = rtrb::RingBuffer::new(100);
-    // TODO: This is just for testing
-    let untyped = UntypedHandle::new(NodeKey::default(), 0, Arc::new(Mutex::new(tx)));
-    <T as Handleable>::get_handle(untyped)
-}
 /// Handle with type data intact, without owning a T. Enables interacting with a
 /// live node in a Graph, e.g. freeing and parameter changes. Allows local error
 /// checking.
@@ -74,12 +60,23 @@ impl<T: Gen + Parameterable<T::Sample>> Handle<T> {
     }
 }
 pub trait HandleTrait {
-    fn set(&mut self);
+    fn set<C: Into<ParameterChange>>(&mut self, change: C);
     fn from_untyped(untyped_handle: UntypedHandle) -> Self;
 }
 impl<T: Gen + Parameterable<T::Sample>> HandleTrait for Handle<T> {
-    fn set(&mut self) {
-        todo!()
+    fn set<C: Into<ParameterChange>>(&mut self, change: C) {
+        let c = change.into();
+        // TODO: Error handling
+        let mut sender = self.untyped_handle.sender.lock().unwrap();
+        sender
+            .push(SchedulingEvent {
+                node_key: self.untyped_handle.node.key(),
+                parameter: c.param,
+                value: c.value,
+                smoothing: c.smoothing,
+                token: c.token,
+            })
+            .unwrap();
     }
 
     fn from_untyped(untyped_handle: UntypedHandle) -> Self {
@@ -92,6 +89,60 @@ pub trait Handleable: Sized {
         Self::HandleType::from_untyped(untyped_handle)
     }
 }
+#[derive(Clone, Debug)]
+pub struct ParameterChange {
+    param: Param,
+    value: Option<ParameterValue>,
+    smoothing: Option<ParameterSmoothing>,
+    token: Option<SchedulingToken>,
+    // TODO:
+    // time: Option<SchedulingTime>,
+}
+impl<P: Into<Param>, V: Into<ParameterValue>> From<(P, V)> for ParameterChange {
+    fn from((param, value): (P, V)) -> Self {
+        ParameterChange {
+            param: param.into(),
+            value: Some(value.into()),
+            smoothing: None,
+            token: None,
+        }
+    }
+}
+impl<P: Into<Param>, V: Into<ParameterValue>> From<(P, V, SchedulingToken)> for ParameterChange {
+    fn from((param, value, token): (P, V, SchedulingToken)) -> Self {
+        ParameterChange {
+            param: param.into(),
+            value: Some(value.into()),
+            smoothing: None,
+            token: Some(token),
+        }
+    }
+}
+impl<P: Into<Param>, V: Into<ParameterValue>, S: Into<ParameterSmoothing>>
+    From<(P, V, S, SchedulingToken)> for ParameterChange
+{
+    fn from((param, value, smoothing, token): (P, V, S, SchedulingToken)) -> Self {
+        ParameterChange {
+            param: param.into(),
+            value: Some(value.into()),
+            smoothing: Some(smoothing.into()),
+            token: Some(token),
+        }
+    }
+}
+impl<P: Into<Param>, V: Into<ParameterValue>, S: Into<ParameterSmoothing>> From<(P, V, S)>
+    for ParameterChange
+{
+    fn from((param, value, smoothing): (P, V, S)) -> Self {
+        ParameterChange {
+            param: param.into(),
+            value: Some(value.into()),
+            smoothing: Some(smoothing.into()),
+            token: None,
+        }
+    }
+}
+
 // impl<Sample, T: Gen<Sample = Sample>> Handleable for T {
 //     type HandleType = Handle<Self>;
 

@@ -4,14 +4,18 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["std"]
+default = ["std", "unstable"]
 # Enables the alloc in no_std. `alloc` does nothing if `std` is enabled.
 alloc = ["knaster_primitives/alloc"]
 # Enables the standard library. `alloc` does nothing if `std` is enabled.
 std = ["knaster_primitives/std"]
+target-features = ["dep:target-features"]
+# Enables unstable Rust features that may speed up execution
+unstable = ["target-features"]
 
 [dependencies]
 knaster_primitives = { path = "../knaster_primitives" }
+target-features = { version = "0.1.6", optional = true }
 thiserror = { version = "2.0.3", default-features = false }
 
 [dev-dependencies]

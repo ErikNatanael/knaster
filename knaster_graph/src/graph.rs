@@ -12,7 +12,7 @@ use crate::{
     connectable::{ChainSink, ChainSinkKind, ConnectionChain},
     core::sync::atomic::AtomicU64,
     dyngen::DynGen,
-    edge::{Edge, EdgeKind, FeedbackEdge, InternalGraphEdge, NodeKeyOrGraph},
+    edge::{Edge, EdgeKind, FeedbackEdge, InternalGraphEdge, NodeKeyOrGraph, ParameterEdge},
     graph_gen::{self, GraphGen},
     handle::{Handle, UntypedHandle},
     node::Node,
@@ -20,11 +20,20 @@ use crate::{
     SchedulingChannelProducer,
 };
 
-use knaster_core::{typenum::*, AudioCtx, Float, Gen, Parameterable, Size};
+use knaster_core::{
+    math::{Add, MathGen},
+    typenum::*,
+    AudioCtx, Float, Gen, Parameterable, Size,
+};
 use rtrb::RingBuffer;
 use slotmap::{new_key_type, SecondaryMap, SlotMap};
 
 /// Unique id identifying a [`Graph`]. Is set from an atomic any time a [`Graph`] is created.
+///
+/// u64 should be sufficient as a total number of Graphs created during one run.
+/// Creating 200 Graphs a second (which is not efficient and you should look at
+/// alternative solutions), it would take almost 3 billion years to run out of
+/// IDs. If this is an issue for your use case, please file a bug report.
 pub type GraphId = u64;
 
 /// Get a unique id for a Graph from this by using `fetch_add`
@@ -33,6 +42,19 @@ static NEXT_GRAPH_ID: AtomicU64 = AtomicU64::new(0);
 new_key_type! {
     /// Node identifier in a specific Graph. For referring to a Node outside of the context of a Graph, use NodeId instead.
     pub struct NodeKey;
+}
+
+/// Unique identifier for a specific Node
+#[derive(Copy, Clone, Debug)]
+pub struct NodeId {
+    /// The key is only unique within the specific Graph
+    key: NodeKey,
+    graph: GraphId,
+}
+impl NodeId {
+    pub fn key(&self) -> NodeKey {
+        self.key
+    }
 }
 
 /// Pass to `Graph::new` to set the options the Graph is created with in an ergonomic and clear way.
@@ -111,10 +133,13 @@ pub struct Graph<F: Float> {
     /// through node_keys_to_free_when_safe than to bother with a HashSet since
     /// this list will almost always be tiny.
     node_keys_pending_removal: HashSet<NodeKey>,
-    /// A list of input edges for every node, sharing the same index as the node
-    node_input_edges: SecondaryMap<NodeKey, Vec<Edge>>,
+    /// A list of input edges for every node. The input channel is the index into the boxed slice
+    node_input_edges: SecondaryMap<NodeKey, Box<[Option<Edge>]>>,
+    /// Edges which control a parameter of a node through the output of another
+    /// node. These can be in addition to audio input edges.
+    node_parameter_edges: SecondaryMap<NodeKey, Vec<ParameterEdge>>,
     /// List of feedback input edges for every node. The NodeKey in the tuple is the index of the FeedbackNode doing the buffering
-    node_feedback_edges: SecondaryMap<NodeKey, Vec<FeedbackEdge>>,
+    // node_feedback_edges: SecondaryMap<NodeKey, Vec<FeedbackEdge>>,
     node_feedback_node_key: SecondaryMap<NodeKey, NodeKey>,
     /// If a node can be freed or not. A node can be made immortal to avoid accidentally removing it.
     node_mortality: SecondaryMap<NodeKey, bool>,
@@ -124,7 +149,7 @@ pub struct Graph<F: Float> {
     /// If a node is a graph, that graph will be added with the same key here.
     graphs_per_node: SecondaryMap<NodeKey, Graph<F>>,
     /// The outputs of the Graph
-    output_edges: Vec<Edge>,
+    output_edges: Box<[Option<Edge>]>,
     /// The edges from the graph inputs to nodes, one Vec per node. `source` in the edge is really the sink here.
     graph_input_edges: SecondaryMap<NodeKey, Vec<Edge>>,
     /// Edges going straight from a graph input to a graph output
@@ -158,7 +183,8 @@ impl<F: Float> Graph<F> {
             DEFAULT_NUM_NODES,
         )));
         let node_input_edges = SecondaryMap::with_capacity(DEFAULT_NUM_NODES);
-        let node_feedback_edges = SecondaryMap::with_capacity(DEFAULT_NUM_NODES);
+        // let node_feedback_edges = SecondaryMap::with_capacity(DEFAULT_NUM_NODES);
+        let node_parameter_edges = SecondaryMap::with_capacity(DEFAULT_NUM_NODES);
         let graph_input_edges = SecondaryMap::with_capacity(DEFAULT_NUM_NODES);
         let graph_input_to_output_edges = Vec::new();
         let buffer_allocator = BufferAllocator::new(block_size * 4);
@@ -181,8 +207,9 @@ impl<F: Float> Graph<F> {
             name,
             nodes,
             node_input_edges,
+            node_parameter_edges,
             node_feedback_node_key: SecondaryMap::with_capacity(DEFAULT_NUM_NODES),
-            node_feedback_edges,
+            // node_feedback_edges,
             node_mortality: SecondaryMap::with_capacity(DEFAULT_NUM_NODES),
             node_order: Vec::with_capacity(DEFAULT_NUM_NODES),
             disconnected_nodes: vec![],
@@ -190,7 +217,7 @@ impl<F: Float> Graph<F> {
             node_keys_pending_removal: HashSet::new(),
             feedback_node_indices: vec![],
             graphs_per_node: SecondaryMap::with_capacity(DEFAULT_NUM_NODES),
-            output_edges: vec![],
+            output_edges: vec![None; Outputs::USIZE].into(),
             graph_input_edges,
             num_inputs: Inputs::USIZE,
             num_outputs: Outputs::USIZE,
@@ -285,8 +312,10 @@ impl<F: Float> Graph<F> {
         let node = Node::new(name.to_owned(), gen);
         let node_key = self.push_node(node);
         let handle = Handle::new(UntypedHandle::new(
-            node_key,
-            self.id,
+            NodeId {
+                key: node_key,
+                graph: self.id,
+            },
             self.graph_gen_communicator
                 .scheduling_event_producer
                 .clone(),
@@ -301,19 +330,154 @@ impl<F: Float> Graph<F> {
         let ctx = AudioCtx::new(self.sample_rate, self.block_size);
 
         node.init(&ctx);
+        let node_inputs = node.inputs;
         let key = self.get_nodes_mut().insert(node);
-        self.node_input_edges.insert(key, vec![]);
-        self.node_feedback_edges.insert(key, vec![]);
+        self.node_input_edges
+            .insert(key, vec![None; node_inputs].into_boxed_slice());
+        // self.node_feedback_edges.insert(key, vec![]);
         self.graph_input_edges.insert(key, vec![]);
         self.node_mortality.insert(key, true);
 
         key
     }
 
-    pub fn connect(&mut self, chain: impl Into<ConnectionChain>) {
+    fn connect_nodes(
+        &mut self,
+        mut source: NodeKey,
+        sink: NodeKey,
+        mut so_from: usize,
+        si_from: usize,
+        channels: usize,
+        additive: bool,
+    ) -> Result<(), GraphError> {
+        let nodes = self.get_nodes();
+        if !nodes.contains_key(source) {
+            return Err(GraphError::NodeNotFound);
+        }
+        if !nodes.contains_key(sink) {
+            return Err(GraphError::NodeNotFound);
+        }
+
+        // Fast and common path
+        if !additive {
+            for i in 0..channels {
+                self.node_input_edges[sink][si_from + i] = Some(Edge {
+                    source,
+                    kind: EdgeKind::Audio {
+                        channel_in_source: so_from + i,
+                    },
+                });
+            }
+            return Ok(());
+        }
+        // Connect additively
+        // If no input exists for the channel, connect directly.
+        // If an input does exist, create a new add node and connect it up, replacing the current edge.
+
+        for i in 0..channels {
+            if let Some(existing_edge) = self.node_input_edges[sink][si_from + i] {
+                // Put an add node in between the input and the previous input,
+                // adding the new source together with the old
+                let add_gen = MathGen::<F, U1, Add>::new();
+                // TODO: We don't need a full handle here
+                let add_handle = self.push(add_gen)?;
+                let add_node = add_handle.untyped_handle.node.key;
+                self.node_input_edges[add_node][0] = Some(existing_edge);
+                self.node_input_edges[add_node][1] = Some(Edge {
+                    source,
+                    kind: EdgeKind::Audio {
+                        channel_in_source: so_from + i,
+                    },
+                });
+                self.node_input_edges[sink][si_from + i] = Some(Edge {
+                    source: add_node,
+                    kind: EdgeKind::Audio {
+                        channel_in_source: 0,
+                    },
+                });
+            } else {
+                self.node_input_edges[sink][si_from + i] = Some(Edge {
+                    source,
+                    kind: EdgeKind::Audio {
+                        channel_in_source: so_from + i,
+                    },
+                });
+            }
+        }
+        Ok(())
+    }
+    // TODO: This would be much cleaner if the output was represented by a node
+    // in the graph, created in `new`.
+    fn connect_node_to_output(
+        &mut self,
+        mut source: NodeKey,
+        mut so_from: usize,
+        si_from: usize,
+        channels: usize,
+        additive: bool,
+    ) -> Result<(), GraphError> {
+        let nodes = self.get_nodes();
+        if !nodes.contains_key(source) {
+            return Err(GraphError::NodeNotFound);
+        }
+
+        // Fast and common path
+        if !additive {
+            for i in 0..channels {
+                self.output_edges[si_from + i] = Some(Edge {
+                    source,
+                    kind: EdgeKind::Audio {
+                        channel_in_source: so_from + i,
+                    },
+                });
+            }
+            return Ok(());
+        }
+        // Connect additively
+        // If no input exists for the channel, connect directly.
+        // If an input does exist, create a new add node and connect it up, replacing the current edge.
+
+        for i in 0..channels {
+            if let Some(existing_edge) = self.output_edges[si_from + i] {
+                // Put an add node in between the input and the previous input,
+                // adding the new source together with the old
+                let add_gen = MathGen::<F, U1, Add>::new();
+                // TODO: We don't need a full handle here
+                let add_handle = self.push(add_gen)?;
+                let add_node = add_handle.untyped_handle.node.key;
+                self.node_input_edges[add_node][0] = Some(existing_edge);
+                self.node_input_edges[add_node][1] = Some(Edge {
+                    source,
+                    kind: EdgeKind::Audio {
+                        channel_in_source: so_from + i,
+                    },
+                });
+                self.output_edges[si_from + i] = Some(Edge {
+                    source: add_node,
+                    kind: EdgeKind::Audio {
+                        channel_in_source: 0,
+                    },
+                });
+                dbg!(self.node_input_edges[add_node][0]);
+                dbg!(self.node_input_edges[add_node][1]);
+                dbg!(self.output_edges[si_from + i]);
+            } else {
+                self.output_edges[si_from + i] = Some(Edge {
+                    source,
+                    kind: EdgeKind::Audio {
+                        channel_in_source: so_from + i,
+                    },
+                });
+            }
+        }
+        Ok(())
+    }
+
+    pub fn connect(&mut self, chain: impl Into<ConnectionChain>) -> Result<(), GraphError> {
         let chain = chain.into();
         let mut chains_to_connect = vec![chain];
         while let Some(chain) = chains_to_connect.pop() {
+            let additive = chain.additive_connection();
             let (source, sink) = chain.deconstruct();
             if let Some(source_chain) = source {
                 let source = source_chain.sink();
@@ -331,14 +495,14 @@ impl<F: Float> Graph<F> {
                         },
                     ) => {
                         let channels = (*so_channels).min(si_channels);
-                        self.node_input_edges[sink_node].push(Edge {
-                            source: *source_node,
-                            kind: EdgeKind::Audio {
-                                channels,
-                                channel_offset_in_sink: si_from,
-                                channel_offset_in_source: *so_from,
-                            },
-                        })
+                        self.connect_nodes(
+                            *source_node,
+                            sink_node,
+                            *so_from,
+                            si_from,
+                            channels,
+                            additive,
+                        )?;
                     }
                     (
                         ChainSinkKind::Node {
@@ -352,14 +516,13 @@ impl<F: Float> Graph<F> {
                         },
                     ) => {
                         let channels = (*so_channels).min(si_channels);
-                        self.output_edges.push(Edge {
-                            source: *source_node,
-                            kind: EdgeKind::Audio {
-                                channels,
-                                channel_offset_in_sink: si_from,
-                                channel_offset_in_source: *so_from,
-                            },
-                        })
+                        self.connect_node_to_output(
+                            *source_node,
+                            *so_from,
+                            si_from,
+                            channels,
+                            additive,
+                        )?;
                     }
                     (
                         ChainSinkKind::GraphConnection {
@@ -374,21 +537,23 @@ impl<F: Float> Graph<F> {
                     ) => {
                         let channels = (*so_channels).min(si_channels);
 
-                        // TODO: More elegant handling of graph input to node edges
-                        self.graph_input_edges[sink_node].push(Edge {
-                            source: sink_node,
-                            kind: EdgeKind::Audio {
-                                channels,
-                                channel_offset_in_sink: si_from,
-                                channel_offset_in_source: *so_from,
-                            },
-                        })
+                        // TODO: Incorporate graph input edges into normal input edges
+                        todo!();
+                        // self.graph_input_edges[sink_node].push(Edge {
+                        //     source: sink_node,
+                        //     kind: EdgeKind::Audio {
+                        //         channels,
+                        //         channel_offset_in_sink: si_from,
+                        //         channel_offset_in_source: *so_from,
+                        //     },
+                        // })
                     }
                     _ => eprintln!("Unhandled connection"),
                 }
                 chains_to_connect.push(*source_chain);
             }
         }
+        Ok(())
     }
 
     pub fn subgraph<Inputs: Size, Outputs: Size>(&mut self, options: GraphSettings) -> Self {
@@ -415,24 +580,21 @@ impl<F: Float> Graph<F> {
             channels: vec![None; self.num_outputs].into_boxed_slice(),
         };
         let block_size = self.block_size;
-        for output_edge in &self.output_edges {
-            if let EdgeKind::Audio {
-                channels,
-                channel_offset_in_sink,
-                channel_offset_in_source,
-            } = output_edge.kind
-            {
+        for (sink_channel, output_edge) in self
+            .output_edges
+            .iter()
+            .enumerate()
+            // Return only the channels that are Some
+            .filter_map(|(i, e)| e.map(|e| (i, e)))
+        {
+            if let EdgeKind::Audio { channel_in_source } = output_edge.kind {
                 let source = &self.get_nodes()[output_edge.source];
                 let source_ptr = source
                     .node_output_ptr()
                     .expect("Node output should be ptr at this point");
-                for i in 0..channels {
-                    assert!(i + channel_offset_in_sink < output_task.channels.len());
-                    assert!(i + channel_offset_in_source < source.outputs);
-                    output_task.channels[i + channel_offset_in_sink] = Some(unsafe {
-                        source_ptr.offset((block_size * (i + channel_offset_in_source)) as isize)
-                    });
-                }
+                assert!(channel_in_source < source.outputs);
+                output_task.channels[sink_channel] =
+                    Some(unsafe { source_ptr.add(block_size * (channel_in_source)) });
             }
         }
         output_task
@@ -453,27 +615,28 @@ impl<F: Float> Graph<F> {
     /// time the schedule is updated.
     fn generate_ar_parameter_changes(&mut self) -> Vec<ArParameterChange<F>> {
         let mut apc = Vec::new();
-        for (node_key, edges) in &self.node_input_edges {
+        for (node_key, edges) in &self.node_parameter_edges {
             for edge in edges {
-                if let EdgeKind::Parameter {
-                    channel_offset_in_source,
+                let ParameterEdge {
+                    source,
+                    channel_in_source,
                     parameter_index,
-                } = &edge.kind
+                } = *edge;
                 {
                     if let Some(node_index) = self.node_order.iter().position(|k| *k == node_key) {
-                        let source_node = &self.get_nodes()[edge.source];
+                        let source_node = &self.get_nodes()[source];
                         let buffer = source_node
                             .node_output_ptr()
                             .expect("Node output ptr should be available when generating tasks");
-                        assert!(*channel_offset_in_source < source_node.outputs);
+                        assert!(channel_in_source < source_node.outputs);
                         // Safety: The buffer has at least `source_node.outputs`
                         // channels of data of size `self.block_size`.
                         let buffer = unsafe {
-                            buffer.offset((channel_offset_in_source * self.block_size) as isize)
+                            buffer.offset((channel_in_source * self.block_size) as isize)
                         };
                         apc.push(ArParameterChange {
                             node: node_index,
-                            parameter_index: *parameter_index,
+                            parameter_index,
                             buffer,
                         })
                     }
@@ -533,23 +696,19 @@ impl<F: Float> Graph<F> {
             for (node_key, edges) in &self.node_input_edges {
                 let num_inputs = self.get_nodes()[node_key].inputs;
                 let mut inputs = vec![crate::core::ptr::null(); num_inputs];
-                for edge in edges {
-                    if let EdgeKind::Audio {
-                        channels,
-                        channel_offset_in_sink,
-                        channel_offset_in_source,
-                    } = edge.kind
-                    {
-                        let source_output_ptr = self.get_nodes()[node_key]
+
+                for (sink_channel, edge) in edges
+                    .iter()
+                    .enumerate()
+                    // Return only the channels that are Some
+                    .filter_map(|(i, e)| e.map(|e| (i, e)))
+                {
+                    if let EdgeKind::Audio { channel_in_source } = edge.kind {
+                        let source_output_ptr = self.get_nodes()[edge.source]
                             .node_output_ptr()
                             .expect("real buffer was just assigned");
-                        for i in 0..channels {
-                            inputs[i + channel_offset_in_sink] = unsafe {
-                                source_output_ptr.offset(
-                                    ((i + channel_offset_in_source) * self.block_size) as isize,
-                                )
-                            };
-                        }
+                        inputs[sink_channel] =
+                            unsafe { source_output_ptr.add(channel_in_source * self.block_size) };
                     }
                 }
                 // If any input hasn't been set, give it a cleared zero buffer.
@@ -568,9 +727,19 @@ impl<F: Float> Graph<F> {
                 Arc::new(AtomicBool::new(false)),
             );
             let task_data = self.generate_task_data(current_change_flag);
+            for t in &task_data.tasks {
+                dbg!(&t.in_buffers);
+                dbg!(t.out_buffer);
+            }
             self.graph_gen_communicator.send_updated_tasks(task_data)?;
             self.recalculation_required = false;
         }
+        dbg!(&self.node_order);
+        for node in &self.node_order {
+            let n = self.get_nodes().get(*node).unwrap();
+            dbg!(n.node_output_ptr());
+        }
+        dbg!(&self.output_edges);
         Ok(())
     }
 
@@ -589,13 +758,17 @@ impl<F: Float> Graph<F> {
         self.node_input_edges.remove(node_key);
         self.graph_input_edges.remove(node_key);
         // feedback from the freed node requires removing the feedback node and all edges from the feedback node
-        self.node_feedback_edges.remove(node_key);
+        self.node_parameter_edges.remove(node_key);
         // Remove all edges leading from the node to other nodes
         for (_k, input_edges) in &mut self.node_input_edges {
             let mut i = 0;
             while i < input_edges.len() {
-                if input_edges[i].source == node_key {
-                    input_edges.remove(i);
+                if let Some(edge) = input_edges[i] {
+                    if edge.source == node_key {
+                        input_edges[i] = None;
+                    } else {
+                        i += 1;
+                    }
                 } else {
                     i += 1;
                 }
@@ -605,8 +778,12 @@ impl<F: Float> Graph<F> {
         {
             let mut i = 0;
             while i < self.output_edges.len() {
-                if self.output_edges[i].source == node_key {
-                    self.output_edges.remove(i);
+                if let Some(edge) = self.output_edges[i] {
+                    if edge.source == node_key {
+                        self.output_edges[i] = None;
+                    } else {
+                        i += 1;
+                    }
                 } else {
                     i += 1;
                 }
@@ -621,46 +798,47 @@ impl<F: Float> Graph<F> {
         Ok(())
     }
     fn clear_feedback_for_node(&mut self, node_key: NodeKey) -> Result<(), FreeError> {
+        // TODO: Update for new feedback node system
         // Remove all feedback edges leading from or to the node
-        let mut nodes_to_free = HashSet::new();
-        if let Some(&feedback_node) = self.node_feedback_node_key.get(node_key) {
-            // The node that is being freed has a feedback node attached to it. Free that as well.
-            nodes_to_free.insert(feedback_node);
-            self.node_feedback_node_key.remove(node_key);
-        }
-        for (feedback_key, feedback_edges) in &mut self.node_feedback_edges {
-            if !feedback_edges.is_empty() {
-                let mut i = 0;
-                while i < feedback_edges.len() {
-                    if feedback_edges[i].source == node_key
-                        || feedback_edges[i].feedback_destination == node_key
-                    {
-                        feedback_edges.remove(i);
-                    } else {
-                        i += 1;
-                    }
-                }
-                if feedback_edges.is_empty() {
-                    // The feedback node has no more edges to it: free it
-                    nodes_to_free.insert(feedback_key);
-                    // TODO: Will this definitely remove all feedback node
-                    // key references? Can a feedback node be manually freed
-                    // in a different way?
-                    let mut node_feedback_node_belongs_to = None;
-                    for (source_node, &feedback_node) in &self.node_feedback_node_key {
-                        if feedback_node == feedback_key {
-                            node_feedback_node_belongs_to = Some(source_node);
-                        }
-                    }
-                    if let Some(key) = node_feedback_node_belongs_to {
-                        self.node_feedback_node_key.remove(key);
-                    }
-                }
-            }
-        }
-        for na in nodes_to_free {
-            self.free_node_from_key(na)?;
-        }
+        // let mut nodes_to_free = HashSet::new();
+        // if let Some(&feedback_node) = self.node_feedback_node_key.get(node_key) {
+        //     // The node that is being freed has a feedback node attached to it. Free that as well.
+        //     nodes_to_free.insert(feedback_node);
+        //     self.node_feedback_node_key.remove(node_key);
+        // }
+        // for (feedback_key, feedback_edges) in &mut self.node_feedback_edges {
+        //     if !feedback_edges.is_empty() {
+        //         let mut i = 0;
+        //         while i < feedback_edges.len() {
+        //             if feedback_edges[i].source == node_key
+        //                 || feedback_edges[i].feedback_destination == node_key
+        //             {
+        //                 feedback_edges.remove(i);
+        //             } else {
+        //                 i += 1;
+        //             }
+        //         }
+        //         if feedback_edges.is_empty() {
+        //             // The feedback node has no more edges to it: free it
+        //             nodes_to_free.insert(feedback_key);
+        //             // TODO: Will this definitely remove all feedback node
+        //             // key references? Can a feedback node be manually freed
+        //             // in a different way?
+        //             let mut node_feedback_node_belongs_to = None;
+        //             for (source_node, &feedback_node) in &self.node_feedback_node_key {
+        //                 if feedback_node == feedback_key {
+        //                     node_feedback_node_belongs_to = Some(source_node);
+        //                 }
+        //             }
+        //             if let Some(key) = node_feedback_node_belongs_to {
+        //                 self.node_feedback_node_key.remove(key);
+        //             }
+        //         }
+        //     }
+        // }
+        // for na in nodes_to_free {
+        //     self.free_node_from_key(na)?;
+        // }
         Ok(())
     }
     /// Check if there are any old nodes or other resources that have been
@@ -726,12 +904,14 @@ impl<F: Float> Graph<F> {
             let mut found_unvisited = false;
             // There is probably room for optimisation here by managing to
             // not iterate the edges multiple times.
-            for edge in input_edges {
-                if !visited.contains(&edge.source) {
-                    nodes_to_process.push(edge.source);
-                    visited.insert(edge.source);
-                    found_unvisited = true;
-                    break;
+            for edge in input_edges.iter() {
+                if let Some(edge) = edge {
+                    if !visited.contains(&edge.source) {
+                        nodes_to_process.push(edge.source);
+                        visited.insert(edge.source);
+                        found_unvisited = true;
+                        break;
+                    }
                 }
             }
             if !found_unvisited {
@@ -749,7 +929,7 @@ impl<F: Float> Graph<F> {
         loop {
             let mut found_later_node = false;
             for (key, input_edges) in &self.node_input_edges {
-                for input_edge in input_edges {
+                for input_edge in input_edges.iter().filter_map(|e| *e) {
                     if input_edge.source == last_connected_node_index
                         && !visited.contains(&input_edge.source)
                     {
@@ -757,7 +937,7 @@ impl<F: Float> Graph<F> {
                         found_later_node = true;
 
                         // check if it's an output node
-                        for edge in &self.output_edges {
+                        for edge in self.output_edges.iter().filter_map(|e| *e) {
                             if last_connected_node_index == edge.source {
                                 last_connected_output_node_index = last_connected_node_index;
                             }
@@ -789,7 +969,7 @@ impl<F: Float> Graph<F> {
             visited.insert(feedback_node_index);
         }
         let mut nodes_to_process = Vec::with_capacity(self.get_nodes_mut().capacity());
-        for edge in &self.output_edges {
+        for edge in self.output_edges.iter().filter_map(|e| *e) {
             // The same source node may be present in multiple output edges e.g.
             // for stereo so we need to check if visited. One output may also
             // depend on another. Therefore we need to make sure to start with
@@ -805,49 +985,50 @@ impl<F: Float> Graph<F> {
         self.node_order.extend(stack.into_iter());
 
         // Check if feedback nodes need to be added to the node order
-        let mut feedback_node_order_addition = vec![];
-        for (_key, feedback_edges) in self.node_feedback_edges.iter() {
-            for feedback_edge in feedback_edges {
-                if !visited.contains(&feedback_edge.source) {
-                    // The source of this feedback_edge needs to be added to the
-                    // node order at the end. Check if it's the input to any
-                    // other node and start a depth first search from the last
-                    // node.
-                    let mut last_connected_node_index = feedback_edge.source;
-                    let mut last_connected_not_visited_ni = feedback_edge.source;
-                    loop {
-                        let mut found_later_node = false;
-                        for (key, input_edges) in self.node_input_edges.iter() {
-                            for input_edge in input_edges {
-                                if input_edge.source == last_connected_node_index {
-                                    last_connected_node_index = key;
+        // TODO: Update for new feedback edge system
+        // let mut feedback_node_order_addition = vec![];
+        // for (_key, feedback_edges) in self.node_feedback_edges.iter() {
+        //     for feedback_edge in feedback_edges {
+        //         if !visited.contains(&feedback_edge.source) {
+        //             // The source of this feedback_edge needs to be added to the
+        //             // node order at the end. Check if it's the input to any
+        //             // other node and start a depth first search from the last
+        //             // node.
+        //             let mut last_connected_node_index = feedback_edge.source;
+        //             let mut last_connected_not_visited_ni = feedback_edge.source;
+        //             loop {
+        //                 let mut found_later_node = false;
+        //                 for (key, input_edges) in self.node_input_edges.iter() {
+        //                     for input_edge in input_edges {
+        //                         if input_edge.source == last_connected_node_index {
+        //                             last_connected_node_index = key;
 
-                                    if !visited.contains(&key) {
-                                        last_connected_not_visited_ni = key;
-                                    }
-                                    found_later_node = true;
-                                    break;
-                                }
-                            }
-                            if found_later_node {
-                                break;
-                            }
-                        }
-                        if !found_later_node {
-                            break;
-                        }
-                    }
-                    // Do a depth first search from `last_connected_node_index`
-                    nodes_to_process.clear();
-                    visited.insert(last_connected_not_visited_ni);
-                    nodes_to_process.push(last_connected_not_visited_ni);
-                    let stack = self.depth_first_search(&mut visited, &mut nodes_to_process);
-                    feedback_node_order_addition.extend(stack);
-                }
-            }
-        }
-        self.node_order
-            .extend(feedback_node_order_addition.into_iter());
+        //                             if !visited.contains(&key) {
+        //                                 last_connected_not_visited_ni = key;
+        //                             }
+        //                             found_later_node = true;
+        //                             break;
+        //                         }
+        //                     }
+        //                     if found_later_node {
+        //                         break;
+        //                     }
+        //                 }
+        //                 if !found_later_node {
+        //                     break;
+        //                 }
+        //             }
+        //             // Do a depth first search from `last_connected_node_index`
+        //             nodes_to_process.clear();
+        //             visited.insert(last_connected_not_visited_ni);
+        //             nodes_to_process.push(last_connected_not_visited_ni);
+        //             let stack = self.depth_first_search(&mut visited, &mut nodes_to_process);
+        //             feedback_node_order_addition.extend(stack);
+        //         }
+        //     }
+        // }
+        // self.node_order
+        //     .extend(feedback_node_order_addition.into_iter());
 
         // Add all remaining nodes. These are not currently connected to anything.
         let mut remaining_nodes = vec![];
@@ -889,6 +1070,22 @@ impl<F: Float> Graph<F> {
             inputs: self.num_inputs,
             outputs: self.num_outputs,
         }
+    }
+    pub fn set_mortality(
+        &mut self,
+        node: impl Into<NodeId>,
+        mortality: bool,
+    ) -> Result<(), GraphError> {
+        let node = node.into();
+        if let Some(m) = self.node_mortality.get_mut(node.key()) {
+            *m = mortality;
+            Ok(())
+        } else {
+            Err(GraphError::NodeNotFound)
+        }
+    }
+    pub fn ctx(&self) -> AudioCtx {
+        AudioCtx::new(self.sample_rate, self.block_size)
     }
 }
 
@@ -944,6 +1141,8 @@ pub enum GraphError {
     PushError(#[from] PushError),
     #[error("Error sending new data to GraphGen: `{0}`")]
     SendToGraphGen(String),
+    #[error("Node cannot be found in current Graph.")]
+    NodeNotFound,
 }
 #[derive(thiserror::Error, Debug)]
 pub enum PushError {}

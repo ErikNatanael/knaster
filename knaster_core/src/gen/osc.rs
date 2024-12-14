@@ -165,18 +165,18 @@ impl<F: Float> Parameterable<F> for Phasor<F> {
 /// Sine wave calculated using the trigonometric function for this platform, as opposed to using a shared lookup table
 ///
 /// A lookup table is often faster, but (with libm) this implementation is available on every platform, even without allocation.
-pub struct SinTrig<F> {
+pub struct SinMath<F> {
     phase: F,
     phase_offset: F,
     phase_increment: F,
 }
-impl<F: Float> Default for SinTrig<F> {
+impl<F: Float> Default for SinMath<F> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<F: Float> SinTrig<F> {
+impl<F: Float> SinMath<F> {
     pub fn new() -> Self {
         Self {
             phase: F::ZERO,
@@ -192,7 +192,7 @@ impl<F: Float> SinTrig<F> {
     }
 }
 
-impl<F: Float> Gen for SinTrig<F> {
+impl<F: Float> Gen for SinMath<F> {
     type Sample = F;
     type Inputs = U0;
     type Outputs = U1;
@@ -214,7 +214,7 @@ impl<F: Float> Gen for SinTrig<F> {
     }
 }
 
-impl<F: Float> Parameterable<F> for SinTrig<F> {
+impl<F: Float> Parameterable<F> for SinMath<F> {
     type Parameters = U3;
 
     fn param_types() -> NumericArray<ParameterType, Self::Parameters> {
@@ -242,6 +242,10 @@ impl<F: Float> Parameterable<F> for SinTrig<F> {
     }
 
     fn param_apply(&mut self, ctx: &AudioCtx, index: usize, value: ParameterValue) {
+        if matches!(value, ParameterValue::Smoothing(..)) {
+            eprintln!("Tried to set parameter smoothing with out a wrapper");
+            return;
+        }
         match index {
             0 => self.freq(
                 F::from(value.float().unwrap()).unwrap(),
