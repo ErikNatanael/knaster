@@ -30,6 +30,11 @@ pub(crate) struct Node<F> {
     /// true if the node was not pushed manually to the Graph. Such nodes may
     /// also be removed automatically.
     pub(crate) auto_added: bool,
+    /// The number of channels in potentially different nodes that are depending
+    /// on the output of this node. We are counting channels because that's how
+    /// the input edges are stored, thereby avoiding additional bookkeeping when
+    /// allocating buffers.
+    pub(crate) num_output_dependents: usize,
 }
 impl<F: Float> Node<F> {
     pub fn new<T: DynGen<F> + 'static>(name: String, gen: T) -> Self {
@@ -49,6 +54,7 @@ impl<F: Float> Node<F> {
             node_output: NodeOutput::Offset(0),
             remove_me: None,
             auto_added: false,
+            num_output_dependents: 0,
         }
     }
     pub fn init(&mut self, ctx: &AudioCtx) {
@@ -93,6 +99,7 @@ impl<F: Float> Node<F> {
     }
 }
 
+#[derive(Copy, Clone)]
 pub(crate) enum NodeOutput<F> {
     Pointer(*mut F),
     Offset(usize),

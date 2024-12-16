@@ -31,7 +31,7 @@ impl<F: Float> Runner<F> {
             graph_node: node,
             output_block: unsafe {
                 RawBlock::new(
-                    output_buffer.offset(0).expect("This is infallible"),
+                    output_buffer.add(0).expect("This is infallible"),
                     Outputs::USIZE,
                     block_size,
                 )

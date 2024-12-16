@@ -31,15 +31,16 @@
 //!
 
 use crate::core::sync::Arc;
-
+use crate::graph::OwnedRawBuffer;
 use knaster_core::Float;
 
-use crate::graph::OwnedRawBuffer;
 struct AllocatedBlock {
     start_offset: usize,
     len: usize,
-    // If a block has been returned, it can be reused
-    returned: bool,
+    // The number of channels in nodes that are borrowing from this block. When
+    // they have returned their borrows the block can be reused. We are counting
+    // channels because that's how the input edges are stored.
+    outstanding_borrows: usize,
 }
 
 pub(crate) struct BufferAllocator<F: Float> {
@@ -64,7 +65,12 @@ impl<F: Float> BufferAllocator<F> {
     pub fn buffer(&self) -> Arc<OwnedRawBuffer<F>> {
         self.buffer.clone()
     }
-    pub fn assign_new_block(&mut self, num_channels: usize, block_size: usize) -> usize {
+    pub fn assign_new_block(
+        &mut self,
+        num_channels: usize,
+        block_size: usize,
+        num_borrows: usize,
+    ) -> usize {
         if self.next_free_pos + num_channels * block_size > self.virtual_allocation_size {
             self.virtual_allocation_size = self.next_free_pos + num_channels * block_size;
         }
@@ -72,7 +78,7 @@ impl<F: Float> BufferAllocator<F> {
         self.allocated_blocks.push(AllocatedBlock {
             start_offset,
             len: num_channels * block_size,
-            returned: false,
+            outstanding_borrows: num_borrows,
         });
         self.next_free_pos += num_channels * block_size;
         start_offset
@@ -81,25 +87,34 @@ impl<F: Float> BufferAllocator<F> {
     pub fn return_block(&mut self, start_offset: usize) {
         for (i, block) in self.allocated_blocks.iter_mut().enumerate() {
             if block.start_offset == start_offset {
-                block.returned = true;
-                self.return_order.push(i);
+                block.outstanding_borrows -= 1;
+                if block.outstanding_borrows == 0 {
+                    self.return_order.push(i);
+                }
                 break;
             }
         }
     }
     pub fn empty_channel(&self) -> *const F {
-        self.buffer.offset(0).unwrap().cast_const()
+        self.buffer.add(0).unwrap().cast_const()
     }
     // Returns the start offset of a block of the given size valid until returned
-    pub fn get_block(&mut self, num_channels: usize, block_size: usize) -> usize {
+    pub fn get_block(
+        &mut self,
+        num_channels: usize,
+        block_size: usize,
+        num_borrows: usize,
+    ) -> usize {
         let len = num_channels * block_size;
         // 1. Try to use an existing allocated block in order of return. If only
         // part of a block is needed, split it.
         for i in (self.return_order.len() - 1)..=0 {
             let index = self.return_order[i];
-            if self.allocated_blocks[index].returned && self.allocated_blocks[index].len <= len {
+            if self.allocated_blocks[index].outstanding_borrows == 0
+                && self.allocated_blocks[index].len <= len
+            {
                 // It's a match!
-                self.allocated_blocks[index].returned = false;
+                self.allocated_blocks[index].outstanding_borrows = num_borrows;
                 self.return_order.remove(i);
                 return self.allocated_blocks[index].start_offset;
             }
@@ -111,7 +126,7 @@ impl<F: Float> BufferAllocator<F> {
         // todo!();
 
         // 3. Allocate a new block
-        self.assign_new_block(num_channels, block_size)
+        self.assign_new_block(num_channels, block_size, num_borrows)
     }
     pub fn reset(&mut self, block_size: usize) {
         self.next_free_pos = 0;
@@ -119,7 +134,8 @@ impl<F: Float> BufferAllocator<F> {
         self.allocated_blocks.clear();
         self.return_order.clear();
         // Allocate one empty channel, always at the start, for assigning to missing inputs
-        self.get_block(1, block_size);
+        // TODO: usize::MAX is not a beautiful way of making sure the block is never reused/always available
+        self.get_block(1, block_size, usize::MAX);
     }
     /// Call this when all blocks have been assigned. If a new allocation needs
     /// to be made, the old one is returned to be dropped once the other Arc is
@@ -140,6 +156,6 @@ impl<F: Float> BufferAllocator<F> {
     /// Run this after `finished_assigning_make_allocation`. If used correctly,
     /// it should always return a Some.
     pub fn offset_to_ptr(&self, offset: usize) -> Option<*mut F> {
-        self.buffer.offset(offset)
+        self.buffer.add(offset)
     }
 }

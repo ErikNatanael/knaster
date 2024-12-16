@@ -104,9 +104,9 @@ impl<F: Float> OwnedRawBuffer<F> {
         let ptr = Box::<[F]>::into_raw(vec![F::ZERO; len].into_boxed_slice());
         Self { ptr }
     }
-    pub fn offset(&self, offset: usize) -> Option<*mut F> {
-        if offset < self.ptr.len() {
-            Some(unsafe { self.ptr.cast::<F>().offset(offset as isize) })
+    pub fn add(&self, add: usize) -> Option<*mut F> {
+        if add < self.ptr.len() {
+            Some(unsafe { self.ptr.cast::<F>().add(add) })
         } else {
             None
         }
@@ -665,6 +665,82 @@ impl<F: Float> Graph<F> {
             gens,
         }
     }
+    /// Assign buffers to nodes maximizing buffer reuse and cache locality
+    /// (ideally, there are surely optimisations left)
+    fn allocate_node_buffers(&mut self) {
+        // Recalculate the number of dependent channels of a node
+        // TODO: This makes a lot of node lookups. Optimise?
+        for (_key, node) in self.get_nodes_mut() {
+            node.num_output_dependents = 0;
+        }
+        for (_key, edges) in &self.node_input_edges {
+            for edge in edges.iter().filter_map(|e| *e) {
+                // Safety:
+                //
+                // Accessing self.nodes is always safe because the
+                // Arc owned by the GraphGen will never touch it, it just
+                // guarantees that the allocation stays valid.
+                (unsafe { &mut *self.nodes.get() })[edge.source].num_output_dependents += 1;
+            }
+        }
+
+        // Assign buffers
+        self.buffer_allocator.reset(self.block_size);
+        // TODO: Iterate by index instead
+        let node_order = self.node_order.clone();
+        for &key in &node_order {
+            let outputs = self.get_nodes()[key].outputs;
+            let num_borrows = self.get_nodes()[key].num_output_dependents;
+            let offset = self
+                .buffer_allocator
+                .get_block(outputs, self.block_size, num_borrows);
+            self.get_nodes_mut()[key].assign_output_offset(offset);
+            // Return every block that is used as an input
+            for edge in self.node_input_edges[key].iter().filter_map(|e| *e) {
+                let block = self.get_nodes()[edge.source].node_output;
+                if let crate::node::NodeOutput::Offset(block) = block {
+                    self.buffer_allocator.return_block(block);
+                }
+            }
+        }
+        if let Some(discarded_allocation) =
+            self.buffer_allocator.finished_assigning_make_allocation()
+        {
+            self.buffers_to_free_when_safe.push(discarded_allocation);
+        }
+        // Convert offsets to pointers
+        for &key in &node_order {
+            unsafe { (&mut *self.nodes.get())[key].swap_offset_to_ptr(&self.buffer_allocator) };
+        }
+        // Assign input pointers
+        for (node_key, edges) in &self.node_input_edges {
+            let num_inputs = self.get_nodes()[node_key].inputs;
+            let mut inputs = vec![crate::core::ptr::null(); num_inputs];
+
+            for (sink_channel, edge) in edges
+                .iter()
+                .enumerate()
+                // Return only the channels that are Some
+                .filter_map(|(i, e)| e.map(|e| (i, e)))
+            {
+                if let EdgeKind::Audio { channel_in_source } = edge.kind {
+                    let source_output_ptr = self.get_nodes()[edge.source]
+                        .node_output_ptr()
+                        .expect("real buffer was just assigned");
+                    inputs[sink_channel] =
+                        unsafe { source_output_ptr.add(channel_in_source * self.block_size) };
+                }
+            }
+            // If any input hasn't been set, give it a cleared zero buffer.
+            // This is important for soundness.
+            for input in &mut inputs {
+                if input.is_null() {
+                    *input = self.buffer_allocator.empty_channel();
+                }
+            }
+            unsafe { (&mut *self.nodes.get())[node_key].assign_inputs(inputs) };
+        }
+    }
 
     /// Applies the latest changes to connections and added nodes in the graph on the audio thread and updates the scheduler.
     pub fn commit_changes(&mut self) -> Result<(), GraphError> {
@@ -672,54 +748,7 @@ impl<F: Float> Graph<F> {
         self.free_old();
         if self.recalculation_required {
             self.calculate_node_order();
-
-            // Assign buffers
-            self.buffer_allocator.reset(self.block_size);
-            // TODO: Iterate by index instead
-            let node_order = self.node_order.clone();
-            for &key in &node_order {
-                let outputs = self.get_nodes()[key].outputs;
-                let offset = self.buffer_allocator.get_block(outputs, self.block_size);
-                self.get_nodes_mut()[key].assign_output_offset(offset);
-                // TODO: Return any blocks that can now be returned
-            }
-            if let Some(discarded_allocation) =
-                self.buffer_allocator.finished_assigning_make_allocation()
-            {
-                self.buffers_to_free_when_safe.push(discarded_allocation);
-            }
-            // Convert offsets to pointers
-            for &key in &node_order {
-                unsafe { (&mut *self.nodes.get())[key].swap_offset_to_ptr(&self.buffer_allocator) };
-            }
-            // Assign input pointers
-            for (node_key, edges) in &self.node_input_edges {
-                let num_inputs = self.get_nodes()[node_key].inputs;
-                let mut inputs = vec![crate::core::ptr::null(); num_inputs];
-
-                for (sink_channel, edge) in edges
-                    .iter()
-                    .enumerate()
-                    // Return only the channels that are Some
-                    .filter_map(|(i, e)| e.map(|e| (i, e)))
-                {
-                    if let EdgeKind::Audio { channel_in_source } = edge.kind {
-                        let source_output_ptr = self.get_nodes()[edge.source]
-                            .node_output_ptr()
-                            .expect("real buffer was just assigned");
-                        inputs[sink_channel] =
-                            unsafe { source_output_ptr.add(channel_in_source * self.block_size) };
-                    }
-                }
-                // If any input hasn't been set, give it a cleared zero buffer.
-                // This is important for soundness.
-                for input in &mut inputs {
-                    if input.is_null() {
-                        *input = self.buffer_allocator.empty_channel();
-                    }
-                }
-                unsafe { (&mut *self.nodes.get())[node_key].assign_inputs(inputs) };
-            }
+            self.allocate_node_buffers();
 
             let ggc = &mut self.graph_gen_communicator;
             let current_change_flag = crate::core::mem::replace(
