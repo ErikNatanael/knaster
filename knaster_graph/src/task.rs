@@ -33,12 +33,18 @@ pub(crate) struct InputToOutputTask {
     pub(crate) graph_output_index: usize,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum BlockOrGraphInput<F> {
+    Block(*mut F),
+    GraphInput(usize),
+}
+
 /// The buffers to be copied to the GraphGen output.
 #[derive(Debug)]
 pub(crate) struct OutputTask<F> {
     /// Pointers to buffers that are guaranteed to be sufficiently large for
     /// the current block size. One optional buffer per output.
-    pub(crate) channels: Box<[Option<*mut F>]>,
+    pub(crate) channels: Box<[Option<BlockOrGraphInput<F>>]>,
 }
 // impl<F: Float> std::fmt::Debug for OutputTask<F> {
 //     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -66,7 +72,6 @@ pub(crate) struct TaskData<F: Float> {
     // Tasks run Gens
     pub(crate) tasks: Box<[Task<F>]>,
     pub(crate) output_task: OutputTask<F>,
-    pub(crate) input_to_output_tasks: Box<[InputToOutputTask]>,
     // if the buffer allocation has been replaced, replace the Arc to them in
     // the GraphGen as well. This keeps the buffer allocation alive even if the
     // `Graph` is dropped.
@@ -80,6 +85,8 @@ pub(crate) struct TaskData<F: Float> {
     /// apply parameter changes directly by function calls before any tasks are
     /// applied.
     pub(crate) gens: Vec<(NodeKey, *mut dyn DynGen<F>)>,
+    /// (node_index_in_order, Vec<(graph_input_channel, node_input_channel))
+    pub(crate) graph_input_channels_to_nodes: Vec<(usize, Vec<(usize, usize)>)>,
 }
 
 impl<F: Float> TaskData<F> {

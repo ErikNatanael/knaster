@@ -148,14 +148,23 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
             tasks,
             output_task: output_tasks,
             current_buffer_allocation: new_buffer_allocation,
-            input_to_output_tasks,
             ar_parameter_changes,
             gens,
+            graph_input_channels_to_nodes,
         } = task_data;
 
         if let Some(buffer_allocation) = new_buffer_allocation.take() {
             // The old buffers will be kept alive until the Arc has been dropped in the GraphGen
             self._arc_buffer_allocation_ptr = buffer_allocation;
+        }
+
+        for (node_index, graph_input_indices) in graph_input_channels_to_nodes {
+            let node_in_buffers = &mut tasks[*node_index].in_buffers;
+            for (graph_input, node_input) in graph_input_indices {
+                let channel = input.channel_as_slice(*graph_input);
+                let graph_input_ptr = channel.as_ptr();
+                node_in_buffers[*node_input] = graph_input_ptr;
+            }
         }
 
         // Run the tasks
@@ -167,13 +176,21 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
         // Zero the output buffer.
         assert_eq!(output_tasks.channels.len(), Outputs::USIZE);
         for (in_channel, out_channel) in output_tasks.channels.iter().zip(output.iter_mut()) {
-            if let Some(ptr) = in_channel {
-                // Safety:
-                //
-                // We only provide allocations of the correct size from
-                // the Graph. Anything else is a bug.
-                let s = unsafe { slice::from_raw_parts(*ptr, self.block_size) };
-                out_channel.copy_from_slice(s);
+            if let Some(channel_input) = in_channel {
+                match channel_input {
+                    crate::task::BlockOrGraphInput::Block(ptr) => {
+                        // Safety:
+                        //
+                        // We only provide allocations of the correct size from
+                        // the Graph. Anything else is a bug.
+                        let s = unsafe { slice::from_raw_parts(*ptr, self.block_size) };
+                        out_channel.copy_from_slice(s);
+                    }
+                    crate::task::BlockOrGraphInput::GraphInput(channel) => {
+                        let s = input.channel_as_slice(*channel);
+                        out_channel.copy_from_slice(s);
+                    }
+                }
             } else {
                 out_channel.fill(F::ZERO);
             }
@@ -191,15 +208,6 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
             }
             self.freed = true;
             self.remove_me_flag.store(true, Ordering::SeqCst);
-        }
-
-        // Copy from inputs to outputs of the graph
-        for in_to_out_task in input_to_output_tasks.iter() {
-            // Safety: We always drop the&mut refernce before requesting
-            // another one so we cannot hold mutliple references to the
-            // same channnel.
-            unsafe { output.channel_as_slice_mut(in_to_out_task.graph_output_index) }
-                .copy_from_slice(input.channel_as_slice(in_to_out_task.graph_input_index));
         }
     }
 
