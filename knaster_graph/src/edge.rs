@@ -3,7 +3,7 @@ use crate::graph::NodeKey;
 /// An edge in the Graph. Only stores the source in the Edge since they are stored per sink node.
 #[derive(Clone, Debug, Copy)]
 pub(crate) struct Edge {
-    pub(crate) source: NodeKey,
+    pub(crate) source: NodeKeyOrGraph,
     pub(crate) kind: EdgeKind,
 }
 

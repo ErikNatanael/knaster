@@ -9,7 +9,7 @@ use std::{
 
 use crate::{
     buffer_allocator::BufferAllocator,
-    connectable::{ChainSink, ChainSinkKind, ConnectionChain},
+    connectable::{ChainElement, ChainSinkKind, ConnectionChain},
     core::sync::atomic::AtomicU64,
     dyngen::DynGen,
     edge::{Edge, EdgeKind, FeedbackEdge, InternalGraphEdge, NodeKeyOrGraph, ParameterEdge},
@@ -49,7 +49,7 @@ new_key_type! {
 pub struct NodeId {
     /// The key is only unique within the specific Graph
     key: NodeKey,
-    graph: GraphId,
+    pub(crate) graph: GraphId,
 }
 impl NodeId {
     pub fn key(&self) -> NodeKey {
@@ -341,18 +341,90 @@ impl<F: Float> Graph<F> {
         key
     }
 
-    fn connect_nodes(
+    pub fn connect_nodes(
         &mut self,
-        mut source: NodeKey,
+        source: impl Into<NodeId>,
+        sink: impl Into<NodeId>,
+        source_from_channel: usize,
+        sink_from_channel: usize,
+        channels: usize,
+        additive: bool,
+    ) -> Result<(), GraphError> {
+        let source = source.into();
+        let sink = sink.into();
+        if !source.graph == self.id {
+            return Err(GraphError::WrongGraph);
+        }
+        if !sink.graph == self.id {
+            return Err(GraphError::WrongGraph);
+        }
+        self.connect_to_node_internal(
+            NodeKeyOrGraph::Node(source.key()),
+            sink.key(),
+            source_from_channel,
+            sink_from_channel,
+            channels,
+            additive,
+        )
+    }
+    pub fn connect_node_to_output(
+        &mut self,
+        source: impl Into<NodeId>,
+        source_from_channel: usize,
+        sink_from_channel: usize,
+        channels: usize,
+        additive: bool,
+    ) -> Result<(), GraphError> {
+        let source = source.into();
+        if !source.graph == self.id {
+            return Err(GraphError::WrongGraph);
+        }
+        self.connect_node_to_output_internal(
+            source.key(),
+            source_from_channel,
+            sink_from_channel,
+            channels,
+            additive,
+        )
+    }
+    pub fn connect_input_to_node(
+        &mut self,
+        sink: impl Into<NodeId>,
+        source_from_channel: usize,
+        sink_from_channel: usize,
+        channels: usize,
+        additive: bool,
+    ) -> Result<(), GraphError> {
+        let sink = sink.into();
+        if !sink.graph == self.id {
+            return Err(GraphError::WrongGraph);
+        }
+        self.connect_to_node_internal(
+            NodeKeyOrGraph::Graph,
+            sink.key(),
+            source_from_channel,
+            sink_from_channel,
+            channels,
+            additive,
+        )
+    }
+
+    /// Make a connection between two nodes in the Graph when it is certain that
+    /// the NodeKeys are from this graph
+    fn connect_to_node_internal(
+        &mut self,
+        source: NodeKeyOrGraph,
         sink: NodeKey,
-        mut so_from: usize,
+        so_from: usize,
         si_from: usize,
         channels: usize,
         additive: bool,
     ) -> Result<(), GraphError> {
         let nodes = self.get_nodes();
-        if !nodes.contains_key(source) {
-            return Err(GraphError::NodeNotFound);
+        if let NodeKeyOrGraph::Node(source) = source {
+            if !nodes.contains_key(source) {
+                return Err(GraphError::NodeNotFound);
+            }
         }
         if !nodes.contains_key(sink) {
             return Err(GraphError::NodeNotFound);
@@ -390,7 +462,7 @@ impl<F: Float> Graph<F> {
                     },
                 });
                 self.node_input_edges[sink][si_from + i] = Some(Edge {
-                    source: add_node,
+                    source: NodeKeyOrGraph::Node(add_node),
                     kind: EdgeKind::Audio {
                         channel_in_source: 0,
                     },
@@ -408,10 +480,11 @@ impl<F: Float> Graph<F> {
     }
     // TODO: This would be much cleaner if the output was represented by a node
     // in the graph, created in `new`.
-    fn connect_node_to_output(
+    /// The internal function for connecting a node to the output
+    fn connect_node_to_output_internal(
         &mut self,
-        mut source: NodeKey,
-        mut so_from: usize,
+        source: NodeKey,
+        so_from: usize,
         si_from: usize,
         channels: usize,
         additive: bool,
@@ -495,7 +568,7 @@ impl<F: Float> Graph<F> {
                         },
                     ) => {
                         let channels = (*so_channels).min(si_channels);
-                        self.connect_nodes(
+                        self.connect_to_node_internal(
                             *source_node,
                             sink_node,
                             *so_from,
@@ -516,7 +589,7 @@ impl<F: Float> Graph<F> {
                         },
                     ) => {
                         let channels = (*so_channels).min(si_channels);
-                        self.connect_node_to_output(
+                        self.connect_node_to_output_internal(
                             *source_node,
                             *so_from,
                             si_from,
@@ -558,6 +631,7 @@ impl<F: Float> Graph<F> {
 
     pub fn subgraph<Inputs: Size, Outputs: Size>(&mut self, options: GraphSettings) -> Self {
         let (subgraph, graph_gen) = Self::new::<Inputs, Outputs>(options);
+        // TODO: Store node key in graph
         let node_key = self.push_node(graph_gen);
 
         subgraph
@@ -1090,8 +1164,8 @@ impl<F: Float> Graph<F> {
         // mutability.
         unsafe { &mut *self.nodes.get() }
     }
-    pub fn output(&self) -> ChainSink {
-        ChainSink {
+    pub fn output(&self) -> ChainElement {
+        ChainElement {
             kind: ChainSinkKind::GraphConnection {
                 from_chan: 0,
                 channels: self.num_outputs,
@@ -1172,6 +1246,12 @@ pub enum GraphError {
     SendToGraphGen(String),
     #[error("Node cannot be found in current Graph.")]
     NodeNotFound,
+    #[error("An id was given to a node in a different Graph")]
+    WrongGraph,
+    #[error("Tried to connect a graph input that doesn't exist: `{0}`")]
+    InputOutOfBounds(usize),
+    #[error("Tried to connect to a graph output that doesn't exist: `{0}`")]
+    OutputOutOfBounds(usize),
 }
 #[derive(thiserror::Error, Debug)]
 pub enum PushError {}

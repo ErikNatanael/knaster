@@ -16,28 +16,59 @@ use crate::{graph::NodeKey, handle::Handle};
 /// TODO: Implementors of this interface should also check input/output channel
 /// arity at runtime and report an error if there is an arity mismatch.
 pub trait Connectable {
-    fn to<T: Into<ChainSink>>(&self, sink: T) -> ConnectionChain;
+    // fn to_element(&self) -> ChainElement;
+    fn to<T: Into<ChainElement>>(&self, sink: T) -> ConnectionChain;
     /// Connect to `other` by adding any additional inputs with this one.
     ///
     /// This is different from first adding inputs together in that the
     /// [`Graph`] is responsible for keeping track of what other inputs the sink
     /// node has.
-    fn add_to<T: Into<ChainSink>>(&self, sink: T) -> ConnectionChain {
+    fn add_to<T: Into<ChainElement>>(&self, sink: T) -> ConnectionChain {
         let mut chain = self.to(sink);
         chain.additive = true;
         chain
     }
-    fn mul<T: Into<ChainSourceOrConstant>>(&self, other: T) -> ConnectionChain;
+    // Implement by connecting self `to` a new inline node with `other` as the other input
+    fn mul<T: Into<ChainSourceOrConstant>>(&self, other: T) -> ConnectionChain {
+        todo!()
+        // let other = other.into();
+        // match other {
+        //     ChainSourceOrConstant::ChainSource(source) => {
+        //         // TODO: hmmm there have to be an equal number of inputs and outputs in the two sources.
+        //         let source = ChainElement::pair(self.to_element(), source);
+        //         let sink = ChainElement {
+        //             kind: ChainSinkKind::NewInlineNode {
+        //                 op: InlineNodeKind::Mul,
+        //             },
+        //             inputs: source.outputs,
+        //             outputs: source.outputs / 2,
+        //         };
+        //         ConnectionChain {
+        //             source: Some(Box::new(ConnectionChain::chain_start(source))),
+        //             sink,
+        //             additive: false,
+        //         }
+        //     }
+        //     ChainSourceOrConstant::Constant(constant) => {
+        //         todo!()
+        //     }
+        // }
+    }
 }
 
 #[derive(Clone, Debug)]
 pub enum ChainSourceOrConstant {
-    ChainSource(ChainSink),
+    ChainSource(ChainElement),
     Constant(PFloat),
 }
-impl From<ChainSink> for ChainSourceOrConstant {
-    fn from(value: ChainSink) -> Self {
+impl From<ChainElement> for ChainSourceOrConstant {
+    fn from(value: ChainElement) -> Self {
         ChainSourceOrConstant::ChainSource(value)
+    }
+}
+impl From<ConnectionChain> for ChainSourceOrConstant {
+    fn from(value: ConnectionChain) -> Self {
+        ChainSourceOrConstant::ChainSource(value.into())
     }
 }
 impl From<PFloat> for ChainSourceOrConstant {
@@ -47,45 +78,26 @@ impl From<PFloat> for ChainSourceOrConstant {
 }
 
 impl Connectable for ConnectionChain {
-    fn to<T: Into<ChainSink>>(&self, sink: T) -> ConnectionChain {
+    fn to<T: Into<ChainElement>>(&self, sink: T) -> ConnectionChain {
         ConnectionChain {
             source: Some(Box::new(self.clone())),
             sink: sink.into(),
             additive: false,
         }
     }
-
-    fn mul<T: Into<ChainSourceOrConstant>>(&self, source: T) -> ConnectionChain {
-        ConnectionChain {
-            source: Some(Box::new(self.clone())),
-            sink: ChainSink {
-                kind: ChainSinkKind::NewInlineNode {
-                    op: InlineNodeKind::Mul,
-                    source: Box::new(source.into()),
-                },
-                inputs: self.sink.outputs,
-                outputs: self.sink.outputs,
-            },
-            additive: false,
-        }
-    }
 }
 impl<G: Gen + Parameterable<G::Sample>> Connectable for Handle<G> {
-    fn to<T: Into<ChainSink>>(&self, other: T) -> ConnectionChain {
+    fn to<T: Into<ChainElement>>(&self, other: T) -> ConnectionChain {
         ConnectionChain {
-            source: Some(Box::new(ConnectionChain {
-                source: None,
-                sink: ChainSink {
-                    kind: ChainSinkKind::Node {
-                        key: self.untyped_handle.node.key(),
-                        from_chan: 0,
-                        channels: self.outputs(),
-                    },
-                    inputs: 0,
-                    outputs: self.outputs(),
+            source: Some(Box::new(ConnectionChain::chain_start(ChainElement {
+                kind: ChainSinkKind::Node {
+                    key: self.untyped_handle.node.key(),
+                    from_chan: 0,
+                    channels: self.outputs(),
                 },
-                additive: false,
-            })),
+                inputs: 0,
+                outputs: self.outputs(),
+            }))),
             sink: other.into(),
             additive: false,
         }
@@ -145,7 +157,7 @@ impl<G: Gen + Parameterable<G::Sample>> Connectable for Handle<G> {
 //     // }
 // }
 #[derive(Clone, Debug)]
-pub struct ChainSink {
+pub struct ChainElement {
     pub(crate) kind: ChainSinkKind,
     pub(crate) inputs: usize,
     pub(crate) outputs: usize,
@@ -160,7 +172,6 @@ pub enum ChainSinkKind {
     /// Inline Mul, Add, Sub, Div etc. that should be added to the graph in between.
     NewInlineNode {
         op: InlineNodeKind,
-        source: Box<ChainSourceOrConstant>,
     },
     GraphConnection {
         from_chan: usize,
@@ -173,8 +184,18 @@ pub enum ChainSinkKind {
     },
     Chain(Box<ConnectionChain>),
     Parameter(Param),
+    Pair(Box<(ChainElement, ChainElement)>),
 }
-impl ChainSink {
+impl ChainElement {
+    pub fn pair(e0: ChainElement, e1: ChainElement) -> Self {
+        let inputs = e0.inputs + e1.inputs;
+        let outputs = e0.outputs + e1.outputs;
+        Self {
+            kind: ChainSinkKind::Pair(Box::new((e0, e1))),
+            inputs,
+            outputs,
+        }
+    }
     // pub fn to_connection_node(&self) -> Option<ConnectionNode> {
     //     match self.kind {
     //         ChainSinkKind::NewInlineNode(_) => todo!(),
@@ -220,14 +241,21 @@ pub enum InlineNodeKind {
 #[derive(Clone, Debug)]
 pub struct ConnectionChain {
     source: Option<Box<ConnectionChain>>,
-    sink: ChainSink,
+    sink: ChainElement,
     additive: bool,
 }
 impl ConnectionChain {
-    pub fn deconstruct(self) -> (Option<Box<ConnectionChain>>, ChainSink) {
+    fn chain_start(source: ChainElement) -> Self {
+        ConnectionChain {
+            source: None,
+            sink: source,
+            additive: false,
+        }
+    }
+    pub fn deconstruct(self) -> (Option<Box<ConnectionChain>>, ChainElement) {
         (self.source, self.sink)
     }
-    pub fn sink(&self) -> &ChainSink {
+    pub fn sink(&self) -> &ChainElement {
         &self.sink
     }
     pub fn source(&self) -> &Option<Box<ConnectionChain>> {
@@ -240,9 +268,9 @@ impl ConnectionChain {
     }
 }
 
-impl From<ConnectionChain> for ChainSink {
+impl From<ConnectionChain> for ChainElement {
     fn from(value: ConnectionChain) -> Self {
-        ChainSink {
+        ChainElement {
             inputs: value
                 .source
                 .as_ref()
