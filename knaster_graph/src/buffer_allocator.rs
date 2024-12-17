@@ -5,30 +5,31 @@
 //! memory is allocated if necessary and the offsets are converted into real
 //! pointers to memory.
 //!
-//! # How to use
-//! ```rust
-//! let a = BufferAllocator::<f32>::new(128);
-//! // 1. Assign blocks
-//! let in_block = a.get_block(64);
-//! let out_block = a.get_block(64);
-//! // We pretend the node has been processed
-//! // The in_block_can be returned
-//! a.return_block(in_block);
-//! // The old out_block becomes the input block to the next 2 Gens
-//! let out_block2 = a.get_block(64);
-//! let out_block3 = a.get_block(64);
-//! a.return_block(out_block);
-//! a.return_block(out_block2);
-//! a.return_block(out_block3);
-//! // Let the allocator reallocate if necessary
-//! a.finished_assigning_make_allocation();
-//! // Replace the offsets by ptrs
-//! let in_block = a.offset_to_ptr(in_block).unwrap();
-//! let out_block = a.offset_to_ptr(out_block).unwrap();
-//! let out_block2 = a.offset_to_ptr(out_block2).unwrap();
-//! let out_block3 = a.offset_to_ptr(out_block3).unwrap();
-//! ```
-//!
+// # How to use
+// ```rust
+// use knaster_graph::buffer_allocator::BufferAllocator;
+// let a = BufferAllocator::<f32>::new(128);
+// // 1. Assign blocks
+// let in_block = a.get_block(64);
+// let out_block = a.get_block(64);
+// // We pretend the node has been processed
+// // The in_block_can be returned
+// a.return_block(in_block);
+// // The old out_block becomes the input block to the next 2 Gens
+// let out_block2 = a.get_block(64);
+// let out_block3 = a.get_block(64);
+// a.return_block(out_block);
+// a.return_block(out_block2);
+// a.return_block(out_block3);
+// // Let the allocator reallocate if necessary
+// a.finished_assigning_make_allocation();
+// // Replace the offsets by ptrs
+// let in_block = a.offset_to_ptr(in_block).unwrap();
+// let out_block = a.offset_to_ptr(out_block).unwrap();
+// let out_block2 = a.offset_to_ptr(out_block2).unwrap();
+// let out_block3 = a.offset_to_ptr(out_block3).unwrap();
+// ```
+//
 
 use crate::core::sync::Arc;
 use crate::graph::OwnedRawBuffer;
@@ -108,15 +109,17 @@ impl<F: Float> BufferAllocator<F> {
         let len = num_channels * block_size;
         // 1. Try to use an existing allocated block in order of return. If only
         // part of a block is needed, split it.
-        for i in (self.return_order.len() - 1)..=0 {
-            let index = self.return_order[i];
-            if self.allocated_blocks[index].outstanding_borrows == 0
-                && self.allocated_blocks[index].len <= len
-            {
-                // It's a match!
-                self.allocated_blocks[index].outstanding_borrows = num_borrows;
-                self.return_order.remove(i);
-                return self.allocated_blocks[index].start_offset;
+        if self.return_order.len() > 0 {
+            for i in (self.return_order.len() - 1)..=0 {
+                let index = self.return_order[i];
+                if self.allocated_blocks[index].outstanding_borrows == 0
+                    && self.allocated_blocks[index].len <= len
+                {
+                    // It's a match!
+                    self.allocated_blocks[index].outstanding_borrows = num_borrows;
+                    self.return_order.remove(i);
+                    return self.allocated_blocks[index].start_offset;
+                }
             }
         }
         // 2. If blocks are available, but too small, try to merge adjacent ones

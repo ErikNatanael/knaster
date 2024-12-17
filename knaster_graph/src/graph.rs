@@ -358,6 +358,22 @@ impl<F: Float> Graph<F> {
             additive,
         )
     }
+    /// Connect a graph input directly to a graph output
+    pub fn connect_input_to_output(
+        &mut self,
+        source_from_channel: usize,
+        sink_from_channel: usize,
+        channels: usize,
+        additive: bool,
+    ) -> Result<(), GraphError> {
+        self.connect_to_output_internal(
+            NodeKeyOrGraph::Graph,
+            source_from_channel,
+            sink_from_channel,
+            channels,
+            additive,
+        )
+    }
     pub fn connect_node_to_output(
         &mut self,
         source: impl Into<NodeId>,
@@ -421,6 +437,7 @@ impl<F: Float> Graph<F> {
             return Err(GraphError::NodeNotFound);
         }
 
+        self.recalculation_required = true;
         // Fast and common path
         if !additive {
             for i in 0..channels {
@@ -487,6 +504,7 @@ impl<F: Float> Graph<F> {
             }
         }
 
+        self.recalculation_required = true;
         // Fast and common path
         if !additive {
             for i in 0..channels {
@@ -524,9 +542,6 @@ impl<F: Float> Graph<F> {
                         channel_in_source: 0,
                     },
                 });
-                dbg!(self.node_input_edges[add_node][0]);
-                dbg!(self.node_input_edges[add_node][1]);
-                dbg!(self.output_edges[si_from + i]);
             } else {
                 self.output_edges[si_from + i] = Some(Edge {
                     source,
@@ -799,7 +814,7 @@ impl<F: Float> Graph<F> {
                             input_pointers_to_node
                                 .as_mut()
                                 .unwrap()
-                                .push((channel_index, channel_in_source));
+                                .push((channel_in_source, channel_index));
                         }
                     }
                 }
@@ -865,19 +880,9 @@ impl<F: Float> Graph<F> {
             );
             let task_data =
                 self.generate_task_data(current_change_flag, graph_input_pointers_to_nodes);
-            for t in &task_data.tasks {
-                dbg!(&t.in_buffers);
-                dbg!(t.out_buffer);
-            }
             self.graph_gen_communicator.send_updated_tasks(task_data)?;
             self.recalculation_required = false;
         }
-        dbg!(&self.node_order);
-        for node in &self.node_order {
-            let n = self.get_nodes().get(*node).unwrap();
-            dbg!(n.node_output_ptr());
-        }
-        dbg!(&self.output_edges);
         Ok(())
     }
 

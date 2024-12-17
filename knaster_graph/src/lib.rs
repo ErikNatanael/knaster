@@ -39,5 +39,7 @@ mod node;
 pub mod runner;
 mod scheduling;
 mod task;
+#[cfg(test)]
+mod tests;
 
 pub use scheduling::*;

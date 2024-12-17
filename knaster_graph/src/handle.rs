@@ -59,12 +59,17 @@ impl<T: Gen + Parameterable<T::Sample>> Handle<T> {
         T::Outputs::USIZE
     }
 }
+impl<T> From<&Handle<T>> for NodeId {
+    fn from(value: &Handle<T>) -> Self {
+        value.untyped_handle.node
+    }
+}
 pub trait HandleTrait {
-    fn set<C: Into<ParameterChange>>(&mut self, change: C);
+    fn set<C: Into<ParameterChange>>(&self, change: C);
     fn from_untyped(untyped_handle: UntypedHandle) -> Self;
 }
 impl<T: Gen + Parameterable<T::Sample>> HandleTrait for Handle<T> {
-    fn set<C: Into<ParameterChange>>(&mut self, change: C) {
+    fn set<C: Into<ParameterChange>>(&self, change: C) {
         let c = change.into();
         // TODO: Error handling
         let mut sender = self.untyped_handle.sender.lock().unwrap();

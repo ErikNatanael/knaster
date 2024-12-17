@@ -146,7 +146,7 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
         let TaskData {
             applied: _,
             tasks,
-            output_task: output_tasks,
+            output_task,
             current_buffer_allocation: new_buffer_allocation,
             ar_parameter_changes,
             gens,
@@ -174,8 +174,8 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
 
         // Set the output of the graph
         // Zero the output buffer.
-        assert_eq!(output_tasks.channels.len(), Outputs::USIZE);
-        for (in_channel, out_channel) in output_tasks.channels.iter().zip(output.iter_mut()) {
+        debug_assert_eq!(output_task.channels.len(), Outputs::USIZE);
+        for (in_channel, out_channel) in output_task.channels.iter().zip(output.iter_mut()) {
             if let Some(channel_input) = in_channel {
                 match channel_input {
                     crate::task::BlockOrGraphInput::Block(ptr) => {
