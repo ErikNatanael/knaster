@@ -8,14 +8,14 @@ use crate::{parameters::*, AudioCtx, BlockAudioCtx, Gen, Rate};
 /// First send a [`ParameterValue::Smoothing`] for a specific parameter to set
 /// the type of smoothing to be applied. Then set the parameter to a new value.
 /// The value will be interpolated from the old to the new value.
-pub struct ParamSmoother<T: Gen + Parameterable<T::Sample>> {
+pub struct WrSmoothParams<T: Gen + Parameterable<T::Sample>> {
     gen: T,
     parameters: NumericArray<Rate, T::Parameters>,
     smoothing: NumericArray<ParameterSmoothing, T::Parameters>,
     smoothing_state: NumericArray<ParameterSmoothingState, T::Parameters>,
 }
 
-impl<T: Gen + Parameterable<T::Sample>> ParamSmoother<T> {
+impl<T: Gen + Parameterable<T::Sample>> WrSmoothParams<T> {
     pub fn new(gen: T) -> Self {
         Self {
             gen,
@@ -101,7 +101,7 @@ impl<T: Gen + Parameterable<T::Sample>> ParamSmoother<T> {
         }
     }
 }
-impl<T: Gen + Parameterable<T::Sample>> Gen for ParamSmoother<T> {
+impl<T: Gen + Parameterable<T::Sample>> Gen for WrSmoothParams<T> {
     type Sample = T::Sample;
 
     type Inputs = T::Inputs;
@@ -186,7 +186,7 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for ParamSmoother<T> {
     }
 }
 
-impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for ParamSmoother<T> {
+impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrSmoothParams<T> {
     type Parameters = T::Parameters;
 
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {

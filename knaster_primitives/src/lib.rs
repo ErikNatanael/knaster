@@ -31,6 +31,7 @@ pub use block::*;
 mod float;
 pub use float::*;
 // Reexport typenum and numeric_array because we need to keep it consistent within everything that touches knaster
+pub use num_traits::Float as FloatMethods;
 pub use numeric_array;
 pub use numeric_array::typenum;
 
