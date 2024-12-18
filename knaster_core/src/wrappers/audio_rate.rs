@@ -13,16 +13,16 @@ use crate::{
 
 /// Wrapper that enables setting a parameter to an audio rate signal. This must
 /// wrap a [`Gen`] for audio rate parameter changes to take effect.
-pub struct ArParams<T: Gen + Parameterable<T::Sample>> {
+pub struct WrArParams<T: Gen + Parameterable<T::Sample>> {
     gen: T,
     buffers: NumericArray<Option<*const T::Sample>, T::Parameters>,
     // Keeps track of where we are in a block if processing sample-by-sample
     block_index: usize,
 }
 
-unsafe impl<T: Gen + Parameterable<T::Sample>> Send for ArParams<T> {}
+unsafe impl<T: Gen + Parameterable<T::Sample>> Send for WrArParams<T> {}
 
-impl<T: Gen + Parameterable<T::Sample>> ArParams<T> {
+impl<T: Gen + Parameterable<T::Sample>> WrArParams<T> {
     pub fn new(gen: T) -> Self {
         Self {
             gen,
@@ -32,7 +32,7 @@ impl<T: Gen + Parameterable<T::Sample>> ArParams<T> {
     }
 }
 
-impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for ArParams<T> {
+impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrArParams<T> {
     type Parameters = T::Parameters;
 
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
@@ -58,7 +58,7 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for ArParams<T>
         self.buffers[index] = Some(buffer);
     }
 }
-impl<T: Gen + Parameterable<T::Sample>> Gen for ArParams<T> {
+impl<T: Gen + Parameterable<T::Sample>> Gen for WrArParams<T> {
     type Sample = T::Sample;
 
     type Inputs = T::Inputs;
