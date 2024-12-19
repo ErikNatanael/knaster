@@ -32,6 +32,7 @@ pub trait GenWrapperExt<T: Gen + Parameterable<T::Sample>> {
     fn wr_div(self, v: T::Sample) -> WrDiv<T>;
     fn wr_v_div_gen(self, v: T::Sample) -> WrVDivGen<T>;
     fn wr_powf(self, v: T::Sample) -> WrPowf<T>;
+    fn wr_powi(self, v: i32) -> WrPowi<T>;
     /// Enable smoothing/easing functions for float parameters
     fn smooth_params(self) -> WrSmoothParams<T>;
     /// Enable setting a parameter to an audio rate signal
@@ -80,5 +81,9 @@ impl<T: Gen + Parameterable<T::Sample>> GenWrapperExt<T> for T {
 
     fn ar_params(self) -> WrArParams<T> {
         WrArParams::new(self)
+    }
+
+    fn wr_powi(self, v: i32) -> WrPowi<T> {
+        WrPowi::new(self, v)
     }
 }

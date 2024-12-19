@@ -25,6 +25,8 @@ mod core {
 pub mod dsp;
 mod gen;
 mod parameters;
+#[cfg(test)]
+mod tests;
 pub mod wrappers;
 
 pub use gen::*;
