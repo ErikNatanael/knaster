@@ -1,4 +1,4 @@
-use crate::core::marker::PhantomData;
+use crate::{core::marker::PhantomData, dsp::wavetable::WavetablePhase};
 
 use knaster_primitives::{
     numeric_array::NumericArray,
@@ -13,35 +13,43 @@ use crate::{
 };
 
 use super::{AudioCtx, Gen};
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "std"))]
 mod wavetable_vec {
-    use crate::dsp::wavetable::{Wavetable, WavetablePhase};
+    use core::{cell::OnceCell, marker::PhantomData};
+    use std::sync::{LazyLock, OnceLock};
+
+    use knaster_primitives::{
+        numeric_array::NumericArray,
+        typenum::{U0, U1, U3},
+        Float, Frame,
+    };
+
+    use crate::{
+        dsp::wavetable::{NonAaWavetable, Wavetable, WavetablePhase, FRACTIONAL_PART, TABLE_SIZE},
+        AudioCtx, Gen, PFloat, ParameterRange, ParameterType, ParameterValue, Parameterable,
+    };
 
     /// Osciallator with an owned Wavetable
-    /// *inputs*
-    /// 0. "freq": The frequency of oscillation
-    /// *outputs*
-    /// 0. "sig": The signal
     #[derive(Debug, Clone)]
-    pub struct WavetableOscillator<F> {
+    pub struct OscWt<F> {
         step: u32,
         phase: WavetablePhase,
+        phase_offset: WavetablePhase,
         wavetable: Wavetable<F>,
-        amp: F,
         freq_to_phase_inc: f64,
         freq: F,
     }
 
-    impl<F: Float> WavetableOscillator<F> {
+    impl<F: Float> OscWt<F> {
         /// Set the frequency of the oscillation. This will be overwritten by the
         /// input frequency if used as a Gen.
         pub fn set_freq(&mut self, freq: F) {
             self.freq = freq;
-            self.step = (freq as f64 * self.freq_to_phase_inc) as u32;
+            self.step = (freq.to_f64() * self.freq_to_phase_inc) as u32;
         }
-        /// Set the amplitude of the signal.
-        pub fn set_amp(&mut self, amp: Sample) {
-            self.amp = amp;
+        /// Set the phase offset in a range 0-1
+        pub fn set_phase_offset(&mut self, offset: F) {
+            self.phase_offset = WavetablePhase((offset.to_f64() * FRACTIONAL_PART as f64) as u32);
         }
         /// Reset the phase of the oscillator.
         pub fn reset_phase(&mut self) {
@@ -51,41 +59,201 @@ mod wavetable_vec {
         /// Generate the next sample given the current settings.
         #[inline(always)]
         #[must_use]
-        pub fn next_sample(&mut self) -> Sample {
+        pub fn next_sample(&mut self) -> F {
             // Use the phase to index into the wavetable
             // self.wavetable.get_linear_interp(temp_phase) * self.amp
-            let sample = self.wavetable.get(self.phase, self.freq) * self.amp;
+            let sample = self
+                .wavetable
+                .get(self.phase + self.phase_offset, self.freq);
             self.phase.increase(self.step);
             sample
         }
     }
 
-    #[impl_gen(range=normal)]
-    impl WavetableOscillator {
-        #[allow(missing_docs)]
-        #[must_use]
-        pub fn new(wavetable: Wavetable) -> Self {
-            WavetableOscillator {
-                step: 0,
-                phase: WavetablePhase(0),
-                wavetable,
-                amp: 1.0,
-                freq_to_phase_inc: 0.0, // set to a real value in init
-                freq: 0.,
-            }
-        }
-        fn process(&mut self, freq: &[Sample], sig: &mut [Sample]) -> GenState {
-            assert!(freq.len() == sig.len());
-            for (&freq, o) in freq.iter().zip(sig.iter_mut()) {
-                self.set_freq(freq);
-                *o = self.next_sample();
-            }
-            GenState::Continue
-        }
-        fn init(&mut self, sample_rate: SampleRate) {
+    impl<F: Float> Gen for OscWt<F> {
+        type Sample = F;
+        type Inputs = U0;
+        type Outputs = U1;
+        fn init(&mut self, ctx: &crate::AudioCtx) {
             self.reset_phase();
             self.freq_to_phase_inc =
-                TABLE_SIZE as f64 * FRACTIONAL_PART as f64 * (1.0 / sample_rate.to_f64());
+                TABLE_SIZE as f64 * FRACTIONAL_PART as f64 * (1.0 / ctx.sample_rate() as f64);
+        }
+
+        fn process(
+            &mut self,
+            _ctx: &mut crate::AudioCtx,
+            _input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
+        ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
+            [self.next_sample()].into()
+        }
+        fn process_block<InBlock, OutBlock>(
+            &mut self,
+            _ctx: &mut crate::BlockAudioCtx,
+            _input: &InBlock,
+            output: &mut OutBlock,
+        ) where
+            InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
+            OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+        {
+            // TODO: Try SIMDifying this with a buffer of phase etc
+            for out in output.channel_as_slice_mut(0) {
+                *out = self.next_sample();
+            }
+        }
+    }
+    impl<F: Float> Parameterable<F> for OscWt<F> {
+        type Parameters = U3;
+
+        fn param_types() -> NumericArray<ParameterType, Self::Parameters> {
+            NumericArray::from([
+                ParameterType::Float,
+                ParameterType::Float,
+                ParameterType::Trigger,
+            ])
+        }
+
+        fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+            NumericArray::from(["freq", "phase_offset", "reset_phase"])
+        }
+
+        fn param_default_values() -> NumericArray<ParameterValue, Self::Parameters> {
+            NumericArray::from([
+                ParameterValue::Float(440. as PFloat),
+                ParameterValue::Float(0.),
+                ParameterValue::Trigger,
+            ])
+        }
+
+        fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
+            todo!()
+        }
+
+        fn param_apply(&mut self, ctx: &AudioCtx, index: usize, value: ParameterValue) {
+            if matches!(value, ParameterValue::Smoothing(..)) {
+                eprintln!("Tried to set parameter smoothing with out a wrapper");
+                return;
+            }
+            match index {
+                0 => self.set_freq(F::from(value.float().unwrap()).unwrap()),
+                1 => self.set_phase_offset(F::from(value.float().unwrap()).unwrap()),
+                2 => self.reset_phase(),
+                _ => (),
+            }
+        }
+    }
+
+    static SINE_WAVETABLE_F32: LazyLock<NonAaWavetable<f32>> =
+        LazyLock::new(|| NonAaWavetable::sine());
+    /// Sine wave based on a wavetable lookup.
+    ///
+    /// A sine wave does not need to be anti-aliased so it uses a simpler
+    /// wavetable structure than OscWt.
+    pub struct SinWt<F> {
+        phase: WavetablePhase,
+        phase_offset: WavetablePhase,
+        phase_increment: u32,
+        freq_to_phase_inc: f64,
+        wavetable: &'static NonAaWavetable<f32>,
+        _marker: PhantomData<F>,
+    }
+    impl<F: Float> Default for SinWt<F> {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl<F: Float> SinWt<F> {
+        pub fn new() -> Self {
+            Self {
+                phase: WavetablePhase(0),
+                phase_offset: WavetablePhase(0),
+                phase_increment: 0,
+                _marker: PhantomData,
+                freq_to_phase_inc: 0.0,
+                wavetable: &SINE_WAVETABLE_F32,
+            }
+        }
+        /// Set the frequency of the oscillation. This will be overwritten by the
+        /// input frequency if used as a Gen.
+        pub fn set_freq(&mut self, freq: F) {
+            self.phase_increment = (freq.to_f64() * self.freq_to_phase_inc) as u32;
+        }
+        /// Set the phase offset in a range 0-1
+        pub fn set_phase_offset(&mut self, offset: F) {
+            self.phase_offset = WavetablePhase((offset.to_f64() * FRACTIONAL_PART as f64) as u32);
+        }
+        /// Reset the phase of the oscillator.
+        pub fn reset_phase(&mut self) {
+            self.phase.0 = 0;
+        }
+
+        /// Generate the next sample given the current settings.
+        #[inline(always)]
+        #[must_use]
+        pub fn next_sample(&mut self) -> F {
+            // Use the phase to index into the wavetable
+            // self.wavetable.get_linear_interp(temp_phase) * self.amp
+            let sample = self.wavetable.get(self.phase + self.phase_offset);
+            self.phase.increase(self.phase_increment);
+            F::new(sample)
+        }
+    }
+
+    impl<F: Float> Gen for SinWt<F> {
+        type Sample = F;
+        type Inputs = U0;
+        type Outputs = U1;
+
+        fn init(&mut self, _ctx: &AudioCtx) {}
+
+        fn process(
+            &mut self,
+            _ctx: &mut AudioCtx,
+            _input: Frame<Self::Sample, Self::Inputs>,
+        ) -> Frame<Self::Sample, Self::Outputs> {
+            [self.next_sample()].into()
+        }
+    }
+
+    impl<F: Float> Parameterable<F> for SinWt<F> {
+        type Parameters = U3;
+
+        fn param_types() -> NumericArray<ParameterType, Self::Parameters> {
+            NumericArray::from([
+                ParameterType::Float,
+                ParameterType::Float,
+                ParameterType::Trigger,
+            ])
+        }
+
+        fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+            NumericArray::from(["freq", "phase_offset", "reset_phase"])
+        }
+
+        fn param_default_values() -> NumericArray<ParameterValue, Self::Parameters> {
+            NumericArray::from([
+                ParameterValue::Float(440. as PFloat),
+                ParameterValue::Float(0.),
+                ParameterValue::Trigger,
+            ])
+        }
+
+        fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
+            todo!()
+        }
+
+        fn param_apply(&mut self, ctx: &AudioCtx, index: usize, value: ParameterValue) {
+            if matches!(value, ParameterValue::Smoothing(..)) {
+                eprintln!("Tried to set parameter smoothing with out a wrapper");
+                return;
+            }
+            match index {
+                0 => self.set_freq(F::from(value.float().unwrap()).unwrap()),
+                1 => self.set_phase_offset(F::from(value.float().unwrap()).unwrap()),
+                2 => self.reset_phase(),
+                _ => (),
+            }
         }
     }
 }
@@ -162,21 +330,25 @@ impl<F: Float> Parameterable<F> for Phasor<F> {
     }
 }
 
-/// Sine wave calculated using the trigonometric function for this platform, as opposed to using a shared lookup table
+/// Sine wave calculated using the trigonometric function for this platform, as
+/// opposed to using a shared lookup table
 ///
-/// A lookup table is often faster, but (with libm) this implementation is available on every platform, even without allocation.
-pub struct SinMath<F> {
+/// Phase is set between 0 and 1
+///
+/// A lookup table is often faster, but (with libm) this implementation is
+/// available on every platform, even without allocation.
+pub struct SinNumeric<F> {
     phase: F,
     phase_offset: F,
     phase_increment: F,
 }
-impl<F: Float> Default for SinMath<F> {
+impl<F: Float> Default for SinNumeric<F> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<F: Float> SinMath<F> {
+impl<F: Float> SinNumeric<F> {
     pub fn new() -> Self {
         Self {
             phase: F::ZERO,
@@ -192,7 +364,7 @@ impl<F: Float> SinMath<F> {
     }
 }
 
-impl<F: Float> Gen for SinMath<F> {
+impl<F: Float> Gen for SinNumeric<F> {
     type Sample = F;
     type Inputs = U0;
     type Outputs = U1;
@@ -204,8 +376,7 @@ impl<F: Float> Gen for SinMath<F> {
         _ctx: &mut AudioCtx,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
-        let from = F::TAU;
-        let out = (self.phase * from).sin();
+        let out = ((self.phase + self.phase_offset) * F::TAU).sin();
         self.phase += self.phase_increment;
         if self.phase > F::ONE {
             self.phase -= F::ONE;
@@ -214,7 +385,7 @@ impl<F: Float> Gen for SinMath<F> {
     }
 }
 
-impl<F: Float> Parameterable<F> for SinMath<F> {
+impl<F: Float> Parameterable<F> for SinNumeric<F> {
     type Parameters = U3;
 
     fn param_types() -> NumericArray<ParameterType, Self::Parameters> {

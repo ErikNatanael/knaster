@@ -1,14 +1,13 @@
 //! Wrappers are composable type that wrap aroung a [`Gen`] + [`Parameterable`]
 //! to provide some extra functionality.
 //!
-//!
-//!
 //! Wrapper types begin by "Wr" by convention to make it easier to spot what's what.
 
 // TODO: Wrapper types that take one value per output channel
 
 mod audio_rate;
 mod closure;
+mod hi_res_params;
 pub use closure::*;
 mod math;
 pub use math::*;

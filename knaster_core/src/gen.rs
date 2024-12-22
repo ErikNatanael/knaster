@@ -5,7 +5,7 @@ use knaster_primitives::{typenum::*, Block, BlockRead, Float, Frame, Size};
 
 /// Contains basic metadata about the context in which an audio process is
 /// running which is often necessary for correct calculation, initialisation etc.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct AudioCtx {
     sample_rate: u32,
     block_size: usize,
@@ -61,7 +61,10 @@ impl AudioCtx {
 ///
 /// Most [`Gen`]s don't need that info and can work straight off of the buffers
 /// given, but some do need to know where they are within a standard block.
-#[derive(Clone, Debug)]
+// TODO: Make BlockAudioCtx mutably borrow an AudioCtx to make partial blocks
+// more efficient. This would avoid having to copy flags and parameters that
+// don't change when a partial block is created.
+#[derive(Clone, Copy, Debug)]
 pub struct BlockAudioCtx {
     audio_ctx: AudioCtx,
     /// The offset of the current processing block from the start of any
@@ -89,14 +92,12 @@ impl BlockAudioCtx {
             frame_clock: 0,
         }
     }
-    pub fn make_partial(&mut self, start_offset: usize, length: usize) {
-        self.block_start_offset = start_offset;
-        self.frames_to_process = length;
-    }
-    /// Removes state for a partial block
-    pub fn clear_partiality(&mut self) {
-        self.block_start_offset = 0;
-        self.frames_to_process = self.block_size();
+    pub fn make_partial(&self, start_offset: usize, length: usize) -> BlockAudioCtx {
+        let mut new = *self;
+        new.block_start_offset += start_offset;
+        new.frames_to_process = length;
+        new.frame_clock += start_offset as u64;
+        new
     }
     /// Substitute the frame clock time with your own. You almost never want to
     /// do this inside the graph.

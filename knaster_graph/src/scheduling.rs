@@ -29,6 +29,7 @@ pub struct SchedulingEvent {
     pub(crate) value: Option<ParameterValue>,
     pub(crate) smoothing: Option<ParameterSmoothing>,
     pub(crate) token: Option<SchedulingToken>,
+    pub(crate) time: Option<SchedulingTime>,
 }
 pub(crate) type SchedulingChannelProducer = rtrb::Producer<SchedulingEvent>;
 // Every GraphGen has one of these for receiving parameter changes.

@@ -25,9 +25,6 @@ impl<T: Gen + Parameterable<T::Sample>> WrSmoothParams<T> {
             smoothing_state: NumericArray::default(),
         }
     }
-    // pub fn new(gen: T) -> (Self, Changer<Sample, T>) {
-    //     todo!()
-    // }
     pub fn set_smoothing(
         &mut self,
         index: usize,
@@ -160,15 +157,19 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrSmoothParams<T> {
                     }
                     let input = input.partial(i, 1);
                     let mut output = output.partial_mut(i, 1);
-                    ctx.make_partial(i, 1);
-                    self.gen.process_block(ctx, &input, &mut output);
+                    let mut partial_ctx = ctx.make_partial(i, 1);
+                    self.gen
+                        .process_block(&mut partial_ctx, &input, &mut output);
+                    ctx.combine_flag_state(&mut partial_ctx);
                     i += 1;
                 } else {
                     // Process the full block
                     let input = input.partial(i, input.block_size() - i);
                     let mut output = output.partial_mut(i, output.block_size() - i);
-                    ctx.make_partial(i, ctx.block_size() - i);
-                    self.gen.process_block(ctx, &input, &mut output);
+                    let mut partial_ctx = ctx.make_partial(i, ctx.block_size() - i);
+                    self.gen
+                        .process_block(&mut partial_ctx, &input, &mut output);
+                    ctx.combine_flag_state(&mut partial_ctx);
                     break;
                 }
             }
@@ -182,7 +183,6 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrSmoothParams<T> {
             }
             self.gen.process_block(ctx, input, output);
         }
-        ctx.clear_partiality();
     }
 }
 

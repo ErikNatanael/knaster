@@ -49,6 +49,13 @@ impl WavetablePhase {
         self.0 = self.0.wrapping_add(add);
     }
 }
+impl core::ops::Add for WavetablePhase {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0.wrapping_add(rhs.0))
+    }
+}
 
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub use wavetable_vec::*;
@@ -69,14 +76,17 @@ mod wavetable_vec {
     #[cfg(feature = "std")]
     use std::vec::Vec;
 
-    /// Holds a table with some partial range of harmonics of the full waveform
+    /// Non-anti-aliased wavetable.
+    ///
+    /// It is used in [`Wavetable`] to store some partial range of harmonics of
+    /// the full waveform.
     #[derive(Debug, Clone)]
-    struct PartialTable<F> {
+    pub struct NonAaWavetable<F> {
         buffer: Vec<F>,      // Box<[Sample; 131072]>,
         diff_buffer: Vec<F>, // Box<[Sample; 131072]>,
     }
 
-    impl<F: Float> Default for PartialTable<F> {
+    impl<F: Float> Default for NonAaWavetable<F> {
         fn default() -> Self {
             let buffer = vec![F::ZERO; TABLE_SIZE];
             let diff_buffer = vec![F::ZERO; TABLE_SIZE];
@@ -86,7 +96,7 @@ mod wavetable_vec {
             }
         }
     }
-    impl<F: Float> PartialTable<F> {
+    impl<F: Float> NonAaWavetable<F> {
         pub fn new() -> Self {
             Self::default()
         }
@@ -390,14 +400,14 @@ mod wavetable_vec {
     /// operations may allocate.
     #[derive(Debug, Clone)]
     pub struct Wavetable<F> {
-        partial_tables: Vec<PartialTable<F>>,
+        partial_tables: Vec<NonAaWavetable<F>>,
     }
 
     impl<F: Float> Default for Wavetable<F> {
         fn default() -> Self {
             let num_tables = freq_to_table_index(20000.0) + 1;
             Wavetable {
-                partial_tables: vec![PartialTable::default(); num_tables],
+                partial_tables: vec![NonAaWavetable::default(); num_tables],
             }
         }
     }
@@ -456,7 +466,7 @@ mod wavetable_vec {
         pub fn sine() -> Self {
             let mut wt = Wavetable::new();
             for table in &mut wt.partial_tables {
-                *table = PartialTable::sine();
+                *table = NonAaWavetable::sine();
             }
             wt
         }
@@ -465,7 +475,7 @@ mod wavetable_vec {
         pub fn cosine() -> Self {
             let mut wt = Wavetable::new();
             for table in &mut wt.partial_tables {
-                *table = PartialTable::cosine();
+                *table = NonAaWavetable::cosine();
             }
             wt
         }
@@ -474,30 +484,16 @@ mod wavetable_vec {
         pub fn aliasing_saw() -> Self {
             let mut wt = Wavetable::new();
             for table in &mut wt.partial_tables {
-                *table = PartialTable::aliasing_saw();
+                *table = NonAaWavetable::aliasing_saw();
             }
             wt
         }
-        // #[must_use]
-        // pub fn crazy(seed: u32) -> Self {
-        //     let wavetable_size = TABLE_SIZE;
-        //     let mut wt = Wavetable::new();
-        //     let mut xorrng = XOrShift32Rng::new(seed);
-        //     wt.fill_sine(16, 1.0);
-        //     for _ in 0..(xorrng.gen_u32() % 3 + 1) {
-        //         wt.fill_sine(16, (xorrng.gen_f32() * 32.0).floor());
-        //     }
-        //     wt.add_noise(1.0 - xorrng.gen_f64() * 0.05, seed + wavetable_size as u32);
-        //     wt.normalize();
-        //     wt.update_diff_buffer();
-        //     wt
-        // }
         #[must_use]
         /// Produces a Hann window
         pub fn hann_window() -> Self {
             let mut wt = Wavetable::new();
             for table in &mut wt.partial_tables {
-                *table = PartialTable::hann_window();
+                *table = NonAaWavetable::hann_window();
             }
             wt
         }
@@ -506,7 +502,7 @@ mod wavetable_vec {
         pub fn hamming_window() -> Self {
             let mut wt = Wavetable::new();
             for table in &mut wt.partial_tables {
-                *table = PartialTable::hamming_window();
+                *table = NonAaWavetable::hamming_window();
             }
             wt
         }
@@ -515,7 +511,7 @@ mod wavetable_vec {
         pub fn sine_window() -> Self {
             let mut wt = Wavetable::new();
             for table in &mut wt.partial_tables {
-                *table = PartialTable::sine_window();
+                *table = NonAaWavetable::sine_window();
             }
             wt
         }
@@ -572,6 +568,8 @@ mod wavetable_vec {
             }
         }
         /// Add noise to the wavetable using [`XOrShift32Rng`], keeping the wavetable within +/- 1.0
+        ///
+        /// TODO: Anti-alias by FFT
         pub fn add_noise(&mut self, probability: f64, seed: u32) {
             for table in self.partial_tables.iter_mut() {
                 table.add_noise(probability, seed);
@@ -619,7 +617,7 @@ mod wavetable_vec {
 
     #[cfg(test)]
     mod tests {
-        use super::{table_index_to_max_freq_produced, table_index_to_max_harmonic};
+        use super::table_index_to_max_freq_produced;
 
         use super::freq_to_table_index;
 
@@ -628,22 +626,22 @@ mod wavetable_vec {
             freq_to_table_index(0.0);
             freq_to_table_index(20.0);
             freq_to_table_index(20000.0);
-            dbg!(freq_to_table_index(0.0));
-            dbg!(freq_to_table_index(20.0));
-            dbg!(freq_to_table_index(20000.0));
-            let max_index = freq_to_table_index(20050.) + 1;
-            println!("Max freq produced:");
-            for i in 0..max_index {
-                dbg!(table_index_to_max_freq_produced(i));
-            }
-            println!("Num harmonics for table:");
-            for i in 0..max_index {
-                println!(
-                    "{i}: max_harmonics: {} max_freq: {}",
-                    table_index_to_max_harmonic(i),
-                    table_index_to_max_freq_produced(i)
-                );
-            }
+            // dbg!(freq_to_table_index(0.0));
+            // dbg!(freq_to_table_index(20.0));
+            // dbg!(freq_to_table_index(20000.0));
+            // let max_index = freq_to_table_index(20050.) + 1;
+            // println!("Max freq produced:");
+            // for i in 0..max_index {
+            //     dbg!(table_index_to_max_freq_produced(i));
+            // }
+            // println!("Num harmonics for table:");
+            // for i in 0..max_index {
+            //     println!(
+            //         "{i}: max_harmonics: {} max_freq: {}",
+            //         table_index_to_max_harmonic(i),
+            //         table_index_to_max_freq_produced(i)
+            //     );
+            // }
             assert!(table_index_to_max_freq_produced(freq_to_table_index(20000.)) >= 20000.);
             assert!(table_index_to_max_freq_produced(freq_to_table_index(20.)) >= 20.);
             assert!(table_index_to_max_freq_produced(freq_to_table_index(200.)) >= 200.);

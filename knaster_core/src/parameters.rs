@@ -38,7 +38,7 @@ pub trait Parameterable<F> {
     /// `ArParams` wrapper or alternative wrapper making use of this value wraps the Gen.
     ///
     /// There is little use in calling this directly unless you are implementing
-    /// a graph. If you are not using a graph, using the ArParams wrapper and
+    /// a graph. If you are not using a `Graph`, using the ArParams wrapper and
     /// this function is equivalent to running frame-by-frame and setting the
     /// value every frame.
     ///
@@ -48,6 +48,16 @@ pub trait Parameterable<F> {
     /// disabled, or the inner struct is dropped.
     #[allow(unused)]
     unsafe fn param_set_ar_param_buffer(&mut self, index: usize, buffer: *const F) {}
+    /// Sets a delay to what frame within the next block the next parameter
+    /// change should take effect.
+    ///
+    /// This will not have any effect unless a [`WrHiResParams`] wrapper is
+    /// used, or the [`Gen`] supports it internally (none of the Knaster proper
+    /// Gens do).
+    ///
+    /// Wrappers must propagagte this call.
+    #[allow(unused)]
+    fn param_set_delay_in_block_for_index(&mut self, index: usize, delay: u16) {}
     /// Apply a parameter change. Typechecks and bounds checks the arguments and
     /// provides sensible errors. Calls [`Parameterable::param_apply`] under the hood.
     fn param(

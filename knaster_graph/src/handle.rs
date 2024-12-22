@@ -100,8 +100,7 @@ pub struct ParameterChange {
     value: Option<ParameterValue>,
     smoothing: Option<ParameterSmoothing>,
     token: Option<SchedulingToken>,
-    // TODO:
-    // time: Option<SchedulingTime>,
+    time: Option<SchedulingTime>,
 }
 impl<P: Into<Param>, V: Into<ParameterValue>> From<(P, V)> for ParameterChange {
     fn from((param, value): (P, V)) -> Self {
@@ -110,6 +109,7 @@ impl<P: Into<Param>, V: Into<ParameterValue>> From<(P, V)> for ParameterChange {
             value: Some(value.into()),
             smoothing: None,
             token: None,
+            time: None,
         }
     }
 }
@@ -120,6 +120,7 @@ impl<P: Into<Param>, V: Into<ParameterValue>> From<(P, V, SchedulingToken)> for 
             value: Some(value.into()),
             smoothing: None,
             token: Some(token),
+            time: None,
         }
     }
 }
@@ -132,6 +133,7 @@ impl<P: Into<Param>, V: Into<ParameterValue>, S: Into<ParameterSmoothing>>
             value: Some(value.into()),
             smoothing: Some(smoothing.into()),
             token: Some(token),
+            time: None,
         }
     }
 }
@@ -144,6 +146,7 @@ impl<P: Into<Param>, V: Into<ParameterValue>, S: Into<ParameterSmoothing>> From<
             value: Some(value.into()),
             smoothing: Some(smoothing.into()),
             token: None,
+            time: None,
         }
     }
 }
