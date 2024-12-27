@@ -1,6 +1,8 @@
 pub mod math;
 pub mod osc;
 
+use core::ops::Deref;
+
 use knaster_primitives::{typenum::*, Block, BlockRead, Float, Frame, Size};
 
 /// Contains basic metadata about the context in which an audio process is
@@ -9,14 +11,12 @@ use knaster_primitives::{typenum::*, Block, BlockRead, Float, Frame, Size};
 pub struct AudioCtx {
     sample_rate: u32,
     block_size: usize,
-    flags: GenFlags,
 }
 impl AudioCtx {
     pub fn new(sample_rate: u32, block_size: usize) -> Self {
         Self {
             sample_rate,
             block_size,
-            flags: GenFlags::default(),
         }
     }
     pub fn block_size(&self) -> usize {
@@ -24,35 +24,6 @@ impl AudioCtx {
     }
     pub fn sample_rate(&self) -> u32 {
         self.sample_rate
-    }
-    /// Set the flag to remove this node. Returns true if freeing self is
-    /// supported by the node tree and false if it isn't. If this returns false,
-    /// the node will not be removed.
-    pub fn remove_self(&mut self) -> bool {
-        self.flags.remove_self = true;
-        self.flags.remove_self_supported
-    }
-    /// Set the flag to remove the graph that owns this node and from which frame.
-    ///
-    /// From and including the frame number specified, the graph will output 0.0
-    /// on all channels until removed. To output the entire block, set
-    /// `from_frame_in_block` to the current block size.
-    pub fn remove_graph(&mut self, from_frame_in_block: u32) {
-        self.flags.remove_graph = true;
-        self.flags.remove_graph_from_frame_in_block = from_frame_in_block;
-    }
-    pub fn combine_flag_state(&mut self, other: &mut AudioCtx) {
-        self.flags.remove_graph = self.flags.remove_graph || other.flags.remove_graph;
-        if self.flags.remove_graph {
-            self.flags.remove_graph_from_frame_in_block = self
-                .flags
-                .remove_graph_from_frame_in_block
-                .min(other.flags.remove_graph_from_frame_in_block);
-        }
-        self.flags.remove_self = self.flags.remove_self || other.flags.remove_self;
-    }
-    pub fn flags_mut(&mut self) -> &mut GenFlags {
-        &mut self.flags
     }
 }
 /// [`AudioCtx`] + metadata about the current context of block processing.
@@ -84,20 +55,21 @@ pub struct BlockAudioCtx {
     frame_clock: u64,
 }
 impl BlockAudioCtx {
-    pub fn new(sample_rate: u32, block_size: usize) -> Self {
+    pub fn new(ctx: AudioCtx) -> Self {
         Self {
-            audio_ctx: AudioCtx::new(sample_rate, block_size),
+            frames_to_process: ctx.block_size,
+            audio_ctx: ctx,
             block_start_offset: 0,
-            frames_to_process: block_size,
             frame_clock: 0,
         }
     }
     pub fn make_partial(&self, start_offset: usize, length: usize) -> BlockAudioCtx {
-        let mut new = *self;
-        new.block_start_offset += start_offset;
-        new.frames_to_process = length;
-        new.frame_clock += start_offset as u64;
-        new
+        Self {
+            audio_ctx: self.audio_ctx,
+            block_start_offset: self.block_start_offset + start_offset,
+            frames_to_process: length,
+            frame_clock: self.frame_clock + start_offset as u64,
+        }
     }
     /// Substitute the frame clock time with your own. You almost never want to
     /// do this inside the graph.
@@ -119,30 +91,27 @@ impl BlockAudioCtx {
     pub fn sample_rate(&self) -> u32 {
         self.audio_ctx.sample_rate
     }
-    /// Set the flag to remove this node. Returns true if freeing self is
-    /// supported by the node tree and false if it isn't. If this returns false,
-    /// the node will not be removed.
-    pub fn remove_self(&mut self) -> bool {
-        self.audio_ctx.remove_self()
-    }
-    /// Set the flag to remove the graph that owns this node and from which frame.
-    ///
-    /// From and including the frame number specified, the graph will output 0.0
-    /// on all channels until removed. To output the entire block, set
-    /// `from_frame_in_block` to the current block size.
-    pub fn remove_graph(&mut self, from_frame_in_block: u32) {
-        self.audio_ctx.remove_graph(from_frame_in_block);
-    }
-    pub fn combine_flag_state(&mut self, other: &mut BlockAudioCtx) {
-        self.audio_ctx.combine_flag_state(other.into())
-    }
-    pub fn flags_mut(&mut self) -> &mut GenFlags {
-        &mut self.audio_ctx.flags
+}
+impl Deref for BlockAudioCtx {
+    type Target = AudioCtx;
+
+    fn deref(&self) -> &Self::Target {
+        &self.audio_ctx
     }
 }
 impl<'a> From<&'a mut BlockAudioCtx> for &'a mut AudioCtx {
     fn from(val: &'a mut BlockAudioCtx) -> Self {
         &mut val.audio_ctx
+    }
+}
+impl From<AudioCtx> for BlockAudioCtx{
+    fn from(val: AudioCtx) -> Self {
+        BlockAudioCtx::new(val)
+    }
+}
+impl From<BlockAudioCtx> for AudioCtx {
+    fn from(val: BlockAudioCtx) -> Self {
+        val.audio_ctx
     }
 }
 impl<'a> From<&'a BlockAudioCtx> for &'a AudioCtx {
@@ -161,8 +130,13 @@ impl<'a> From<&'a mut BlockAudioCtx> for &'a AudioCtx {
         &val.audio_ctx
     }
 }
-/// Used for carrying some basic state up through the tree of wrappers.
+/// Output state used for carrying some basic state up through the tree of Gens and wrappers.
 /// Currently only used for freeing nodes.
+/// 
+/// When a node wants to signal that it should be freed, it will set the flag 
+/// `remove_self`. When a node wants to signal that its parent should be freed, it will set 
+/// the flag `remove_container`. It is up to the graph implementations how the node will be 
+/// freed. In knaster_graph, `remove_self` requires a wrapper while `remove_parent` is built in.
 #[derive(Copy, Clone, Debug)]
 pub struct GenFlags {
     /// Will be set to true by a wrapper if self freeing it supported on the
@@ -173,20 +147,28 @@ pub struct GenFlags {
     remove_self_supported: bool,
     /// If the local node should be freed. Requires a wrapper to free it.
     remove_self: bool,
-    /// Set to true if the graph should be freed within this block
-    remove_graph: bool,
-    /// The frame at which the graph should be freed. From (including) that
+    /// Set to true if the parent of this node should be freed within this block
+    remove_parent: bool,
+    /// The frame at which the parent should be freed. From (including) that
     /// frame, the graph output will be 0 until it is removed.
-    remove_graph_from_frame_in_block: u32,
+    remove_parent_from_frame_in_block: u32,
 }
 impl GenFlags {
+    pub fn new() -> Self {
+        Self {
+            remove_self_supported: false,
+            remove_self: false,
+            remove_parent: false,
+            remove_parent_from_frame_in_block: u32::MAX,
+        }
+    }
     /// If the graph should be removed this returns Some(u32) where the u32 is
     /// the frame in the current block from which the graph should output 0. The
     /// frame number may be larger than the current block, in which case the
     /// whole block should be output as usual.
     pub fn remove_graph(&self) -> Option<u32> {
-        if self.remove_graph {
-            Some(self.remove_graph_from_frame_in_block)
+        if self.remove_parent {
+            Some(self.remove_parent_from_frame_in_block)
         } else {
             None
         }
@@ -194,20 +176,29 @@ impl GenFlags {
     pub fn remove_self(&self) -> bool {
         self.remove_self
     }
+    /// Set the flag to remove this node. Returns true if freeing self is
+    /// supported by the node tree and false if it isn't. If this returns false,
+    /// the node will not be removed.
     pub fn set_remove_self(&mut self) {
         if self.remove_self_supported {
             self.remove_self = true;
         } else {
             // TODO: report error
+            eprintln!("Warning: Remove self flag set, but not supported.");
         }
     }
+    /// Set the flag to remove the graph that owns this node and from which frame.
+    ///
+    /// From and including the frame number specified, the graph will output 0.0
+    /// on all channels until removed. To output the entire block, set
+    /// `from_frame_in_block` to the current block size.
     pub fn set_remove_graph(&mut self, from_frame: u32) {
-        self.remove_graph = true;
-        self.remove_graph_from_frame_in_block = from_frame;
+        self.remove_parent = true;
+        self.remove_parent_from_frame_in_block = from_frame;
     }
     pub fn clear_graph_flags(&mut self) {
-        self.remove_graph = false;
-        self.remove_graph_from_frame_in_block = u32::MAX;
+        self.remove_parent = false;
+        self.remove_parent_from_frame_in_block = u32::MAX;
     }
     pub fn clear_node_flags(&mut self) {
         self.remove_self = false;
@@ -216,12 +207,7 @@ impl GenFlags {
 }
 impl Default for GenFlags {
     fn default() -> Self {
-        Self {
-            remove_self_supported: false,
-            remove_self: false,
-            remove_graph: false,
-            remove_graph_from_frame_in_block: u32::MAX,
-        }
+        Self::new()
     }
 }
 pub trait Gen {
@@ -239,7 +225,8 @@ pub trait Gen {
     fn init(&mut self, ctx: &AudioCtx) {}
     fn process(
         &mut self,
-        ctx: &mut AudioCtx,
+        ctx: AudioCtx,
+        flags: &mut GenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs>;
 
@@ -254,7 +241,8 @@ pub trait Gen {
     /// The information about partial blocks is available in [`BlockAudioCtx`]
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        ctx: &mut BlockAudioCtx,
+        ctx: BlockAudioCtx,
+        flags: &mut GenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where
@@ -267,7 +255,7 @@ pub trait Gen {
             for i in 0..Self::Inputs::USIZE {
                 in_frame[i] = input.read(i, frame);
             }
-            let out_frame = self.process(ctx.into(), in_frame);
+            let out_frame = self.process(ctx.into(), flags, in_frame);
             for i in 0..Self::Outputs::USIZE {
                 output.write(out_frame[i], i, frame);
             }

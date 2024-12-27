@@ -4,17 +4,12 @@ use core::f32;
 
 use anyhow::Result;
 use knaster_core::{
-    empty_block,
-    numeric_array::NumericArray,
-    typenum::{Unsigned, U0, U1, U3},
-    AudioCtx, Block, BlockAudioCtx, Float, Frame, Gen, PFloat, Param, ParameterError,
-    ParameterRange, ParameterType, ParameterValue, Parameterable, VecBlock,
+    empty_block, numeric_array::NumericArray, typenum::{Unsigned, U0, U1, U3}, AudioCtx, Block, BlockAudioCtx, Float, Frame, Gen, GenFlags, PFloat, Param, ParameterError, ParameterRange, ParameterType, ParameterValue, Parameterable, VecBlock
 };
 fn main() -> Result<()> {
     // Let's pretend we're running an audio backend at 48kHz with a block size of 64.
-    let mut ctx = BlockAudioCtx::new(48000, 64);
-    // A &mut BlockAudioCtx plays better with the `.into()` typecasting
-    let ctx = &mut ctx;
+    let ctx = BlockAudioCtx::new(AudioCtx::new(48000, 64));
+    let mut flags = GenFlags::new();
     let mut osc = Osc::new();
     // Since we own the Osc directly and it isn't wrapped in anything, we can
     // set the frequency directly:
@@ -24,11 +19,11 @@ fn main() -> Result<()> {
 
     // # Generating audio
     // We can generate frames one by one:
-    let output = osc.process(ctx.into(), [].into());
+    let output = osc.process(ctx.into(), &mut flags,[].into());
     assert_eq!(output[0], 0.0);
     // Or in blocks
     let mut output_block = VecBlock::new(1, 64);
-    osc.process_block(ctx, &&empty_block(), &mut output_block);
+    osc.process_block(ctx, &mut flags, &&empty_block(), &mut output_block);
     assert!(
         (output_block.read(0, 63)
             - ((200.0 / ctx.sample_rate() as f32) * f32::consts::TAU * 64.).sin())
@@ -74,7 +69,8 @@ impl<F: Float> Gen for Osc<F> {
 
     fn process(
         &mut self,
-        _ctx: &mut AudioCtx,
+        _ctx: AudioCtx,
+        _flags: &mut GenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         let out = (self.phase * F::from(std::f32::consts::TAU).unwrap()).sin();
@@ -113,7 +109,7 @@ impl<F: Float> Parameterable<F> for Osc<F> {
         todo!()
     }
 
-    fn param_apply(&mut self, ctx: &AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
         match index {
             0 => self.freq(
                 F::from(value.float().unwrap()).unwrap(),
@@ -127,7 +123,7 @@ impl<F: Float> Parameterable<F> for Osc<F> {
 
     fn param(
         &mut self,
-        ctx: &AudioCtx,
+        ctx: AudioCtx,
         param: impl Into<Param>,
         value: impl Into<ParameterValue>,
     ) -> Result<(), ParameterError> {

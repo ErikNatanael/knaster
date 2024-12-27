@@ -4,9 +4,7 @@
 //! - Typesafe Handle types
 
 use crate::{
-    core::marker::PhantomData,
-    graph::{GraphId, NodeId, NodeKey},
-    SchedulingEvent, SchedulingToken,
+    core::marker::PhantomData, graph::{GraphId, NodeId, NodeKey}, SchedulingEvent, SchedulingTime, SchedulingToken
 };
 use knaster_core::{
     numeric_array, typenum::Unsigned, AudioCtx, Gen, Param, ParameterRange, ParameterSmoothing,
@@ -80,6 +78,7 @@ impl<T: Gen + Parameterable<T::Sample>> HandleTrait for Handle<T> {
                 value: c.value,
                 smoothing: c.smoothing,
                 token: c.token,
+                time: c.time,
             })
             .unwrap();
     }
@@ -196,8 +195,8 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for Handle<T> {
         T::param_range()
     }
 
-    fn param_apply(&mut self, ctx: &AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, _ctx: AudioCtx, index: usize, value: ParameterValue) {
         // Instead of setting parameters directly, send changes to the scheduler
-        todo!()
+        self.set((index, value));
     }
 }

@@ -1,4 +1,4 @@
-use knaster_core::{typenum::NonZero, BlockAudioCtx, Float, Size};
+use knaster_core::{typenum::NonZero, AudioCtx, BlockAudioCtx, Float, GenFlags, Size};
 
 use crate::{
     block::{AggregateBlockRead, RawBlock},
@@ -56,11 +56,12 @@ impl<F: Float> Runner<F> {
     /// returns. The pointers will not be stored past this function call.
     pub unsafe fn run(&mut self, input_pointers: &[*const F]) {
         assert!(input_pointers.len() == self.inputs());
-        let mut ctx = BlockAudioCtx::new(self.sample_rate, self.block_size);
+        let mut ctx = BlockAudioCtx::new(AudioCtx::new(self.sample_rate, self.block_size));
         ctx.set_frame_clock(self.frame_clock);
+        let mut flags = GenFlags::new();
         let gen = self.graph_node.gen;
         let input = unsafe { AggregateBlockRead::new(input_pointers, self.block_size) };
-        unsafe { &mut (*gen) }.process_block(&mut ctx, &input, &mut self.output_block);
+        unsafe { &mut (*gen) }.process_block(ctx, &mut flags, &input, &mut self.output_block);
         self.frame_clock += self.block_size as u64;
     }
     pub fn output_block(&mut self) -> &mut RawBlock<F> {

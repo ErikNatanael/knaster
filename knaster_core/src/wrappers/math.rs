@@ -1,6 +1,6 @@
 use knaster_primitives::FloatMethods;
 
-use crate::{Gen, Parameterable};
+use crate::{Gen, GenFlags, Parameterable};
 
 // TODO: SIMD implementations for blocks
 // TODO: SIMD implementations for multi channel frame by frame outputs
@@ -23,14 +23,32 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrMul<T> {
 
     fn process(
         &mut self,
-        ctx: &mut crate::AudioCtx,
+        ctx: crate::AudioCtx,
+        flags: &mut GenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
-        let mut out = self.gen.process(ctx, input);
+        let mut out = self.gen.process(ctx, flags, input);
         for sample in &mut out {
             *sample *= self.value;
         }
         out
+    }
+    fn process_block<InBlock, OutBlock>(
+        &mut self,
+        ctx: crate::BlockAudioCtx,
+        flags: &mut GenFlags,
+        input: &InBlock,
+        output: &mut OutBlock,
+    ) where
+        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+    {
+        self.gen.process_block(ctx, flags, input, output);
+        for channel in output.iter_mut() {
+            for sample in channel {
+                *sample *= self.value;
+            }
+        }
     }
 }
 
@@ -54,8 +72,14 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrMul<T> {
         T::param_range()
     }
 
-    fn param_apply(&mut self, ctx: &crate::AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
         T::param_apply(&mut self.gen, ctx, index, value)
+    }
+    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
+        self.gen.set_ar_param_buffer(index, buffer);
+    }
+    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
+        self.gen.set_delay_within_block_for_param(index, delay);
     }
 }
 
@@ -76,14 +100,32 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrAdd<T> {
 
     fn process(
         &mut self,
-        ctx: &mut crate::AudioCtx,
+        ctx: crate::AudioCtx,
+        flags: &mut GenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
-        let mut out = self.gen.process(ctx, input);
+        let mut out = self.gen.process(ctx, flags, input);
         for sample in &mut out {
             *sample += self.value;
         }
         out
+    }
+    fn process_block<InBlock, OutBlock>(
+        &mut self,
+        ctx: crate::BlockAudioCtx,
+        flags: &mut GenFlags,
+        input: &InBlock,
+        output: &mut OutBlock,
+    ) where
+        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+    {
+        self.gen.process_block(ctx, flags, input, output);
+        for channel in output.iter_mut() {
+            for sample in channel {
+                *sample += self.value;
+            }
+        }
     }
 }
 
@@ -107,8 +149,14 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrAdd<T> {
         T::param_range()
     }
 
-    fn param_apply(&mut self, ctx: &crate::AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
         T::param_apply(&mut self.gen, ctx, index, value)
+    }
+    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
+        self.gen.set_ar_param_buffer(index, buffer);
+    }
+    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
+        self.gen.set_delay_within_block_for_param(index, delay);
     }
 }
 
@@ -129,14 +177,32 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrSub<T> {
 
     fn process(
         &mut self,
-        ctx: &mut crate::AudioCtx,
+        ctx: crate::AudioCtx,
+        flags: &mut GenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
-        let mut out = self.gen.process(ctx, input);
+        let mut out = self.gen.process(ctx, flags, input);
         for sample in &mut out {
             *sample -= self.value;
         }
         out
+    }
+    fn process_block<InBlock, OutBlock>(
+        &mut self,
+        ctx: crate::BlockAudioCtx,
+        flags: &mut GenFlags,
+        input: &InBlock,
+        output: &mut OutBlock,
+    ) where
+        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+    {
+        self.gen.process_block(ctx, flags, input, output);
+        for channel in output.iter_mut() {
+            for sample in channel {
+                *sample -= self.value;
+            }
+        }
     }
 }
 
@@ -160,8 +226,14 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrSub<T> {
         T::param_range()
     }
 
-    fn param_apply(&mut self, ctx: &crate::AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
         T::param_apply(&mut self.gen, ctx, index, value)
+    }
+    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
+        self.gen.set_ar_param_buffer(index, buffer);
+    }
+    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
+        self.gen.set_delay_within_block_for_param(index, delay);
     }
 }
 /// `value` - `gen`
@@ -181,14 +253,33 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrVSubGen<T> {
 
     fn process(
         &mut self,
-        ctx: &mut crate::AudioCtx,
+        ctx: crate::AudioCtx,
+        flags: &mut GenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
-        let mut out = self.gen.process(ctx, input);
+        let mut out = self.gen.process(ctx, flags, input);
         for sample in &mut out {
             *sample = self.value - *sample;
         }
         out
+    }
+
+    fn process_block<InBlock, OutBlock>(
+        &mut self,
+        ctx: crate::BlockAudioCtx,
+        flags: &mut GenFlags,
+        input: &InBlock,
+        output: &mut OutBlock,
+    ) where
+        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+    {
+        self.gen.process_block(ctx, flags, input, output);
+        for channel in output.iter_mut() {
+            for sample in channel {
+                *sample = self.value - *sample;
+            }
+        }
     }
 }
 
@@ -212,8 +303,14 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrVSubGen<T
         T::param_range()
     }
 
-    fn param_apply(&mut self, ctx: &crate::AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
         T::param_apply(&mut self.gen, ctx, index, value)
+    }
+    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
+        self.gen.set_ar_param_buffer(index, buffer);
+    }
+    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
+        self.gen.set_delay_within_block_for_param(index, delay);
     }
 }
 
@@ -234,14 +331,32 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrDiv<T> {
 
     fn process(
         &mut self,
-        ctx: &mut crate::AudioCtx,
+        ctx: crate::AudioCtx,
+        flags: &mut GenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
-        let mut out = self.gen.process(ctx, input);
+        let mut out = self.gen.process(ctx, flags, input);
         for sample in &mut out {
             *sample /= self.value;
         }
         out
+    }
+    fn process_block<InBlock, OutBlock>(
+        &mut self,
+        ctx: crate::BlockAudioCtx,
+        flags: &mut GenFlags,
+        input: &InBlock,
+        output: &mut OutBlock,
+    ) where
+        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+    {
+        self.gen.process_block(ctx, flags, input, output);
+        for channel in output.iter_mut() {
+            for sample in channel {
+                *sample /= self.value;
+            }
+        }
     }
 }
 
@@ -265,8 +380,14 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrDiv<T> {
         T::param_range()
     }
 
-    fn param_apply(&mut self, ctx: &crate::AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
         T::param_apply(&mut self.gen, ctx, index, value)
+    }
+    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
+        self.gen.set_ar_param_buffer(index, buffer);
+    }
+    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
+        self.gen.set_delay_within_block_for_param(index, delay);
     }
 }
 
@@ -287,14 +408,33 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrVDivGen<T> {
 
     fn process(
         &mut self,
-        ctx: &mut crate::AudioCtx,
+        ctx: crate::AudioCtx,
+        flags: &mut GenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
-        let mut out = self.gen.process(ctx, input);
+        let mut out = self.gen.process(ctx, flags, input);
         for sample in &mut out {
             *sample = self.value / *sample;
         }
         out
+    }
+
+    fn process_block<InBlock, OutBlock>(
+        &mut self,
+        ctx: crate::BlockAudioCtx,
+        flags: &mut GenFlags,
+        input: &InBlock,
+        output: &mut OutBlock,
+    ) where
+        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+    {
+        self.gen.process_block(ctx, flags, input, output);
+        for channel in output.iter_mut() {
+            for sample in channel {
+            *sample = self.value / *sample;
+            }
+        }
     }
 }
 
@@ -318,8 +458,14 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrVDivGen<T
         T::param_range()
     }
 
-    fn param_apply(&mut self, ctx: &crate::AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
         T::param_apply(&mut self.gen, ctx, index, value)
+    }
+    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
+        self.gen.set_ar_param_buffer(index, buffer);
+    }
+    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
+        self.gen.set_delay_within_block_for_param(index, delay);
     }
 }
 
@@ -340,14 +486,34 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrPowf<T> {
 
     fn process(
         &mut self,
-        ctx: &mut crate::AudioCtx,
+        ctx: crate::AudioCtx,
+        flags: &mut GenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
-        let mut out = self.gen.process(ctx, input);
+        let mut out = self.gen.process(ctx, flags, input);
         for sample in &mut out {
             *sample = sample.powf(self.value);
         }
         out
+    }
+
+    fn process_block<InBlock, OutBlock>(
+        &mut self,
+        ctx: crate::BlockAudioCtx,
+        flags: &mut GenFlags,
+        input: &InBlock,
+        output: &mut OutBlock,
+    ) where
+        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+    {
+        self.gen.process_block(ctx, flags, input, output);
+        for channel in output.iter_mut() {
+            for sample in channel {
+
+            *sample = sample.powf(self.value);
+            }
+        }
     }
 }
 
@@ -371,8 +537,14 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrPowf<T> {
         T::param_range()
     }
 
-    fn param_apply(&mut self, ctx: &crate::AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
         T::param_apply(&mut self.gen, ctx, index, value)
+    }
+    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
+        self.gen.set_ar_param_buffer(index, buffer);
+    }
+    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
+        self.gen.set_delay_within_block_for_param(index, delay);
     }
 }
 
@@ -393,10 +565,11 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrPowi<T> {
 
     fn process(
         &mut self,
-        ctx: &mut crate::AudioCtx,
+        ctx: crate::AudioCtx,
+        flags: &mut GenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
-        let mut out = self.gen.process(ctx, input);
+        let mut out = self.gen.process(ctx, flags, input);
         for sample in &mut out {
             *sample = sample.powi(self.value);
         }
@@ -424,7 +597,13 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrPowi<T> {
         T::param_range()
     }
 
-    fn param_apply(&mut self, ctx: &crate::AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
         T::param_apply(&mut self.gen, ctx, index, value)
+    }
+    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
+        self.gen.set_ar_param_buffer(index, buffer);
+    }
+    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
+        self.gen.set_delay_within_block_for_param(index, delay);
     }
 }

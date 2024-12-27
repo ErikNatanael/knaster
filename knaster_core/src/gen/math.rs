@@ -8,6 +8,8 @@ use knaster_primitives::{
 
 use crate::{Gen, Parameterable};
 
+use super::GenFlags;
+
 pub trait Operation<T> {
     #[cfg(feature = "unstable")]
     const SIMD_WIDTH: usize =
@@ -93,7 +95,8 @@ where
 
     fn process(
         &mut self,
-        _ctx: &mut crate::AudioCtx,
+        _ctx: crate::AudioCtx,
+        _flags: &mut GenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
         // This is probably quite inefficient, but block processing will be the
@@ -115,7 +118,8 @@ where
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        _ctx: &mut crate::BlockAudioCtx,
+        _ctx: crate::BlockAudioCtx,
+        _flags: &mut GenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where
@@ -146,7 +150,7 @@ impl<F: Float, Channels: Size, Op: Operation<F>> Parameterable<F> for MathGen<F,
     }
     fn param_apply(
         &mut self,
-        _ctx: &crate::AudioCtx,
+        _ctx: crate::AudioCtx,
         _index: usize,
         _value: crate::ParameterValue,
     ) {

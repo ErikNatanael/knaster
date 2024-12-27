@@ -1,6 +1,5 @@
 use knaster_core::{
-    typenum::{U0, U1},
-    Float, Gen, PFloat, ParameterRange, Parameterable,
+    typenum::{U0, U1}, Float, Gen, GenFlags, PFloat, ParameterRange, Parameterable
 };
 
 /// Outputs a static number every frame
@@ -21,7 +20,8 @@ impl<F: Float> Gen for TestNumGen<F> {
 
     fn process(
         &mut self,
-        _ctx: &mut knaster_core::AudioCtx,
+        _ctx: knaster_core::AudioCtx,
+        _flags: &mut GenFlags,
         _input: knaster_core::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         [self.number].into()
@@ -49,7 +49,7 @@ impl<F: Float> Parameterable<F> for TestNumGen<F> {
 
     fn param_apply(
         &mut self,
-        _ctx: &knaster_core::AudioCtx,
+        _ctx: knaster_core::AudioCtx,
         _index: usize,
         _value: knaster_core::ParameterValue,
     ) {
@@ -77,7 +77,8 @@ impl<F: Float> Gen for TestInPlusParamGen<F> {
 
     fn process(
         &mut self,
-        _ctx: &mut knaster_core::AudioCtx,
+        _ctx: knaster_core::AudioCtx,
+        _flags: &mut GenFlags,
         input: knaster_core::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         [self.number + input[0]].into()
@@ -109,7 +110,7 @@ impl<F: Float> Parameterable<F> for TestInPlusParamGen<F> {
 
     fn param_apply(
         &mut self,
-        _ctx: &knaster_core::AudioCtx,
+        _ctx: knaster_core::AudioCtx,
         index: usize,
         value: knaster_core::ParameterValue,
     ) {

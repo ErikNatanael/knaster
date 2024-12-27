@@ -1,8 +1,8 @@
 use knaster_core::{
-    AudioCtx, BlockAudioCtx, Float, Gen, Param, ParameterValue, Parameterable, Size,
+    AudioCtx, BlockAudioCtx, Float, Gen, GenFlags, Param, ParameterValue, Parameterable, Size
 };
 
-use crate::block::{AggregateBlock, AggregateBlockRead, RawBlock};
+use crate::block::{AggregateBlockRead, RawBlock};
 
 /// Type erasing trait to allow us to store [`Gen`]s as trait objects. It
 /// requires all nodes that are added to the [`Graph`] to implement both [`Gen`]
@@ -16,7 +16,8 @@ pub trait DynGen<F> {
     fn init(&mut self, ctx: &AudioCtx);
     fn process_block(
         &mut self,
-        ctx: &mut BlockAudioCtx,
+        ctx: BlockAudioCtx,
+        flags: &mut GenFlags,
         input: &AggregateBlockRead<F>,
         output: &mut RawBlock<F>,
     ) where
@@ -25,7 +26,7 @@ pub trait DynGen<F> {
     fn outputs(&self) -> usize;
     fn parameters(&self) -> usize;
     unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const F);
-    fn param_apply(&mut self, ctx: &AudioCtx, parameter: Param, value: ParameterValue);
+    fn param_apply(&mut self, ctx: AudioCtx, parameter: Param, value: ParameterValue);
 }
 impl<
         F: Float,
@@ -53,20 +54,21 @@ impl<
 
     fn process_block(
         &mut self,
-        ctx: &mut BlockAudioCtx,
+        ctx: BlockAudioCtx,
+        flags: &mut GenFlags,
         input: &AggregateBlockRead<F>,
         output: &mut RawBlock<F>,
     ) where
         F: Float,
     {
-        self.process_block(ctx, input, output)
+        self.process_block(ctx, flags, input, output)
     }
 
     unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const F) {
-        unsafe { self.param_set_ar_param_buffer(index, buffer) };
+        unsafe { self.set_ar_param_buffer(index, buffer) };
     }
 
-    fn param_apply(&mut self, ctx: &AudioCtx, parameter: Param, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: AudioCtx, parameter: Param, value: ParameterValue) {
         self.param(ctx, parameter, value);
     }
 }

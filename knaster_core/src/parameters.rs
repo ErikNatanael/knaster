@@ -33,7 +33,7 @@ pub trait Parameterable<F> {
     ///
     /// Tries to apply the parameter change without checking the validity of the
     /// values. May panic or do nothing given unexpected values.
-    fn param_apply(&mut self, ctx: &AudioCtx, index: usize, value: ParameterValue);
+    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue);
     /// Set an audio buffer to control a parameter. Does nothing unless an
     /// `ArParams` wrapper or alternative wrapper making use of this value wraps the Gen.
     ///
@@ -47,7 +47,10 @@ pub trait Parameterable<F> {
     /// contiguous allocation of at least block size until it is replaced,
     /// disabled, or the inner struct is dropped.
     #[allow(unused)]
-    unsafe fn param_set_ar_param_buffer(&mut self, index: usize, buffer: *const F) {}
+    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const F) {
+        // TODO: Proper errors
+        eprintln!("Warning: Audio rate parameter buffer set, but did not reach a WrArParams and will have no effect.");
+    }
     /// Sets a delay to what frame within the next block the next parameter
     /// change should take effect.
     ///
@@ -57,12 +60,15 @@ pub trait Parameterable<F> {
     ///
     /// Wrappers must propagagte this call.
     #[allow(unused)]
-    fn param_set_delay_in_block_for_index(&mut self, index: usize, delay: u16) {}
+    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
+        // TODO: Proper errors
+        eprintln!("Warning: Parameter delay set, but did not reach a WrHiResParams and will have no effect.");
+    }
     /// Apply a parameter change. Typechecks and bounds checks the arguments and
     /// provides sensible errors. Calls [`Parameterable::param_apply`] under the hood.
     fn param(
         &mut self,
-        ctx: &AudioCtx,
+        ctx: AudioCtx,
         param: impl Into<Param>,
         value: impl Into<ParameterValue>,
     ) -> Result<(), ParameterError> {

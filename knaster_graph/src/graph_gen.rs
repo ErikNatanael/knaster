@@ -9,7 +9,7 @@ use crate::{
 };
 use std::sync::Arc;
 
-use knaster_core::{numeric_array::NumericArray, typenum::U0, Float, Gen, Parameterable, Size};
+use knaster_core::{numeric_array::NumericArray, typenum::U0, Float, Gen, GenFlags, Parameterable, Size};
 use slotmap::SlotMap;
 
 use crate::{
@@ -66,7 +66,8 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
 
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        ctx: &mut knaster_core::BlockAudioCtx,
+        ctx: knaster_core::BlockAudioCtx,
+        flags: &mut GenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where
@@ -169,7 +170,7 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
 
         // Run the tasks
         for task in tasks.iter_mut() {
-            task.run(ctx);
+            task.run(ctx, flags);
         }
 
         // Set the output of the graph
@@ -197,7 +198,7 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
         }
 
         // Check if the free graph flag has been set
-        if let Some(frame_num) = ctx.flags_mut().remove_graph() {
+        if let Some(frame_num) = flags.remove_graph() {
             if (frame_num as usize) < self.block_size {
                 // output zeroes from the frame it's supposed to be freed
                 for channel in output.iter_mut() {
@@ -213,8 +214,9 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
 
     fn process(
         &mut self,
-        ctx: &mut knaster_core::AudioCtx,
-        input: knaster_core::Frame<Self::Sample, Self::Inputs>,
+        _ctx: knaster_core::AudioCtx,
+        _flags: &mut GenFlags,
+        _input: knaster_core::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         todo!()
     }
@@ -237,9 +239,9 @@ impl<F: Float, Inputs: Size, Outputs: Size> Parameterable<F> for GraphGen<F, Inp
 
     fn param_apply(
         &mut self,
-        ctx: &knaster_core::AudioCtx,
-        index: usize,
-        value: knaster_core::ParameterValue,
+        _ctx: knaster_core::AudioCtx,
+        _index: usize,
+        _value: knaster_core::ParameterValue,
     ) {
         todo!()
     }

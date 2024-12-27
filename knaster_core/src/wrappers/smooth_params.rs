@@ -1,6 +1,6 @@
 use knaster_primitives::{numeric_array::NumericArray, typenum::*, Block, BlockRead, Frame};
 
-use crate::{parameters::*, AudioCtx, BlockAudioCtx, Gen, Rate};
+use crate::{parameters::*, AudioCtx, BlockAudioCtx, Gen, GenFlags, Rate};
 
 /// Wrapper that enables input parameter smoothing for a [`Gen`]. Smoothing only
 /// works with `Float` type parameters.
@@ -111,7 +111,8 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrSmoothParams<T> {
 
     fn process(
         &mut self,
-        ctx: &mut AudioCtx,
+        ctx: AudioCtx,
+        flags: &mut GenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         // We only have potentially block rate parameters, run the whole block
@@ -121,11 +122,12 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrSmoothParams<T> {
                     .param_apply(ctx, j, ParameterValue::Float(new_value))
             }
         }
-        self.gen.process(ctx, input)
+        self.gen.process(ctx, flags, input)
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        ctx: &mut BlockAudioCtx,
+        ctx: BlockAudioCtx,
+        flags: &mut GenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where
@@ -157,19 +159,17 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrSmoothParams<T> {
                     }
                     let input = input.partial(i, 1);
                     let mut output = output.partial_mut(i, 1);
-                    let mut partial_ctx = ctx.make_partial(i, 1);
+                    let partial_ctx = ctx.make_partial(i, 1);
                     self.gen
-                        .process_block(&mut partial_ctx, &input, &mut output);
-                    ctx.combine_flag_state(&mut partial_ctx);
+                        .process_block(partial_ctx, flags, &input, &mut output);
                     i += 1;
                 } else {
                     // Process the full block
                     let input = input.partial(i, input.block_size() - i);
                     let mut output = output.partial_mut(i, output.block_size() - i);
-                    let mut partial_ctx = ctx.make_partial(i, ctx.block_size() - i);
+                    let partial_ctx = ctx.make_partial(i, ctx.block_size() - i);
                     self.gen
-                        .process_block(&mut partial_ctx, &input, &mut output);
-                    ctx.combine_flag_state(&mut partial_ctx);
+                        .process_block(partial_ctx, flags, &input, &mut output);
                     break;
                 }
             }
@@ -181,7 +181,7 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrSmoothParams<T> {
                         .param_apply(ctx.into(), j, ParameterValue::Float(new_value))
                 }
             }
-            self.gen.process_block(ctx, input, output);
+            self.gen.process_block(ctx, flags, input, output);
         }
     }
 }
@@ -201,7 +201,7 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrSmoothPar
         T::param_range()
     }
 
-    fn param_apply(&mut self, ctx: &AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
         if index >= T::Parameters::USIZE {
             return;
         }

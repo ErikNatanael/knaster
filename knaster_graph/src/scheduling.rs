@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use crate::{core::sync::atomic::AtomicBool, graph::NodeKey};
 
-use knaster_core::{Float, Param, ParameterError, ParameterSmoothing, ParameterValue};
+use knaster_core::{Seconds, Float, Param, ParameterError, ParameterSmoothing, ParameterValue};
 
 pub struct SchedulingEvent {
     pub(crate) node_key: NodeKey,
@@ -44,6 +44,11 @@ pub struct AudioThreadScheduler {
 
 pub enum SchedulingError {
     ParameterError(ParameterError),
+}
+
+#[derive(Clone, Debug)]
+pub struct SchedulingTime {
+    seconds: Seconds,
 }
 
 /// Attach this token to all changes that you want to be simultaneous. Then,

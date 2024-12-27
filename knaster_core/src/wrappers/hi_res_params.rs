@@ -1,6 +1,6 @@
-use knaster_primitives::{numeric_array::NumericArray, Frame, Size};
+use knaster_primitives::{numeric_array::NumericArray, Frame};
 
-use crate::{AudioCtx, Gen, ParameterValue, Parameterable};
+use crate::{AudioCtx, Gen, GenFlags, ParameterValue, Parameterable};
 
 /// Enables sample accurate parameter changes within a block. Changes must be
 /// scheduled in the order they are to be applied.
@@ -8,16 +8,32 @@ use crate::{AudioCtx, Gen, ParameterValue, Parameterable};
 /// `DelayedChangesPerBlock` determines the maximum number of changes that can
 /// be scheduled per block.
 ///
-/// It is recommended to apply this outside of [`WrSmoothParams`]
-pub struct WrHiResParams<T: Gen + Parameterable<T::Sample>, DelayedChangesPerBlock: Size> {
+/// This wrapper needs to be outside of other wrappers that can run partial blocks, such as [`WrSmoothParams`] and [`WrArParams`]
+pub struct WrHiResParams<const DELAYED_CHANGES_PER_BLOCK: usize, T: Gen + Parameterable<T::Sample>> {
     gen: T,
     // frame in block, parameter index, value
-    waiting_changes: NumericArray<Option<(u16, usize, ParameterValue)>, DelayedChangesPerBlock>,
+    waiting_changes: [Option<(u16, usize, ParameterValue)>; DELAYED_CHANGES_PER_BLOCK],
+    // The time that the next change to the given parameter index should be delayed by.
     next_delay: NumericArray<u16, T::Parameters>,
+    // The number of delayed changes this block to avoid unnecessary loops
+    next_delay_i: usize,
+
 }
 
-impl<T: Gen + Parameterable<T::Sample>, DelayedChangesPerBlock: Size> Parameterable<T::Sample>
-    for WrHiResParams<T, DelayedChangesPerBlock>
+impl<T: Gen + Parameterable<T::Sample>, const DELAYED_CHANGES_PER_BLOCK: usize>
+    WrHiResParams<DELAYED_CHANGES_PER_BLOCK, T> {
+        pub fn new(gen: T) -> Self {
+            WrHiResParams {
+                gen,
+                waiting_changes: [None; DELAYED_CHANGES_PER_BLOCK],
+                next_delay: NumericArray::default(),
+                next_delay_i: 0,
+            }
+        }
+    }
+
+impl<T: Gen + Parameterable<T::Sample>, const DELAYED_CHANGES_PER_BLOCK: usize> Parameterable<T::Sample>
+    for WrHiResParams<DELAYED_CHANGES_PER_BLOCK, T>
 {
     type Parameters = T::Parameters;
 
@@ -33,30 +49,30 @@ impl<T: Gen + Parameterable<T::Sample>, DelayedChangesPerBlock: Size> Parametera
         T::param_range()
     }
 
-    fn param_apply(&mut self, ctx: &AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
         if self.next_delay[index] == 0 {
             self.gen.param_apply(ctx, index, value);
         } else {
-            let mut i = 0;
-            while i < DelayedChangesPerBlock::USIZE {
-                if self.waiting_changes[i].is_none() {
-                    self.waiting_changes[i] = Some((self.next_delay[index], index, value));
-                }
+            if self.next_delay_i < DELAYED_CHANGES_PER_BLOCK{
+                    self.waiting_changes[self.next_delay_i] = Some((self.next_delay[index], index, value));
+                    self.next_delay_i += 1;
+            } else {
+                // TODO: Proper error reporting
+                eprintln!("Warning: Not enough space for echeduled changes in WrHiResParams, change ignored. Allocate more space for saving scheduled changes by setting the generic DelayedChangesPerBlock to a higher number.");
             }
         }
-        self.next_delay[index] = 0;
     }
 
-    unsafe fn param_set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
-        self.gen.param_set_ar_param_buffer(index, buffer)
+    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
+        self.gen.set_ar_param_buffer(index, buffer)
     }
 
-    fn param_set_delay_in_block_for_index(&mut self, index: usize, delay: u16) {
+    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
         self.next_delay[index] = delay;
     }
 }
-impl<T: Gen + Parameterable<T::Sample>, DelayedChangesPerBlock: Size> Gen
-    for WrHiResParams<T, DelayedChangesPerBlock>
+impl<T: Gen + Parameterable<T::Sample>, const DELAYED_CHANGES_PER_BLOCK: usize> Gen
+    for WrHiResParams<DELAYED_CHANGES_PER_BLOCK, T>
 {
     type Sample = T::Sample;
 
@@ -70,7 +86,8 @@ impl<T: Gen + Parameterable<T::Sample>, DelayedChangesPerBlock: Size> Gen
 
     fn process(
         &mut self,
-        ctx: &mut AudioCtx,
+        ctx: AudioCtx,
+        flags: &mut GenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         // The block size is one so all available changes should be applied
@@ -79,11 +96,12 @@ impl<T: Gen + Parameterable<T::Sample>, DelayedChangesPerBlock: Size> Gen
                 self.gen.param_apply(ctx, index, value);
             }
         }
-        self.gen.process(ctx, input)
+        self.gen.process(ctx, flags,  input)
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        ctx: &mut crate::BlockAudioCtx,
+        ctx: crate::BlockAudioCtx,
+        flags: &mut GenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where
@@ -92,18 +110,19 @@ impl<T: Gen + Parameterable<T::Sample>, DelayedChangesPerBlock: Size> Gen
     {
         let mut block_i = 0;
         let mut change_i = 0;
-        let mut local_frames_to_process = ctx.frames_to_process();
+        let num_changes_scheduled = self.next_delay_i;
+        dbg!(&self.waiting_changes);
         loop {
+        let mut local_frames_to_process = ctx.frames_to_process() - block_i;
             // Process the next delyed change
-            while change_i < DelayedChangesPerBlock::USIZE {
+            while change_i < num_changes_scheduled {
                 if let Some((delay, index, value)) = &self.waiting_changes[change_i] {
-                    if (*delay as usize) < block_i + ctx.block_start_offset() {
+                    if (*delay as usize) <= block_i + ctx.block_start_offset() {
                         self.gen.param_apply(ctx.into(), *index, *value);
                         self.waiting_changes[change_i] = None;
                     } else {
                         local_frames_to_process = local_frames_to_process
-                            .min((*delay) as usize - ctx.block_start_offset());
-
+                            .min((*delay) as usize - ctx.block_start_offset() - block_i);
                         break;
                     }
                 }
@@ -113,16 +132,17 @@ impl<T: Gen + Parameterable<T::Sample>, DelayedChangesPerBlock: Size> Gen
                 break;
             }
             if local_frames_to_process == ctx.frames_to_process() {
-                self.gen.process_block(ctx, input, output);
+                self.gen.process_block(ctx, flags, input, output);
             } else {
                 let input = input.partial(block_i, local_frames_to_process);
                 let mut output = output.partial_mut(block_i, local_frames_to_process);
-                let mut partial_ctx = ctx.make_partial(block_i, local_frames_to_process);
+                let partial_ctx = ctx.make_partial(block_i, local_frames_to_process);
                 self.gen
-                    .process_block(&mut partial_ctx, &input, &mut output);
-                ctx.combine_flag_state(&mut partial_ctx);
+                    .process_block(partial_ctx, flags, &input, &mut output);
             }
             block_i += local_frames_to_process;
         }
+        //
+        self.next_delay_i = 0;
     }
 }

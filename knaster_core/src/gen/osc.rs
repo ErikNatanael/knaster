@@ -1,4 +1,4 @@
-use crate::{core::marker::PhantomData, dsp::wavetable::WavetablePhase};
+use crate::core::marker::PhantomData;
 
 use knaster_primitives::{
     numeric_array::NumericArray,
@@ -12,11 +12,11 @@ use crate::{
     PFloat, Param, ParameterError, ParameterRange, ParameterType, ParameterValue, Parameterable,
 };
 
-use super::{AudioCtx, Gen};
+use super::{AudioCtx, Gen, GenFlags};
 #[cfg(any(feature = "alloc", feature = "std"))]
 mod wavetable_vec {
-    use core::{cell::OnceCell, marker::PhantomData};
-    use std::sync::{LazyLock, OnceLock};
+    use core::marker::PhantomData;
+    use std::sync::LazyLock;
 
     use knaster_primitives::{
         numeric_array::NumericArray,
@@ -25,8 +25,7 @@ mod wavetable_vec {
     };
 
     use crate::{
-        dsp::wavetable::{NonAaWavetable, Wavetable, WavetablePhase, FRACTIONAL_PART, TABLE_SIZE},
-        AudioCtx, Gen, PFloat, ParameterRange, ParameterType, ParameterValue, Parameterable,
+        dsp::wavetable::{NonAaWavetable, Wavetable, WavetablePhase, FRACTIONAL_PART, TABLE_SIZE}, AudioCtx, Gen, GenFlags, PFloat, ParameterRange, ParameterType, ParameterValue, Parameterable
     };
 
     /// Osciallator with an owned Wavetable
@@ -82,14 +81,16 @@ mod wavetable_vec {
 
         fn process(
             &mut self,
-            _ctx: &mut crate::AudioCtx,
+            _ctx: crate::AudioCtx,
+            _flags: &mut GenFlags,
             _input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
         ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
             [self.next_sample()].into()
         }
         fn process_block<InBlock, OutBlock>(
             &mut self,
-            _ctx: &mut crate::BlockAudioCtx,
+            _ctx: crate::BlockAudioCtx,
+            _flags: &mut GenFlags,
             _input: &InBlock,
             output: &mut OutBlock,
         ) where
@@ -129,7 +130,7 @@ mod wavetable_vec {
             todo!()
         }
 
-        fn param_apply(&mut self, ctx: &AudioCtx, index: usize, value: ParameterValue) {
+        fn param_apply(&mut self, _ctx: AudioCtx, index: usize, value: ParameterValue) {
             if matches!(value, ParameterValue::Smoothing(..)) {
                 eprintln!("Tried to set parameter smoothing with out a wrapper");
                 return;
@@ -209,7 +210,8 @@ mod wavetable_vec {
 
         fn process(
             &mut self,
-            _ctx: &mut AudioCtx,
+            _ctx: AudioCtx,
+            _flags: &mut GenFlags,
             _input: Frame<Self::Sample, Self::Inputs>,
         ) -> Frame<Self::Sample, Self::Outputs> {
             [self.next_sample()].into()
@@ -243,7 +245,7 @@ mod wavetable_vec {
             todo!()
         }
 
-        fn param_apply(&mut self, ctx: &AudioCtx, index: usize, value: ParameterValue) {
+        fn param_apply(&mut self, _ctx: AudioCtx, index: usize, value: ParameterValue) {
             if matches!(value, ParameterValue::Smoothing(..)) {
                 eprintln!("Tried to set parameter smoothing with out a wrapper");
                 return;
@@ -291,7 +293,8 @@ impl<F: Float> Gen for Phasor<F> {
 
     fn process(
         &mut self,
-        _ctx: &mut AudioCtx,
+        _ctx: AudioCtx,
+        _flags: &mut GenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         let mut out = Frame::default();
@@ -323,7 +326,7 @@ impl<F: Float> Parameterable<F> for Phasor<F> {
         [ParameterRange::Float(f64::NEG_INFINITY, f64::INFINITY)].into()
     }
 
-    fn param_apply(&mut self, _ctx: &AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, _ctx: AudioCtx, index: usize, value: crate::ParameterValue) {
         if index == 0 {
             self.set_freq(value.float().unwrap())
         }
@@ -373,7 +376,8 @@ impl<F: Float> Gen for SinNumeric<F> {
 
     fn process(
         &mut self,
-        _ctx: &mut AudioCtx,
+        _ctx: AudioCtx,
+        _flags: &mut GenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         let out = ((self.phase + self.phase_offset) * F::TAU).sin();
@@ -412,7 +416,7 @@ impl<F: Float> Parameterable<F> for SinNumeric<F> {
         todo!()
     }
 
-    fn param_apply(&mut self, ctx: &AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
         if matches!(value, ParameterValue::Smoothing(..)) {
             eprintln!("Tried to set parameter smoothing with out a wrapper");
             return;
@@ -430,7 +434,7 @@ impl<F: Float> Parameterable<F> for SinNumeric<F> {
 
     fn param(
         &mut self,
-        ctx: &AudioCtx,
+        ctx: AudioCtx,
         param: impl Into<Param>,
         value: impl Into<ParameterValue>,
     ) -> Result<(), ParameterError> {

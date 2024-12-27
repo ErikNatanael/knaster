@@ -1,6 +1,5 @@
 use crate::{
-    typenum::{U0, U1},
-    Float, Gen, PFloat, ParameterRange, Parameterable,
+    typenum::{U0, U1}, Float, Gen, GenFlags, PFloat, ParameterRange, Parameterable
 };
 
 /// Outputs a static number every frame
@@ -21,7 +20,8 @@ impl<F: Float> Gen for TestNumGen<F> {
 
     fn process(
         &mut self,
-        _ctx: &mut crate::AudioCtx,
+        _ctx: crate::AudioCtx,
+        _flags: &mut GenFlags,
         _input: crate::Frame<Self::Sample, Self::Inputs>,
     ) -> crate::Frame<Self::Sample, Self::Outputs> {
         [self.number].into()
@@ -46,7 +46,7 @@ impl<F: Float> Parameterable<F> for TestNumGen<F> {
 
     fn param_apply(
         &mut self,
-        _ctx: &crate::AudioCtx,
+        _ctx: crate::AudioCtx,
         _index: usize,
         _value: crate::ParameterValue,
     ) {
@@ -74,7 +74,8 @@ impl<F: Float> Gen for TestInPlusParamGen<F> {
 
     fn process(
         &mut self,
-        _ctx: &mut crate::AudioCtx,
+        _ctx: crate::AudioCtx,
+        _flags: &mut GenFlags,
         input: crate::Frame<Self::Sample, Self::Inputs>,
     ) -> crate::Frame<Self::Sample, Self::Outputs> {
         [self.number + input[0]].into()
@@ -101,7 +102,7 @@ impl<F: Float> Parameterable<F> for TestInPlusParamGen<F> {
         .into()
     }
 
-    fn param_apply(&mut self, _ctx: &crate::AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, _ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
         if index == 0 {
             self.set_number(F::new(value.float().unwrap()));
         }

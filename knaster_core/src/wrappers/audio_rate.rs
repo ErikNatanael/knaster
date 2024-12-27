@@ -1,4 +1,4 @@
-use crate::core::{marker::PhantomData, ops::Add};
+use crate::{core::{marker::PhantomData, ops::Add}, GenFlags};
 
 use knaster_primitives::{
     numeric_array::NumericArray,
@@ -47,13 +47,13 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrArParams<
         T::param_range()
     }
 
-    fn param_apply(&mut self, ctx: &AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
         if self.buffers[index].is_none() {
             self.gen.param_apply(ctx, index, value);
         }
     }
 
-    unsafe fn param_set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
+    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
         debug_assert!(index < T::Parameters::USIZE);
         self.buffers[index] = Some(buffer);
     }
@@ -71,7 +71,8 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrArParams<T> {
 
     fn process(
         &mut self,
-        ctx: &mut AudioCtx,
+        ctx: AudioCtx,
+        flags: &mut GenFlags, 
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         for (param, buffer) in self.buffers.iter().enumerate() {
@@ -82,7 +83,7 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrArParams<T> {
             }
         }
         self.block_index = (self.block_index + 1) % ctx.block_size() as usize;
-        self.gen.process(ctx, input)
+        self.gen.process(ctx, flags, input)
     }
     // TODO: Be more efficient about processing
 }
@@ -118,7 +119,8 @@ where
 
     fn process(
         &mut self,
-        ctx: &mut AudioCtx,
+        ctx: AudioCtx,
+        flags: &mut GenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         // The index T::Inputs is one more than the previous number of audio
@@ -132,12 +134,13 @@ where
         for i in 0..T::Inputs::USIZE {
             new_input[i] = input[i];
         }
-        self.process(ctx, new_input)
+        self.process(ctx, flags, new_input)
     }
 
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        ctx: &mut BlockAudioCtx,
+        ctx: BlockAudioCtx,
+        flags: &mut GenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where
@@ -150,7 +153,7 @@ where
             for i in 0..Self::Inputs::USIZE {
                 in_frame[i] = input.read(i, frame);
             }
-            let out_frame = self.process(ctx.into(), in_frame);
+            let out_frame = self.process(ctx.into(), flags, in_frame);
             for i in 0..Self::Outputs::USIZE {
                 output.write(out_frame[i], i, frame);
             }

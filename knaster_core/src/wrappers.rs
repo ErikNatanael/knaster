@@ -8,6 +8,7 @@
 mod audio_rate;
 mod closure;
 mod hi_res_params;
+pub use hi_res_params::*;
 pub use closure::*;
 mod math;
 pub use math::*;
