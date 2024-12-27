@@ -4,11 +4,13 @@
 //! - Typesafe Handle types
 
 use crate::{
-    core::marker::PhantomData, graph::{GraphId, NodeId, NodeKey}, SchedulingEvent, SchedulingTime, SchedulingToken
+    core::marker::PhantomData,
+    graph::{GraphId, NodeId, NodeKey},
+    SchedulingEvent, SchedulingTime, SchedulingToken,
 };
 use knaster_core::{
-    numeric_array, typenum::Unsigned, AudioCtx, Gen, Param, ParameterRange, ParameterSmoothing,
-    ParameterValue, Parameterable, Trigger,
+    numeric_array, typenum::Unsigned, AudioCtx, Gen, Param, ParameterError, ParameterRange,
+    ParameterSmoothing, ParameterValue, Parameterable, Trigger,
 };
 
 #[cfg(not(feature = "std"))]
@@ -63,24 +65,36 @@ impl<T> From<&Handle<T>> for NodeId {
     }
 }
 pub trait HandleTrait {
-    fn set<C: Into<ParameterChange>>(&self, change: C);
+    fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), ParameterError>;
     fn from_untyped(untyped_handle: UntypedHandle) -> Self;
 }
 impl<T: Gen + Parameterable<T::Sample>> HandleTrait for Handle<T> {
-    fn set<C: Into<ParameterChange>>(&self, change: C) {
+    fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), ParameterError> {
         let c = change.into();
+        let param_index = match c.param {
+            knaster_core::Param::Index(param_i) => param_i,
+            knaster_core::Param::Desc(desc) => {
+                if let Some(param_i) = T::param_descriptions().iter().position(|d| *d == desc) {
+                    param_i
+                } else {
+                    // Fail
+                    return Err(ParameterError::DescriptionNotFound(desc));
+                }
+            }
+        };
         // TODO: Error handling
         let mut sender = self.untyped_handle.sender.lock().unwrap();
         sender
             .push(SchedulingEvent {
                 node_key: self.untyped_handle.node.key(),
-                parameter: c.param,
+                parameter: param_index,
                 value: c.value,
                 smoothing: c.smoothing,
                 token: c.token,
                 time: c.time,
             })
             .unwrap();
+        Ok(())
     }
 
     fn from_untyped(untyped_handle: UntypedHandle) -> Self {

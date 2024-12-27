@@ -9,7 +9,9 @@ use crate::{
 };
 use std::sync::Arc;
 
-use knaster_core::{numeric_array::NumericArray, typenum::U0, Float, Gen, GenFlags, Parameterable, Size};
+use knaster_core::{
+    numeric_array::NumericArray, typenum::U0, Float, Gen, GenFlags, Parameterable, Size,
+};
 use slotmap::SlotMap;
 
 use crate::{
@@ -41,7 +43,7 @@ pub(super) struct GraphGen<F: Float, Inputs: Size, Outputs: Size> {
     // blocks it has stayed here. After a large number of blocks it is removed
     // to avoid filling up the queue with parameter changes for nodes that don't
     // exist anymore.
-    pub(super) waiting_parameter_changes: Vec<(SchedulingEvent, usize)>,
+    pub(super) waiting_parameter_changes: Vec<(SchedulingEvent, u32)>,
 
     pub(super) current_task_data: TaskData<F>,
     // This Arc is cloned from the Graph and exists so that if the Graph gets
@@ -57,12 +59,17 @@ pub(super) struct GraphGen<F: Float, Inputs: Size, Outputs: Size> {
     pub(super) new_task_data_consumer: rtrb::Consumer<TaskData<F>>,
     pub(super) remove_me_flag: Arc<AtomicBool>,
     pub(super) _channels: PhantomData<(NumericArray<(), Inputs>, NumericArray<(), Outputs>)>,
+    pub(super) blocks_to_keep_scheduled_changes: u32,
 }
 
 impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs> {
     type Sample = F;
     type Inputs = Inputs;
     type Outputs = Outputs;
+
+    fn init(&mut self, _ctx: &knaster_core::AudioCtx) {
+        self.blocks_to_keep_scheduled_changes = self.sample_rate / self.block_size as u32;
+    }
 
     fn process_block<InBlock, OutBlock>(
         &mut self,
@@ -111,14 +118,30 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
         if !self.waiting_parameter_changes.is_empty() {
             let mut i = self.waiting_parameter_changes.len() - 1;
             loop {
-                let (event, num_blocks_waiting) = &self.waiting_parameter_changes[i];
-                let ready_to_apply = event.token.as_ref().map_or(true, |t| t.ready());
-                let node_key = event.node_key;
+                // Remove old changes that aren't applied in time. When a Gen is removed, but has parameter changes queued, they would otherwise pile up.
+                if self.waiting_parameter_changes[i].1 > self.blocks_to_keep_scheduled_changes {
+                    self.waiting_parameter_changes.swap_remove(i);
+                    i -= 1;
+                    continue;
+                }
+                let event = &self.waiting_parameter_changes[i].0;
+                let mut ready_to_apply = event.token.as_ref().map_or(true, |t| t.ready());
+                let mut delay_in_block = 0;
+                if let Some(time) = &event.time {
+                    let time_in_samples = time.to_samples(self.sample_rate as u64);
+                    ready_to_apply &= time_in_samples
+                        < ctx.frame_clock() + self.block_size as u64;
+                    delay_in_block =  time_in_samples- ctx.frame_clock();
+                }
 
+                let node_key = event.node_key;
                 if ready_to_apply {
+                    self.waiting_parameter_changes[i].1 += 1;
+                    let event = &self.waiting_parameter_changes[i].0;
                     for (key, gen) in &mut self.current_task_data.gens {
                         if *key == node_key {
                             let g = unsafe { &mut (**gen) };
+                            g.set_delay_within_block_for_param(event.parameter, delay_in_block as u16);
                             if let Some(smoothing) = event.smoothing {
                                 g.param_apply(ctx.into(), event.parameter, smoothing.into());
                             }
@@ -129,7 +152,11 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
                             break;
                         }
                     }
+                } else {
+                    self.waiting_parameter_changes[i].1 += 1;
                 }
+
+
                 // Since we are using an usize it can't go into the negative so this
                 // conditional is used instead of a while loop. We need the i == 0
                 // iteration to run before breaking out.
@@ -145,13 +172,13 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
 
         let task_data = &mut self.current_task_data;
         let TaskData {
-            applied: _,
             tasks,
             output_task,
             current_buffer_allocation: new_buffer_allocation,
-            ar_parameter_changes,
-            gens,
             graph_input_channels_to_nodes,
+            applied: _,
+            ar_parameter_changes: _,
+            gens: _,
         } = task_data;
 
         if let Some(buffer_allocation) = new_buffer_allocation.take() {

@@ -26,7 +26,8 @@ pub trait DynGen<F> {
     fn outputs(&self) -> usize;
     fn parameters(&self) -> usize;
     unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const F);
-    fn param_apply(&mut self, ctx: AudioCtx, parameter: Param, value: ParameterValue);
+    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16);
+    fn param_apply(&mut self, ctx: AudioCtx, parameter: usize, value: ParameterValue);
 }
 impl<
         F: Float,
@@ -68,7 +69,11 @@ impl<
         unsafe { self.set_ar_param_buffer(index, buffer) };
     }
 
-    fn param_apply(&mut self, ctx: AudioCtx, parameter: Param, value: ParameterValue) {
-        self.param(ctx, parameter, value);
+    fn param_apply(&mut self, ctx: AudioCtx, parameter: usize, value: ParameterValue) {
+        self.param_apply(ctx, parameter, value);
+    }
+    
+    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
+        self.set_delay_within_block_for_param(index, delay);
     }
 }

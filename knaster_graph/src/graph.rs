@@ -285,6 +285,7 @@ impl<F: Float> Graph<F> {
                 _arc_buffer_allocation_ptr: graph.buffer_allocator.buffer(),
                 _channels: core::marker::PhantomData,
                 remove_me_flag: remove_me.clone(),
+                blocks_to_keep_scheduled_changes: graph.sample_rate / graph.block_size as u32,
             },
         );
 

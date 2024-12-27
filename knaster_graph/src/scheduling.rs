@@ -21,11 +21,11 @@ use std::sync::Arc;
 
 use crate::{core::sync::atomic::AtomicBool, graph::NodeKey};
 
-use knaster_core::{Seconds, Float, Param, ParameterError, ParameterSmoothing, ParameterValue};
+use knaster_core::{Seconds, Param, ParameterError, ParameterSmoothing, ParameterValue};
 
 pub struct SchedulingEvent {
     pub(crate) node_key: NodeKey,
-    pub(crate) parameter: Param,
+    pub(crate) parameter: usize,
     pub(crate) value: Option<ParameterValue>,
     pub(crate) smoothing: Option<ParameterSmoothing>,
     pub(crate) token: Option<SchedulingToken>,
@@ -49,6 +49,11 @@ pub enum SchedulingError {
 #[derive(Clone, Debug)]
 pub struct SchedulingTime {
     seconds: Seconds,
+}
+impl SchedulingTime {
+    pub fn to_samples(&self, sample_rate: u64) -> u64 {
+        self.seconds.to_samples(sample_rate)
+    }
 }
 
 /// Attach this token to all changes that you want to be simultaneous. Then,
