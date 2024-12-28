@@ -1,4 +1,5 @@
-use crate::{Gen, GenFlags, Parameterable};
+use knaster_primitives::{Block, BlockRead};
+use crate::{BlockAudioCtx, Gen, GenFlags, Parameterable};
 
 /// Applies the closure to every sample of every channel in the [`Gen`] output
 ///
@@ -34,6 +35,18 @@ impl<T: Gen + Parameterable<T::Sample>, C: FnMut(T::Sample) -> T::Sample + 'stat
             *sample = (self.closure)(*sample);
         }
         out
+    }
+    fn process_block<InBlock, OutBlock>(&mut self, ctx: BlockAudioCtx, flags: &mut GenFlags, input: &InBlock, output: &mut OutBlock)
+    where
+        InBlock: BlockRead<Sample=Self::Sample>,
+        OutBlock: Block<Sample=Self::Sample>,
+    {
+        self.gen.process_block(ctx, flags, input, output);
+        for channel in output.iter_mut() {
+            for sample in channel {
+                *sample = (self.closure)(*sample);
+            }
+        }
     }
 }
 

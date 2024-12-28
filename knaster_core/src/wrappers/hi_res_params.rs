@@ -111,7 +111,6 @@ impl<T: Gen + Parameterable<T::Sample>, const DELAYED_CHANGES_PER_BLOCK: usize> 
         let mut block_i = 0;
         let mut change_i = 0;
         let num_changes_scheduled = self.next_delay_i;
-        dbg!(&self.waiting_changes);
         loop {
         let mut local_frames_to_process = ctx.frames_to_process() - block_i;
             // Process the next delyed change

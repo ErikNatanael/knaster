@@ -575,6 +575,24 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrPowi<T> {
         }
         out
     }
+    fn process_block<InBlock, OutBlock>(
+        &mut self,
+        ctx: crate::BlockAudioCtx,
+        flags: &mut GenFlags,
+        input: &InBlock,
+        output: &mut OutBlock,
+    ) where
+        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+    {
+        self.gen.process_block(ctx, flags, input, output);
+        for channel in output.iter_mut() {
+            for sample in channel {
+
+                *sample = sample.powi(self.value);
+            }
+        }
+    }
 }
 
 impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrPowi<T> {
