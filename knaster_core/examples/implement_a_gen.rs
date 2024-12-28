@@ -1,7 +1,5 @@
 //! We implement a naive implementation of a cosine wave oscillator, similar to `CosMath`
 
-use core::f32;
-
 use anyhow::Result;
 use knaster_core::{
     empty_block, numeric_array::NumericArray, typenum::{Unsigned, U0, U1, U3}, AudioCtx, Block, BlockAudioCtx, Float, Frame, Gen, GenFlags, PFloat, Param, ParameterError, ParameterRange, ParameterType, ParameterValue, Parameterable, VecBlock
@@ -11,7 +9,7 @@ fn main() -> Result<()> {
     let ctx = BlockAudioCtx::new(AudioCtx::new(48000, 64));
     let mut flags = GenFlags::new();
     let mut osc = Osc::new();
-    // Since we own the Osc directly and it isn't wrapped in anything, we can
+    // Since we own the Osc directly, and it isn't wrapped in anything, we can
     // set the frequency directly:
     osc.freq(200., ctx.sample_rate() as f32);
     // We can also use the Parameterable trait interface
@@ -26,7 +24,7 @@ fn main() -> Result<()> {
     osc.process_block(ctx, &mut flags, &&empty_block(), &mut output_block);
     assert!(
         (output_block.read(0, 63)
-            - ((200.0 / ctx.sample_rate() as f32) * f32::consts::TAU * 64.).sin())
+            - ((200.0 / ctx.sample_rate() as f32) * std::f32::consts::TAU * 64.).sin())
         .abs()
             < f32::EPSILON
     );
