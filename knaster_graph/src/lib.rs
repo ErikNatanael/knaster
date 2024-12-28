@@ -41,5 +41,6 @@ mod scheduling;
 mod task;
 #[cfg(test)]
 mod tests;
+pub mod inspection;
 
 pub use scheduling::*;

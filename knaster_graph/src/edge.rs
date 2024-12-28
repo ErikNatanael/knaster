@@ -4,7 +4,8 @@ use crate::graph::NodeKey;
 #[derive(Clone, Debug, Copy)]
 pub(crate) struct Edge {
     pub(crate) source: NodeKeyOrGraph,
-    pub(crate) kind: EdgeKind,
+    pub(crate) channel_in_source: usize,
+    pub(crate) is_feedback: bool,
 }
 
 #[derive(Clone, Debug, Copy, PartialEq)]
@@ -13,25 +14,25 @@ pub(crate) enum NodeKeyOrGraph {
     Graph,
 }
 
-#[derive(Clone, Debug, Copy)]
-pub(crate) enum EdgeKind {
-    /// Audio edge connection from the output of one node to the input of another. Always one channel per edge.
-    Audio {
-        /// what the channel to connect is in the source
-        channel_in_source: usize,
-    },
-    Feedback {
-        channel_in_source: usize,
-    },
-    // /// Parameter edge connection from one channel of output from a node to control a parameter of another node.
-    // ///
-    // /// Always only one channel of audio
-    // Parameter {
-    //     /// what the first channel to pipe is in the source
-    //     channel_in_source: usize,
-    //     parameter_index: usize,
-    // },
-}
+// #[derive(Clone, Debug, Copy)]
+// pub(crate) enum EdgeKind {
+//     /// Audio edge connection from the output of one node to the input of another. Always one channel per edge.
+//     Audio {
+//         /// what the channel to connect is in the source
+//         channel_in_source: usize,
+//     },
+//     Feedback {
+//         channel_in_source: usize,
+//     },
+//     // /// Parameter edge connection from one channel of output from a node to control a parameter of another node.
+//     // ///
+//     // /// Always only one channel of audio
+//     // Parameter {
+//     //     /// what the first channel to pipe is in the source
+//     //     channel_in_source: usize,
+//     //     parameter_index: usize,
+//     // },
+// }
 
 pub(crate) struct ParameterEdge {
     pub(crate) source: NodeKey,

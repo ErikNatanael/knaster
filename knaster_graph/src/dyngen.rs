@@ -1,7 +1,7 @@
 use knaster_core::{
     AudioCtx, BlockAudioCtx, Float, Gen, GenFlags, Param, ParameterValue, Parameterable, Size
 };
-
+use knaster_core::numeric_array::NumericArray;
 use crate::block::{AggregateBlockRead, RawBlock};
 
 /// Type erasing trait to allow us to store [`Gen`]s as trait objects. It
@@ -28,6 +28,7 @@ pub trait DynGen<F> {
     unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const F);
     fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16);
     fn param_apply(&mut self, ctx: AudioCtx, parameter: usize, value: ParameterValue);
+    fn param_descriptions(&self) -> Vec<&'static str>;
 }
 impl<
         F: Float,
@@ -42,17 +43,6 @@ impl<
         self.init(ctx)
     }
 
-    fn inputs(&self) -> usize {
-        T::Inputs::USIZE
-    }
-
-    fn outputs(&self) -> usize {
-        T::Outputs::USIZE
-    }
-    fn parameters(&self) -> usize {
-        T::Parameters::USIZE
-    }
-
     fn process_block(
         &mut self,
         ctx: BlockAudioCtx,
@@ -65,15 +55,30 @@ impl<
         self.process_block(ctx, flags, input, output)
     }
 
+    fn inputs(&self) -> usize {
+        T::Inputs::USIZE
+    }
+    fn outputs(&self) -> usize {
+        T::Outputs::USIZE
+    }
+
+    fn parameters(&self) -> usize {
+        T::Parameters::USIZE
+    }
+
     unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const F) {
         unsafe { self.set_ar_param_buffer(index, buffer) };
+    }
+
+    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
+        self.set_delay_within_block_for_param(index, delay);
     }
 
     fn param_apply(&mut self, ctx: AudioCtx, parameter: usize, value: ParameterValue) {
         self.param_apply(ctx, parameter, value);
     }
-    
-    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
-        self.set_delay_within_block_for_param(index, delay);
+
+    fn param_descriptions(&self) -> Vec<&'static str> {
+        Self::param_descriptions().to_vec()
     }
 }

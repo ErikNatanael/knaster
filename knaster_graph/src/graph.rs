@@ -12,7 +12,7 @@ use crate::{
     connectable::{ChainElement, ChainSinkKind, ConnectionChain},
     core::sync::atomic::AtomicU64,
     dyngen::DynGen,
-    edge::{Edge, EdgeKind, FeedbackEdge, InternalGraphEdge, NodeKeyOrGraph, ParameterEdge},
+    edge::{Edge, FeedbackEdge, InternalGraphEdge, NodeKeyOrGraph, ParameterEdge},
     graph_gen::{self, GraphGen},
     handle::{Handle, UntypedHandle},
     node::Node,
@@ -20,6 +20,7 @@ use crate::{
     SchedulingChannelProducer,
 };
 
+use crate::inspection::{EdgeInspection, EdgeSource, GraphInspection, NodeInspection};
 use knaster_core::{
     math::{Add, MathGen},
     typenum::*,
@@ -40,12 +41,12 @@ pub type GraphId = u64;
 static NEXT_GRAPH_ID: AtomicU64 = AtomicU64::new(0);
 
 new_key_type! {
-    /// Node identifier in a specific Graph. For referring to a Node outside of the context of a Graph, use NodeId instead.
+    /// Node identifier in a specific Graph. For referring to a Node outside the context of a Graph, use NodeId instead.
     pub struct NodeKey;
 }
 
 /// Unique identifier for a specific Node
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct NodeId {
     /// The key is only unique within the specific Graph
     key: NodeKey,
@@ -146,8 +147,6 @@ pub struct Graph<F: Float> {
     node_order: Vec<NodeKey>,
     disconnected_nodes: Vec<NodeKey>,
     feedback_node_indices: Vec<NodeKey>,
-    /// If a node is a graph, that graph will be added with the same key here.
-    graphs_per_node: SecondaryMap<NodeKey, Graph<F>>,
     /// The outputs of the Graph
     output_edges: Box<[Option<Edge>]>,
     /// If changes have been made that require recalculating the graph this will be set to true.
@@ -210,7 +209,6 @@ impl<F: Float> Graph<F> {
             node_keys_to_free_when_safe: vec![],
             node_keys_pending_removal: HashSet::new(),
             feedback_node_indices: vec![],
-            graphs_per_node: SecondaryMap::with_capacity(DEFAULT_NUM_NODES),
             output_edges: vec![None; Outputs::USIZE].into(),
             num_inputs: Inputs::USIZE,
             num_outputs: Outputs::USIZE,
@@ -302,6 +300,7 @@ impl<F: Float> Graph<F> {
         gen: T,
     ) -> Result<Handle<T>, GraphError> {
         let name = std::any::type_name::<T>();
+        let name = shorten_name(name);
         let node = Node::new(name.to_owned(), gen);
         let node_key = self.push_node(node);
         let handle = Handle::new(UntypedHandle::new(
@@ -444,9 +443,8 @@ impl<F: Float> Graph<F> {
             for i in 0..channels {
                 self.node_input_edges[sink][si_from + i] = Some(Edge {
                     source,
-                    kind: EdgeKind::Audio {
                         channel_in_source: so_from + i,
-                    },
+                    is_feedback: false,
                 });
             }
             return Ok(());
@@ -466,22 +464,19 @@ impl<F: Float> Graph<F> {
                 self.node_input_edges[add_node][0] = Some(existing_edge);
                 self.node_input_edges[add_node][1] = Some(Edge {
                     source,
-                    kind: EdgeKind::Audio {
                         channel_in_source: so_from + i,
-                    },
+                    is_feedback: false,
                 });
                 self.node_input_edges[sink][si_from + i] = Some(Edge {
                     source: NodeKeyOrGraph::Node(add_node),
-                    kind: EdgeKind::Audio {
                         channel_in_source: 0,
-                    },
+                    is_feedback: false,
                 });
             } else {
                 self.node_input_edges[sink][si_from + i] = Some(Edge {
                     source,
-                    kind: EdgeKind::Audio {
                         channel_in_source: so_from + i,
-                    },
+                    is_feedback: false,
                 });
             }
         }
@@ -511,9 +506,8 @@ impl<F: Float> Graph<F> {
             for i in 0..channels {
                 self.output_edges[si_from + i] = Some(Edge {
                     source,
-                    kind: EdgeKind::Audio {
                         channel_in_source: so_from + i,
-                    },
+                    is_feedback: false,
                 });
             }
             return Ok(());
@@ -533,22 +527,19 @@ impl<F: Float> Graph<F> {
                 self.node_input_edges[add_node][0] = Some(existing_edge);
                 self.node_input_edges[add_node][1] = Some(Edge {
                     source,
-                    kind: EdgeKind::Audio {
                         channel_in_source: so_from + i,
-                    },
+                    is_feedback: false,
                 });
                 self.output_edges[si_from + i] = Some(Edge {
                     source: NodeKeyOrGraph::Node(add_node),
-                    kind: EdgeKind::Audio {
                         channel_in_source: 0,
-                    },
+                    is_feedback: false,
                 });
             } else {
                 self.output_edges[si_from + i] = Some(Edge {
                     source,
-                    kind: EdgeKind::Audio {
                         channel_in_source: so_from + i,
-                    },
+                    is_feedback: false,
                 });
             }
         }
@@ -576,7 +567,7 @@ impl<F: Float> Graph<F> {
                             channels: si_channels,
                         },
                     ) => {
-                        let channels = (*so_channels).min(si_channels);
+                        let channels: usize = (*so_channels).min(si_channels);
                         self.connect_to_node_internal(
                             NodeKeyOrGraph::Node(*source_node),
                             sink_node,
@@ -597,7 +588,7 @@ impl<F: Float> Graph<F> {
                             channels: si_channels,
                         },
                     ) => {
-                        let channels = (*so_channels).min(si_channels);
+                        let channels: usize = (*so_channels).min(si_channels);
                         self.connect_to_output_internal(
                             NodeKeyOrGraph::Node(*source_node),
                             *so_from,
@@ -642,6 +633,7 @@ impl<F: Float> Graph<F> {
         let (subgraph, graph_gen) = Self::new::<Inputs, Outputs>(options);
         // TODO: Store node key in graph
         let node_key = self.push_node(graph_gen);
+        self.get_nodes_mut()[node_key].is_graph = Some(subgraph.id);
 
         subgraph
     }
@@ -670,25 +662,23 @@ impl<F: Float> Graph<F> {
             // Return only the channels that are Some
             .filter_map(|(i, e)| e.map(|e| (i, e)))
         {
-            if let EdgeKind::Audio { channel_in_source } = output_edge.kind {
                 match output_edge.source {
                     NodeKeyOrGraph::Node(source_key) => {
                         let source = &self.get_nodes()[source_key];
                         let source_ptr = source
                             .node_output_ptr()
                             .expect("Node output should be ptr at this point");
-                        assert!(channel_in_source < source.outputs);
+                        assert!(output_edge.channel_in_source < source.outputs);
                         output_task.channels[sink_channel] =
                             Some(BlockOrGraphInput::Block(unsafe {
-                                source_ptr.add(block_size * (channel_in_source))
+                                source_ptr.add(block_size * (output_edge.channel_in_source))
                             }));
                     }
                     NodeKeyOrGraph::Graph => {
                         output_task.channels[sink_channel] =
-                            Some(BlockOrGraphInput::GraphInput(channel_in_source));
+                            Some(BlockOrGraphInput::GraphInput(output_edge.channel_in_source));
                     }
                 }
-            }
         }
         output_task
     }
@@ -808,16 +798,14 @@ impl<F: Float> Graph<F> {
                         }
                     }
                     NodeKeyOrGraph::Graph => {
-                        if let EdgeKind::Audio { channel_in_source } = edge.kind {
                             if input_pointers_to_node.is_none() {
                                 input_pointers_to_node = Some(Vec::new());
                             }
                             input_pointers_to_node
                                 .as_mut()
                                 .unwrap()
-                                .push((channel_in_source, channel_index));
+                                .push((edge.channel_in_source, channel_index));
                         }
-                    }
                 }
             }
             if let Some(graph_inputs_to_node) = input_pointers_to_node {
@@ -844,15 +832,13 @@ impl<F: Float> Graph<F> {
                 // Return only the channels that are Some
                 .filter_map(|(i, e)| e.map(|e| (i, e)))
             {
-                if let EdgeKind::Audio { channel_in_source } = edge.kind {
                     if let NodeKeyOrGraph::Node(source_key) = edge.source {
                         let source_output_ptr = self.get_nodes()[source_key]
                             .node_output_ptr()
                             .expect("real buffer was just assigned");
                         inputs[sink_channel] =
-                            unsafe { source_output_ptr.add(channel_in_source * self.block_size) };
+                            unsafe { source_output_ptr.add(edge.channel_in_source * self.block_size) };
                     }
-                }
             }
             // If any input hasn't been set, give it a cleared zero buffer.
             // This is important for soundness.
@@ -948,6 +934,71 @@ impl<F: Float> Graph<F> {
         self.node_keys_pending_removal.insert(node_key);
         Ok(())
     }
+
+    /// Generate inspection metadata for this graph. Intended for
+    /// generating static or dynamic inspection and graph manipulation tools.
+    pub fn inspection(&self) -> GraphInspection {
+        let real_nodes = self.get_nodes();
+        // Maps a node key to the index in the Vec
+        let mut node_key_processed = Vec::with_capacity(real_nodes.len());
+        let mut nodes = Vec::with_capacity(real_nodes.len());
+        for (node_key, node) in real_nodes {
+
+            let mut input_edges = Vec::new();
+            if let Some(edges) = self.node_input_edges.get(node_key) {
+                for (input_channel_index, edge) in edges
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, e)| e.map(|e| (i, e)))
+                {
+                    input_edges.push(EdgeInspection {
+                        source: match edge.source {
+                            NodeKeyOrGraph::Node(key) => EdgeSource::Node(key),
+                            NodeKeyOrGraph::Graph => EdgeSource::Graph,
+                        },
+                        from_index: edge.channel_in_source,
+                        to_index: input_channel_index,
+                        is_feedback: false,
+                    });
+                }
+            }
+
+            nodes.push(NodeInspection {
+                name: node.name.to_string(),
+                address: node_key,
+                inputs: node.inputs,
+                outputs: node.outputs,
+                input_edges,
+                parameter_descriptions: node.parameter_descriptions.clone(),
+                pending_removal: self.node_keys_pending_removal.contains(&node_key),
+                unconnected: self.disconnected_nodes.contains(&node_key),
+                is_graph: None,
+            });
+            node_key_processed.push(node_key);
+        }
+        let mut graph_output_edges = Vec::new();
+        for (channel_index, edge) in self.output_edges.iter().enumerate() {
+            if let Some(edge) = edge {
+                graph_output_edges.push(EdgeInspection {
+                    source: match edge.source {
+                        NodeKeyOrGraph::Node(key) => EdgeSource::Node(key),
+                        NodeKeyOrGraph::Graph => EdgeSource::Graph,
+                    },
+                    from_index: edge.channel_in_source,
+                    to_index: channel_index,
+                    is_feedback: edge.is_feedback,
+                });
+            }
+        }
+
+        GraphInspection {
+            nodes,
+            num_inputs: self.num_inputs,
+            num_outputs: self.num_outputs,
+            graph_id: self.id,
+            graph_output_edges,
+        }
+    }
     fn clear_feedback_for_node(&mut self, node_key: NodeKey) -> Result<(), FreeError> {
         // TODO: Update for new feedback node system
         // Remove all feedback edges leading from or to the node
@@ -1015,9 +1066,6 @@ impl<F: Float> Graph<F> {
             let (key, flag) = &self.node_keys_to_free_when_safe[i];
             if flag.load(Ordering::SeqCst) {
                 nodes.remove(*key);
-                // If the node was a graph, free the graph as well (it will be returned and  dropped here)
-                // The Graph should be dropped after the GraphGen Node.
-                self.graphs_per_node.remove(*key);
                 self.node_keys_pending_removal.remove(key);
                 self.node_keys_to_free_when_safe.remove(i);
             } else {
@@ -1244,6 +1292,22 @@ impl<F: Float> Graph<F> {
     pub fn ctx(&self) -> AudioCtx {
         AudioCtx::new(self.sample_rate, self.block_size)
     }
+}
+
+fn shorten_name(name: &str) -> String {
+    let mut short= String::new();
+    for path in name.split_inclusive(&['<', '>', ';', '(', ')', '[', ']'][..]) {
+        // Push the last part of the extracted path
+        if let Some(last) = path.rsplit_once(':') {
+            short.push_str(last.1);
+        } else {
+            short.push_str(path);
+        }
+        if let Some(',') | Some(';') = short.chars().last() {
+            short.push(' ');
+        }
+    }
+    short
 }
 
 struct GraphGenCommunicator<F: Float> {

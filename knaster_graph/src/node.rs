@@ -4,40 +4,48 @@ use crate::core::sync::Arc;
 use knaster_core::{AudioCtx, Float};
 
 use crate::{buffer_allocator::BufferAllocator, dyngen::DynGen, task::Task};
+use crate::graph::GraphId;
 
 /// `Node` wraps a [`DynGen`] in a graph. It is used to hold a pointer to the
 /// Gen allocation and some metadata about it.
 ///
 /// Safety:
-/// - `Node` should not be used outside of the graph context.
+/// - `Node` should not be used outside the graph context.
 /// - The Node may not be dropped while its gen pointer is accessible on the graph, e.g. via a Task
 /// - Dereferencing the gen pointer from a thread other than the audio thread is a data race.
 /// - Every other field of this struct can be accessed from the Graph directly.
 pub(crate) struct Node<F> {
-    /// name is only used for inspectability
+    /// ACCESSIBILITY AND QOL
     // TODO: option to disable this and other optional QOL features in shipped builds
     pub(crate) name: String,
+    pub(crate) parameter_descriptions: Vec<String>,
+    pub(crate) is_graph: Option<GraphId>,
+
+    /// STATIC DATA (won't change after the node has been created)
     pub(crate) gen: *mut dyn DynGen<F>,
     pub(crate) inputs: usize,
     pub(crate) outputs: usize,
     pub(crate) parameters: usize,
-    // TODO: Should this by NonNull<*const F> ??
-    pub(crate) node_inputs: Vec<*const F>,
-    pub(crate) node_output: NodeOutput<F>,
-    /// If this node can signal its own removal from the audio thread, it will
-    /// do so by setting this AtomicBool to true.
-    pub(crate) remove_me: Option<Arc<AtomicBool>>,
     /// true if the node was not pushed manually to the Graph. Such nodes may
     /// also be removed automatically.
     pub(crate) auto_added: bool,
-    /// The number of channels in potentially different nodes that are depending
+
+    /// STATE FOR TASK GENERATION etc.
+    // TODO: Should this be NonNull<*const F> ??
+    pub(crate) node_inputs: Vec<*const F>,
+    pub(crate) node_output: NodeOutput<F>,
+    /// The number of channels in potentially different nodes that depend
     /// on the output of this node. We are counting channels because that's how
     /// the input edges are stored, thereby avoiding additional bookkeeping when
     /// allocating buffers.
     pub(crate) num_output_dependents: usize,
+    /// If this node can signal its own removal from the audio thread, it will
+    /// do so by setting this AtomicBool to true.
+    pub(crate) remove_me: Option<Arc<AtomicBool>>,
 }
 impl<F: Float> Node<F> {
     pub fn new<T: DynGen<F> + 'static>(name: String, gen: T) -> Self {
+        let parameter_descriptions = gen.param_descriptions().into_iter().map(|s| s.to_string()).collect();
         let inputs = gen.inputs();
         let outputs = gen.outputs();
         let parameters = gen.parameters();
@@ -46,6 +54,7 @@ impl<F: Float> Node<F> {
 
         Self {
             name,
+            parameter_descriptions,
             gen: ptr,
             inputs,
             outputs,
@@ -54,6 +63,7 @@ impl<F: Float> Node<F> {
             node_output: NodeOutput::Offset(0),
             remove_me: None,
             auto_added: false,
+            is_graph: None,
             num_output_dependents: 0,
         }
     }

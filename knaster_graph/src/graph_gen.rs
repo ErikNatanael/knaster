@@ -245,7 +245,7 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
         _flags: &mut GenFlags,
         _input: knaster_core::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
-        todo!()
+        unreachable!()
     }
 }
 
@@ -253,15 +253,15 @@ impl<F: Float, Inputs: Size, Outputs: Size> Parameterable<F> for GraphGen<F, Inp
     type Parameters = U0;
 
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
-        todo!()
+        [].into()
     }
 
     fn param_default_values() -> NumericArray<knaster_core::ParameterValue, Self::Parameters> {
-        todo!()
+        [].into()
     }
 
     fn param_range() -> NumericArray<knaster_core::ParameterRange, Self::Parameters> {
-        todo!()
+        [].into()
     }
 
     fn param_apply(
@@ -270,7 +270,6 @@ impl<F: Float, Inputs: Size, Outputs: Size> Parameterable<F> for GraphGen<F, Inp
         _index: usize,
         _value: knaster_core::ParameterValue,
     ) {
-        todo!()
     }
 }
 
