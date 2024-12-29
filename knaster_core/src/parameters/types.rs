@@ -45,6 +45,12 @@ impl ParameterValue {
             _ => None,
         }
     }
+    pub fn index(self) -> Option<usize> {
+        match self {
+            ParameterValue::Index(value) => Some(value),
+            _ => None,
+        }
+    }
     pub fn ty(self) -> ParameterType {
         match self {
             ParameterValue::Float(_) => ParameterType::Float,

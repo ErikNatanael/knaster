@@ -13,7 +13,7 @@ use crate::{
     core::sync::atomic::AtomicU64,
     dyngen::DynGen,
     edge::{Edge, NodeKeyOrGraph, ParameterEdge},
-    graph_gen::{GraphGen},
+    graph_gen::GraphGen,
     handle::{Handle, UntypedHandle},
     node::Node,
     task::{ArParameterChange, BlockOrGraphInput, OutputTask, Task, TaskData},
@@ -21,10 +21,11 @@ use crate::{
 };
 
 use crate::inspection::{EdgeInspection, EdgeSource, GraphInspection, NodeInspection};
+use crate::wrappers::done::WrDone;
 use knaster_core::{
     math::{Add, MathGen},
     typenum::*,
-    AudioCtx, Float, Gen, Size,
+    AudioCtx, Done, Float, Gen, Size,
 };
 use rtrb::RingBuffer;
 use slotmap::{new_key_type, SecondaryMap, SlotMap};
@@ -292,16 +293,45 @@ impl<F: Float> Graph<F> {
         (graph, graph_gen)
     }
 
-    /// Push something implementing [`Gen`] or a [`Graph`] to the graph with the
-    /// id provided, storing its address in the NodeAddress provided. The node
-    /// will start processing at the `start_time`.
-    pub fn push<T: Gen<Sample = F> + 'static>(
-        &mut self,
-        gen: T,
-    ) -> Result<Handle<T>, GraphError> {
+    /// Push something implementing [`Gen`] to the graph.
+    pub fn push<T: Gen<Sample = F> + 'static>(&mut self, gen: T) -> Result<Handle<T>, GraphError> {
         let name = std::any::type_name::<T>();
         let name = shorten_name(name);
         let node = Node::new(name.to_owned(), gen);
+        let node_key = self.push_node(node);
+        let handle = Handle::new(UntypedHandle::new(
+            NodeId {
+                key: node_key,
+                graph: self.id,
+            },
+            self.graph_gen_communicator
+                .scheduling_event_producer
+                .clone(),
+        ));
+        Ok(handle)
+    }
+    /// Push something implementing [`Gen`] to the graph, adding the [`WrDone`] wrapper. This
+    /// enables the node to free itself if it marks itself as done or for removal using [`GenFlags`].
+    pub fn push_with_done_action<T: Gen<Sample = F> + 'static>(
+        &mut self,
+        gen: T,
+        default_done_action: Done,
+    ) -> Result<Handle<T>, GraphError>
+    where
+        // Make sure we can add a parameter
+        <T as Gen>::Parameters: crate::core::ops::Add<B1>,
+        <<T as Gen>::Parameters as crate::core::ops::Add<B1>>::Output: Size,
+    {
+        let free_self_flag = Arc::new(AtomicBool::new(false));
+        let gen = WrDone {
+            gen,
+            free_self_flag: free_self_flag.clone(),
+            done_action: default_done_action,
+        };
+        let name = std::any::type_name::<T>();
+        let name = shorten_name(name);
+        let mut node = Node::new(name.to_owned(), gen);
+        node.remove_me = Some(free_self_flag);
         let node_key = self.push_node(node);
         let handle = Handle::new(UntypedHandle::new(
             NodeId {
@@ -433,19 +463,18 @@ impl<F: Float> Graph<F> {
                 return Err(GraphError::NodeNotFound);
             }
             if so_from + channels > nodes[source].outputs {
-                return Err(GraphError::OutputOutOfBounds(so_from+channels-1));
+                return Err(GraphError::OutputOutOfBounds(so_from + channels - 1));
             }
         } else {
             if so_from + channels > self.num_inputs {
-                return Err(GraphError::GraphInputOutOfBounds(so_from+channels-1));
+                return Err(GraphError::GraphInputOutOfBounds(so_from + channels - 1));
             }
-            
         }
         if !nodes.contains_key(sink) {
             return Err(GraphError::NodeNotFound);
         }
-        if si_from + channels > nodes[sink].inputs{
-            return Err(GraphError::InputOutOfBounds(si_from+channels-1));
+        if si_from + channels > nodes[sink].inputs {
+            return Err(GraphError::InputOutOfBounds(si_from + channels - 1));
         }
 
         self.recalculation_required = true;
@@ -454,7 +483,7 @@ impl<F: Float> Graph<F> {
             for i in 0..channels {
                 self.node_input_edges[sink][si_from + i] = Some(Edge {
                     source,
-                        channel_in_source: so_from + i,
+                    channel_in_source: so_from + i,
                     is_feedback: false,
                 });
             }
@@ -475,18 +504,18 @@ impl<F: Float> Graph<F> {
                 self.node_input_edges[add_node][0] = Some(existing_edge);
                 self.node_input_edges[add_node][1] = Some(Edge {
                     source,
-                        channel_in_source: so_from + i,
+                    channel_in_source: so_from + i,
                     is_feedback: false,
                 });
                 self.node_input_edges[sink][si_from + i] = Some(Edge {
                     source: NodeKeyOrGraph::Node(add_node),
-                        channel_in_source: 0,
+                    channel_in_source: 0,
                     is_feedback: false,
                 });
             } else {
                 self.node_input_edges[sink][si_from + i] = Some(Edge {
                     source,
-                        channel_in_source: so_from + i,
+                    channel_in_source: so_from + i,
                     is_feedback: false,
                 });
             }
@@ -510,7 +539,7 @@ impl<F: Float> Graph<F> {
                 return Err(GraphError::NodeNotFound);
             }
             if so_from + channels > nodes[source].outputs {
-                return Err(GraphError::OutputOutOfBounds(so_from+channels-1));
+                return Err(GraphError::OutputOutOfBounds(so_from + channels - 1));
             }
         }
 
@@ -520,7 +549,7 @@ impl<F: Float> Graph<F> {
             for i in 0..channels {
                 self.output_edges[si_from + i] = Some(Edge {
                     source,
-                        channel_in_source: so_from + i,
+                    channel_in_source: so_from + i,
                     is_feedback: false,
                 });
             }
@@ -541,18 +570,18 @@ impl<F: Float> Graph<F> {
                 self.node_input_edges[add_node][0] = Some(existing_edge);
                 self.node_input_edges[add_node][1] = Some(Edge {
                     source,
-                        channel_in_source: so_from + i,
+                    channel_in_source: so_from + i,
                     is_feedback: false,
                 });
                 self.output_edges[si_from + i] = Some(Edge {
                     source: NodeKeyOrGraph::Node(add_node),
-                        channel_in_source: 0,
+                    channel_in_source: 0,
                     is_feedback: false,
                 });
             } else {
                 self.output_edges[si_from + i] = Some(Edge {
                     source,
-                        channel_in_source: so_from + i,
+                    channel_in_source: so_from + i,
                     is_feedback: false,
                 });
             }
@@ -676,23 +705,22 @@ impl<F: Float> Graph<F> {
             // Return only the channels that are Some
             .filter_map(|(i, e)| e.map(|e| (i, e)))
         {
-                match output_edge.source {
-                    NodeKeyOrGraph::Node(source_key) => {
-                        let source = &self.get_nodes()[source_key];
-                        let source_ptr = source
-                            .node_output_ptr()
-                            .expect("Node output should be ptr at this point");
-                        assert!(output_edge.channel_in_source < source.outputs);
-                        output_task.channels[sink_channel] =
-                            Some(BlockOrGraphInput::Block(unsafe {
-                                source_ptr.add(block_size * (output_edge.channel_in_source))
-                            }));
-                    }
-                    NodeKeyOrGraph::Graph => {
-                        output_task.channels[sink_channel] =
-                            Some(BlockOrGraphInput::GraphInput(output_edge.channel_in_source));
-                    }
+            match output_edge.source {
+                NodeKeyOrGraph::Node(source_key) => {
+                    let source = &self.get_nodes()[source_key];
+                    let source_ptr = source
+                        .node_output_ptr()
+                        .expect("Node output should be ptr at this point");
+                    assert!(output_edge.channel_in_source < source.outputs);
+                    output_task.channels[sink_channel] = Some(BlockOrGraphInput::Block(unsafe {
+                        source_ptr.add(block_size * (output_edge.channel_in_source))
+                    }));
                 }
+                NodeKeyOrGraph::Graph => {
+                    output_task.channels[sink_channel] =
+                        Some(BlockOrGraphInput::GraphInput(output_edge.channel_in_source));
+                }
+            }
         }
         output_task
     }
@@ -812,14 +840,14 @@ impl<F: Float> Graph<F> {
                         }
                     }
                     NodeKeyOrGraph::Graph => {
-                            if input_pointers_to_node.is_none() {
-                                input_pointers_to_node = Some(Vec::new());
-                            }
-                            input_pointers_to_node
-                                .as_mut()
-                                .unwrap()
-                                .push((edge.channel_in_source, channel_index));
+                        if input_pointers_to_node.is_none() {
+                            input_pointers_to_node = Some(Vec::new());
                         }
+                        input_pointers_to_node
+                            .as_mut()
+                            .unwrap()
+                            .push((edge.channel_in_source, channel_index));
+                    }
                 }
             }
             if let Some(graph_inputs_to_node) = input_pointers_to_node {
@@ -846,13 +874,13 @@ impl<F: Float> Graph<F> {
                 // Return only the channels that are Some
                 .filter_map(|(i, e)| e.map(|e| (i, e)))
             {
-                    if let NodeKeyOrGraph::Node(source_key) = edge.source {
-                        let source_output_ptr = self.get_nodes()[source_key]
-                            .node_output_ptr()
-                            .expect("real buffer was just assigned");
-                        inputs[sink_channel] =
-                            unsafe { source_output_ptr.add(edge.channel_in_source * self.block_size) };
-                    }
+                if let NodeKeyOrGraph::Node(source_key) = edge.source {
+                    let source_output_ptr = self.get_nodes()[source_key]
+                        .node_output_ptr()
+                        .expect("real buffer was just assigned");
+                    inputs[sink_channel] =
+                        unsafe { source_output_ptr.add(edge.channel_in_source * self.block_size) };
+                }
             }
             // If any input hasn't been set, give it a cleared zero buffer.
             // This is important for soundness.
@@ -957,7 +985,6 @@ impl<F: Float> Graph<F> {
         let mut node_key_processed = Vec::with_capacity(real_nodes.len());
         let mut nodes = Vec::with_capacity(real_nodes.len());
         for (node_key, node) in real_nodes {
-
             let mut input_edges = Vec::new();
             if let Some(edges) = self.node_input_edges.get(node_key) {
                 for (input_channel_index, edge) in edges
@@ -1062,7 +1089,7 @@ impl<F: Float> Graph<F> {
     /// removed from the graph and can now be freed since they are no longer
     /// used on the audio thread.
     fn free_old(&mut self) {
-        // See if the GraphGen has reported any nodes that should be freed
+        // See if any nodes are marked for removal
         let mut free_queue = Vec::new();
         for (key, node) in self.get_nodes_mut() {
             if let Some(to_free) = &mut node.remove_me {
@@ -1102,9 +1129,8 @@ impl<F: Float> Graph<F> {
         }
     }
 
-    /// Goes through all of the nodes that are connected to nodes in `nodes_to_process` and adds them to the list in
+    /// Goes through all the nodes that are connected to nodes in `nodes_to_process` and adds them to the list in
     /// reverse depth first order.
-    ///
     fn depth_first_search(
         &self,
         visited: &mut HashSet<NodeKey>,
@@ -1310,7 +1336,7 @@ impl<F: Float> Graph<F> {
 }
 
 fn shorten_name(name: &str) -> String {
-    let mut short= String::new();
+    let mut short = String::new();
     for path in name.split_inclusive(&['<', '>', ';', '(', ')', '[', ']'][..]) {
         // Push the last part of the extracted path
         if let Some(last) = path.rsplit_once(':') {

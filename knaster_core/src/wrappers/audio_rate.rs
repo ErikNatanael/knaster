@@ -129,7 +129,7 @@ where
         for i in 0..T::Inputs::USIZE {
             new_input[i] = input[i];
         }
-        self.process(ctx, flags, new_input)
+        self.gen.process(ctx, flags, new_input)
     }
 
     fn process_block<InBlock, OutBlock>(

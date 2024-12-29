@@ -48,3 +48,31 @@ pub enum Rate {
     /// Smoothing happens at audio rate
     AudioRate,
 }
+
+/// Specify an action to take once this [`Gen`] is done.
+///
+/// Some Gens have a "done" state. This enum represents a list of standardised actions to take
+/// when done.
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub enum Done {
+    None = 0,
+    /// Free only the current Gen node.
+    FreeSelf,
+    /// Free the structure that contains the node. In knaster_graph, that is the `Graph`.
+    FreeParent,
+}
+impl Default for Done {
+    fn default() -> Self {
+        Done::None
+    }
+}
+impl From<usize> for Done {
+    fn from(value: usize) -> Self {
+        match value {
+            0 => Done::None,
+            1 => Done::FreeSelf,
+            2 => Done::FreeParent,
+            _ => Done::None,
+        }
+    }
+}

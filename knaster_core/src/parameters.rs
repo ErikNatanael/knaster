@@ -33,6 +33,7 @@ impl From<&'static str> for Param {
     }
 }
 
+/// An inclusive range for the supported values of a parameter
 #[derive(Copy, Clone)]
 pub enum ParameterRange {
     Float(PFloat, PFloat),
@@ -40,12 +41,20 @@ pub enum ParameterRange {
     Index(usize, usize),
 }
 impl ParameterRange {
+    pub fn done() -> Self {
+        Self::Index(0, 2)
+    }
     pub fn ty(self) -> ParameterType {
         match self {
             ParameterRange::Float(_, _) => ParameterType::Float,
             ParameterRange::Trigger => ParameterType::Trigger,
             ParameterRange::Index(_, _) => ParameterType::Index,
         }
+    }
+}
+impl Default for ParameterRange {
+    fn default() -> Self {
+        Self::Float(PFloat::NEG_INFINITY, PFloat::INFINITY)
     }
 }
 #[derive(Copy, Clone, Debug)]

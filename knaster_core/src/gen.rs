@@ -1,5 +1,6 @@
 pub mod math;
 pub mod osc;
+pub mod envelopes;
 
 use core::ops::Deref;
 
@@ -147,6 +148,10 @@ pub struct GenFlags {
     ///
     /// TODO: Make it part of a diagnostics/debug feature
     remove_self_supported: bool,
+    /// The [`Gen`] that is done sets this to true when done through [`Self::mark_done`]
+    done: bool,
+    /// What frame in the current block the node was done.
+    done_frame_in_block: u32,
     /// If the local node should be freed. Requires a wrapper to free it.
     remove_self: bool,
     /// Set to true if the parent of this node should be freed within this block
@@ -159,12 +164,14 @@ impl GenFlags {
     pub fn new() -> Self {
         Self {
             remove_self_supported: false,
+            done: false,
+            done_frame_in_block: u32::MAX,
             remove_self: false,
             remove_parent: false,
             remove_parent_from_frame_in_block: u32::MAX,
         }
     }
-    /// If the graph should be removed this returns Some(u32) where the u32 is
+    /// Returns Some(u32) if the graph should be removed, where the u32 is
     /// the frame in the current block from which the graph should output 0. The
     /// frame number may be larger than the current block, in which case the
     /// whole block should be output as usual.
@@ -178,10 +185,17 @@ impl GenFlags {
     pub fn remove_self(&self) -> bool {
         self.remove_self
     }
+    pub fn done(&self) -> Option<u32> {
+        if self.done {
+            Some(self.done_frame_in_block)
+        } else {
+            None
+        }
+    }
     /// Set the flag to remove this node. Returns true if freeing self is
     /// supported by the node tree and false if it isn't. If this returns false,
     /// the node will not be removed.
-    pub fn set_remove_self(&mut self) {
+    pub fn mark_remove_self(&mut self) {
         if self.remove_self_supported {
             self.remove_self = true;
         } else {
@@ -194,9 +208,17 @@ impl GenFlags {
     /// From and including the frame number specified, the graph will output 0.0
     /// on all channels until removed. To output the entire block, set
     /// `from_frame_in_block` to the current block size.
-    pub fn set_remove_graph(&mut self, from_frame: u32) {
+    pub fn mark_remove_parent(&mut self, from_frame: u32) {
         self.remove_parent = true;
         self.remove_parent_from_frame_in_block = from_frame;
+    }
+    /// Mark this node as done.
+    ///
+    /// The property can be read by a wrapper or the container/graph, which can take some action in
+    /// response.
+    pub fn mark_done(&mut self, from_frame: u32) {
+        self.done = true;
+        self.done_frame_in_block = from_frame;
     }
     pub fn clear_graph_flags(&mut self) {
         self.remove_parent = false;
@@ -205,6 +227,8 @@ impl GenFlags {
     pub fn clear_node_flags(&mut self) {
         self.remove_self = false;
         self.remove_self_supported = false;
+        self.done = false;
+        self.done_frame_in_block = u32::MAX;
     }
 }
 impl Default for GenFlags {
