@@ -11,9 +11,9 @@ libm = ["num-traits/libm"]
 # Use std for floating point maths, incompatible with the libm feature
 std = ["num-traits/std"]
 deafault = ["alloc"]
-serde_derive = ["dep:serde_derive"]
+serde_derive = ["dep:serde"]
 
 [dependencies]
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 numeric-array = { version = "0.6.1", default-features = false }
-serde_derive = { version = "1.0.217", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
