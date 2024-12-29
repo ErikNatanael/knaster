@@ -127,7 +127,11 @@ mod wavetable_vec {
         }
 
         fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
-            todo!()
+            NumericArray::from([
+                ParameterRange::Float(0., PFloat::INFINITY),
+                ParameterRange::Float(PFloat::NEG_INFINITY, PFloat::INFINITY),
+                ParameterRange::Trigger,
+            ])
         }
 
         fn param_apply(&mut self, _ctx: AudioCtx, index: usize, value: ParameterValue) {
@@ -413,7 +417,11 @@ impl<F: Float> Parameterable<F> for SinNumeric<F> {
     }
 
     fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
-        todo!()
+        NumericArray::from([
+            ParameterRange::Float(0., PFloat::INFINITY),
+            ParameterRange::Float(PFloat::NEG_INFINITY, PFloat::INFINITY),
+            ParameterRange::Trigger,
+        ])
     }
 
     fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {

@@ -26,10 +26,13 @@ pub trait Parameterable<F> {
             .map(|v| v.ty())
             .collect()
     }
+    /// Specifies a name per parameter which can be used to refer to that parameter
+    /// when calling [`Parameterable::param`].
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters>;
     fn param_default_values() -> NumericArray<ParameterValue, Self::Parameters>;
     fn param_range() -> NumericArray<ParameterRange, Self::Parameters>;
-    /// Meant for internal use. See Parameterable::param for a safer public interface.
+    /// Set the parameter value without range or type checks.
+    /// See Parameterable::param for a safer and more ergonomic interface.
     ///
     /// Tries to apply the parameter change without checking the validity of the
     /// values. May panic or do nothing given unexpected values.
@@ -126,8 +129,4 @@ pub enum ParameterRange {
 }
 #[derive(Copy, Clone, Debug)]
 pub struct Trigger;
-// #[derive(Copy, Clone, Debug)]
-// pub struct GraphContext {
-//     pub sample_rate: u32,
-//     pub block_size: u32,
-// }
+
