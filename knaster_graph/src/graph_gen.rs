@@ -141,7 +141,9 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
                     for (key, gen) in &mut self.current_task_data.gens {
                         if *key == node_key {
                             let g = unsafe { &mut (**gen) };
-                            g.set_delay_within_block_for_param(event.parameter, delay_in_block as u16);
+                            if delay_in_block > 0 {
+                                g.set_delay_within_block_for_param(event.parameter, delay_in_block as u16);
+                            }
                             if let Some(smoothing) = event.smoothing {
                                 g.param_apply(ctx.into(), event.parameter, smoothing.into());
                             }
