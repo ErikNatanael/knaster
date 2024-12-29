@@ -20,6 +20,7 @@ pub struct GraphInspection {
     pub num_outputs: usize,
     /// The ID of the graph
     pub graph_id: crate::graph::GraphId,
+    pub graph_name: String,
 }
 
 impl GraphInspection {
@@ -31,6 +32,7 @@ impl GraphInspection {
             num_outputs: 0,
             graph_id: 0,
             graph_output_edges: vec![],
+            graph_name: String::new(),
         }
     }
     /// Generates the input to display the graph inspection using the Graphviz dot tool.

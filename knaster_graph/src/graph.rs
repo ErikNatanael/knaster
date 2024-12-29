@@ -997,6 +997,7 @@ impl<F: Float> Graph<F> {
             num_outputs: self.num_outputs,
             graph_id: self.id,
             graph_output_edges,
+            graph_name: self.name.clone(),
         }
     }
     fn clear_feedback_for_node(&mut self, node_key: NodeKey) -> Result<(), FreeError> {
