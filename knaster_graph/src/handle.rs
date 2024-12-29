@@ -5,12 +5,12 @@
 
 use crate::{
     core::marker::PhantomData,
-    graph::{GraphId, NodeId, NodeKey},
+    graph::NodeId,
     SchedulingEvent, SchedulingTime, SchedulingToken,
 };
 use knaster_core::{
     numeric_array, typenum::Unsigned, AudioCtx, Gen, Param, ParameterError, ParameterRange,
-    ParameterSmoothing, ParameterValue, Parameterable, Trigger,
+    ParameterSmoothing, ParameterValue,
 };
 
 #[cfg(not(feature = "std"))]
@@ -42,7 +42,7 @@ pub struct Handle<T> {
     pub(crate) untyped_handle: UntypedHandle,
 }
 
-impl<T: Gen + Parameterable<T::Sample>> Handle<T> {
+impl<T: Gen> Handle<T> {
     pub fn new(untyped_handle: UntypedHandle) -> Self {
         Self {
             _phantom: PhantomData,
@@ -68,7 +68,7 @@ pub trait HandleTrait {
     fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), ParameterError>;
     fn from_untyped(untyped_handle: UntypedHandle) -> Self;
 }
-impl<T: Gen + Parameterable<T::Sample>> HandleTrait for Handle<T> {
+impl<T: Gen> HandleTrait for Handle<T> {
     fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), ParameterError> {
         let c = change.into();
         let param_index = match c.param {
@@ -193,24 +193,3 @@ impl<P: Into<Param>, V: Into<ParameterValue>, S: Into<ParameterSmoothing>> From<
 // impl<F: Float> Handleable for crate::test_reverb::Reverb<F> {
 //     type HandleType = Handle<Self>;
 // }
-
-impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for Handle<T> {
-    type Parameters = T::Parameters;
-
-    fn param_descriptions() -> numeric_array::NumericArray<&'static str, Self::Parameters> {
-        T::param_descriptions()
-    }
-
-    fn param_default_values() -> numeric_array::NumericArray<ParameterValue, Self::Parameters> {
-        T::param_default_values()
-    }
-
-    fn param_range() -> numeric_array::NumericArray<ParameterRange, Self::Parameters> {
-        T::param_range()
-    }
-
-    fn param_apply(&mut self, _ctx: AudioCtx, index: usize, value: ParameterValue) {
-        // Instead of setting parameters directly, send changes to the scheduler
-        self.set((index, value));
-    }
-}

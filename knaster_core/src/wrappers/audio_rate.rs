@@ -7,22 +7,22 @@ use knaster_primitives::{
 };
 
 use crate::{
-    parameters::{PFloat, ParameterValue, Parameterable},
+    parameters::{PFloat, ParameterValue},
     AudioCtx, BlockAudioCtx, Gen,
 };
 
 /// Wrapper that enables setting a parameter to an audio rate signal. This must
 /// wrap a [`Gen`] for audio rate parameter changes to take effect.
-pub struct WrArParams<T: Gen + Parameterable<T::Sample>> {
+pub struct WrArParams<T: Gen> {
     gen: T,
     buffers: NumericArray<Option<*const T::Sample>, T::Parameters>,
     // Keeps track of where we are in a block if processing sample-by-sample
     block_index: usize,
 }
 
-unsafe impl<T: Gen + Parameterable<T::Sample>> Send for WrArParams<T> {}
+unsafe impl<T: Gen> Send for WrArParams<T> {}
 
-impl<T: Gen + Parameterable<T::Sample>> WrArParams<T> {
+impl<T: Gen > WrArParams<T> {
     pub fn new(gen: T) -> Self {
         Self {
             gen,
@@ -32,33 +32,7 @@ impl<T: Gen + Parameterable<T::Sample>> WrArParams<T> {
     }
 }
 
-impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrArParams<T> {
-    type Parameters = T::Parameters;
-
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
-        T::param_descriptions()
-    }
-
-    fn param_default_values() -> NumericArray<ParameterValue, Self::Parameters> {
-        T::param_default_values()
-    }
-
-    fn param_range() -> NumericArray<crate::parameters::ParameterRange, Self::Parameters> {
-        T::param_range()
-    }
-
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
-        if self.buffers[index].is_none() {
-            self.gen.param_apply(ctx, index, value);
-        }
-    }
-
-    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
-        debug_assert!(index < T::Parameters::USIZE);
-        self.buffers[index] = Some(buffer);
-    }
-}
-impl<T: Gen + Parameterable<T::Sample>> Gen for WrArParams<T> {
+impl<T: Gen  > Gen for WrArParams<T> {
     type Sample = T::Sample;
 
     type Inputs = T::Inputs;
@@ -86,6 +60,27 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrArParams<T> {
         self.gen.process(ctx, flags, input)
     }
     // TODO: Be more efficient about processing
+
+    type Parameters = T::Parameters;
+
+    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+        T::param_descriptions()
+    }
+
+    fn param_range() -> NumericArray<crate::parameters::ParameterRange, Self::Parameters> {
+        T::param_range()
+    }
+
+    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+        if self.buffers[index].is_none() {
+            self.gen.param_apply(ctx, index, value);
+        }
+    }
+
+    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
+        debug_assert!(index < T::Parameters::USIZE);
+        self.buffers[index] = Some(buffer);
+    }
 }
 
 /// Adds an audio input channel and uses that channel to set a parameter every
@@ -98,7 +93,7 @@ pub struct ArParamToInput<T, ParamIndex> {
     _index: PhantomData<ParamIndex>,
 }
 
-impl<T: Gen + Parameterable<T::Sample>, ParamIndex: Unsigned> Gen for ArParamToInput<T, ParamIndex>
+impl<T: Gen  , ParamIndex: Unsigned> Gen for ArParamToInput<T, ParamIndex>
 where
     // ParamIndex must be less than the number of parameters. This is as much as
     // we can check statically, remaining checks will be done at runtime.
@@ -158,5 +153,18 @@ where
                 output.write(out_frame[i], i, frame);
             }
         }
+    }
+    type Parameters = T::Parameters;
+
+    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+        T::param_descriptions()
+    }
+
+    fn param_range() -> NumericArray<crate::parameters::ParameterRange, Self::Parameters> {
+        T::param_range()
+    }
+
+    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+        self.gen.param_apply(ctx, index, value);
     }
 }

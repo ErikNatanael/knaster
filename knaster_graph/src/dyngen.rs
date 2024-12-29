@@ -1,7 +1,7 @@
 use knaster_core::{
-    AudioCtx, BlockAudioCtx, Float, Gen, GenFlags, Param, ParameterValue, Parameterable, Size
+    AudioCtx, BlockAudioCtx, Float, Gen, GenFlags, ParameterValue
 };
-use knaster_core::numeric_array::NumericArray;
+use knaster_core::typenum::*;
 use crate::block::{AggregateBlockRead, RawBlock};
 
 /// Type erasing trait to allow us to store [`Gen`]s as trait objects. It
@@ -32,11 +32,7 @@ pub trait DynGen<F> {
 }
 impl<
         F: Float,
-        Inputs: Size,
-        Outputs: Size,
-        Parameters: Size,
-        T: Gen<Sample = F, Inputs = Inputs, Outputs = Outputs>
-            + Parameterable<F, Parameters = Parameters>,
+        T: Gen<Sample = F >,
     > DynGen<F> for T
 {
     fn init(&mut self, ctx: &AudioCtx) {

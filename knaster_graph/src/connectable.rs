@@ -1,10 +1,4 @@
-use core::marker::PhantomData;
-
-use knaster_core::{
-    numeric_array::NumericArray,
-    typenum::{U1, U2, U3},
-    Gen, PFloat, Param, Parameterable, Size,
-};
+use knaster_core::{Gen, PFloat, Param};
 
 use crate::{graph::NodeKey, handle::Handle};
 
@@ -86,7 +80,7 @@ impl Connectable for ConnectionChain {
         }
     }
 }
-impl<G: Gen + Parameterable<G::Sample>> Connectable for Handle<G> {
+impl<G: Gen > Connectable for Handle<G> {
     fn to<T: Into<ChainElement>>(&self, other: T) -> ConnectionChain {
         ConnectionChain {
             source: Some(Box::new(ConnectionChain::chain_start(ChainElement {

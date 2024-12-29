@@ -1,23 +1,23 @@
 use knaster_primitives::{Block, BlockRead};
-use crate::{BlockAudioCtx, Gen, GenFlags, Parameterable};
+use crate::{BlockAudioCtx, Gen, GenFlags};
 
 /// Applies the closure to every sample of every channel in the [`Gen`] output
 ///
 /// This is almost certainly not as performant as using wrappers dedicated to a specific
 /// math operation, but good for prototyping and for when performance is not so important.
-pub struct WrClosure<T: Gen + Parameterable<T::Sample>, C: FnMut(T::Sample) -> T::Sample + 'static>
+pub struct WrClosure<T: Gen, C: FnMut(T::Sample) -> T::Sample + 'static>
 {
     gen: T,
     closure: C,
 }
-impl<T: Gen + Parameterable<T::Sample>, C: FnMut(T::Sample) -> T::Sample + 'static>
+impl<T: Gen, C: FnMut(T::Sample) -> T::Sample + 'static>
     WrClosure<T, C>
 {
     pub fn new(gen: T, closure: C) -> Self {
         Self { gen, closure }
     }
 }
-impl<T: Gen + Parameterable<T::Sample>, C: FnMut(T::Sample) -> T::Sample + 'static> Gen
+impl<T: Gen, C: FnMut(T::Sample) -> T::Sample + 'static> Gen
     for WrClosure<T, C>
 {
     type Sample = T::Sample;
@@ -48,22 +48,12 @@ impl<T: Gen + Parameterable<T::Sample>, C: FnMut(T::Sample) -> T::Sample + 'stat
             }
         }
     }
-}
 
-impl<T: Gen + Parameterable<T::Sample>, C: FnMut(T::Sample) -> T::Sample + 'static>
-    Parameterable<T::Sample> for WrClosure<T, C>
-{
     type Parameters = T::Parameters;
 
     fn param_descriptions(
     ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
-    }
-
-    fn param_default_values(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterValue, Self::Parameters>
-    {
-        T::param_default_values()
     }
 
     fn param_range(

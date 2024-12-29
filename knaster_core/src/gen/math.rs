@@ -6,7 +6,7 @@ use knaster_primitives::{
     Float, Size,
 };
 
-use crate::{Gen, Parameterable};
+use crate::Gen;
 
 use super::GenFlags;
 
@@ -135,15 +135,9 @@ where
         }
         // dbg!(input.channel_as_slice(1));
     }
-}
-// No parameters, empty impl
-impl<F: Float, Channels: Size, Op: Operation<F>> Parameterable<F> for MathGen<F, Channels, Op> {
     type Parameters = U0;
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         NumericArray::default()
-    }
-    fn param_default_values() -> NumericArray<crate::ParameterValue, Self::Parameters> {
-        NumericArray::from([])
     }
     fn param_range() -> NumericArray<crate::ParameterRange, Self::Parameters> {
         NumericArray::from([])

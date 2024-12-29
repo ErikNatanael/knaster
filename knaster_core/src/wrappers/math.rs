@@ -1,22 +1,22 @@
 use knaster_primitives::FloatMethods;
 
-use crate::{Gen, GenFlags, Parameterable};
+use crate::{Gen, GenFlags};
 
 // TODO: SIMD implementations for blocks
 // TODO: SIMD implementations for multi channel frame by frame outputs
 // TODO: min, max, powi, sqrt, exp, exp2, abs, range/mul_add, cbrt, tanh
 
 /// `gen` * `value`
-pub struct WrMul<T: Gen + Parameterable<T::Sample>> {
+pub struct WrMul<T: Gen> {
     gen: T,
     value: T::Sample,
 }
-impl<T: Gen + Parameterable<T::Sample>> WrMul<T> {
+impl<T: Gen> WrMul<T> {
     pub fn new(gen: T, value: T::Sample) -> Self {
         Self { gen, value }
     }
 }
-impl<T: Gen + Parameterable<T::Sample>> Gen for WrMul<T> {
+impl<T: Gen> Gen for WrMul<T> {
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -50,20 +50,11 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrMul<T> {
             }
         }
     }
-}
-
-impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrMul<T> {
     type Parameters = T::Parameters;
 
     fn param_descriptions(
     ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
-    }
-
-    fn param_default_values(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterValue, Self::Parameters>
-    {
-        T::param_default_values()
     }
 
     fn param_range(
@@ -84,16 +75,16 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrMul<T> {
 }
 
 /// `gen` + `value`
-pub struct WrAdd<T: Gen + Parameterable<T::Sample>> {
+pub struct WrAdd<T: Gen> {
     gen: T,
     value: T::Sample,
 }
-impl<T: Gen + Parameterable<T::Sample>> WrAdd<T> {
+impl<T: Gen> WrAdd<T> {
     pub fn new(gen: T, value: T::Sample) -> Self {
         Self { gen, value }
     }
 }
-impl<T: Gen + Parameterable<T::Sample>> Gen for WrAdd<T> {
+impl<T: Gen> Gen for WrAdd<T> {
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -127,9 +118,6 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrAdd<T> {
             }
         }
     }
-}
-
-impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrAdd<T> {
     type Parameters = T::Parameters;
 
     fn param_descriptions(
@@ -137,11 +125,6 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrAdd<T> {
         T::param_descriptions()
     }
 
-    fn param_default_values(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterValue, Self::Parameters>
-    {
-        T::param_default_values()
-    }
 
     fn param_range(
     ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
@@ -161,16 +144,16 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrAdd<T> {
 }
 
 /// `gen` - `value`
-pub struct WrSub<T: Gen + Parameterable<T::Sample>> {
+pub struct WrSub<T: Gen> {
     gen: T,
     value: T::Sample,
 }
-impl<T: Gen + Parameterable<T::Sample>> WrSub<T> {
+impl<T: Gen> WrSub<T> {
     pub fn new(gen: T, value: T::Sample) -> Self {
         Self { gen, value }
     }
 }
-impl<T: Gen + Parameterable<T::Sample>> Gen for WrSub<T> {
+impl<T: Gen> Gen for WrSub<T> {
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -204,9 +187,6 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrSub<T> {
             }
         }
     }
-}
-
-impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrSub<T> {
     type Parameters = T::Parameters;
 
     fn param_descriptions(
@@ -214,11 +194,6 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrSub<T> {
         T::param_descriptions()
     }
 
-    fn param_default_values(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterValue, Self::Parameters>
-    {
-        T::param_default_values()
-    }
 
     fn param_range(
     ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
@@ -237,16 +212,16 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrSub<T> {
     }
 }
 /// `value` - `gen`
-pub struct WrVSubGen<T: Gen + Parameterable<T::Sample>> {
+pub struct WrVSubGen<T: Gen> {
     gen: T,
     value: T::Sample,
 }
-impl<T: Gen + Parameterable<T::Sample>> WrVSubGen<T> {
+impl<T: Gen> WrVSubGen<T> {
     pub fn new(gen: T, value: T::Sample) -> Self {
         Self { gen, value }
     }
 }
-impl<T: Gen + Parameterable<T::Sample>> Gen for WrVSubGen<T> {
+impl<T: Gen> Gen for WrVSubGen<T> {
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -281,20 +256,11 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrVSubGen<T> {
             }
         }
     }
-}
-
-impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrVSubGen<T> {
     type Parameters = T::Parameters;
 
     fn param_descriptions(
     ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
-    }
-
-    fn param_default_values(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterValue, Self::Parameters>
-    {
-        T::param_default_values()
     }
 
     fn param_range(
@@ -315,16 +281,16 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrVSubGen<T
 }
 
 /// `gen` / `value`
-pub struct WrDiv<T: Gen + Parameterable<T::Sample>> {
+pub struct WrDiv<T: Gen> {
     gen: T,
     value: T::Sample,
 }
-impl<T: Gen + Parameterable<T::Sample>> WrDiv<T> {
+impl<T: Gen> WrDiv<T> {
     pub fn new(gen: T, value: T::Sample) -> Self {
         Self { gen, value }
     }
 }
-impl<T: Gen + Parameterable<T::Sample>> Gen for WrDiv<T> {
+impl<T: Gen> Gen for WrDiv<T> {
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -358,9 +324,6 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrDiv<T> {
             }
         }
     }
-}
-
-impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrDiv<T> {
     type Parameters = T::Parameters;
 
     fn param_descriptions(
@@ -368,11 +331,6 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrDiv<T> {
         T::param_descriptions()
     }
 
-    fn param_default_values(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterValue, Self::Parameters>
-    {
-        T::param_default_values()
-    }
 
     fn param_range(
     ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
@@ -392,16 +350,16 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrDiv<T> {
 }
 
 /// `value` / `gen`
-pub struct WrVDivGen<T: Gen + Parameterable<T::Sample>> {
+pub struct WrVDivGen<T: Gen> {
     gen: T,
     value: T::Sample,
 }
-impl<T: Gen + Parameterable<T::Sample>> WrVDivGen<T> {
+impl<T: Gen> WrVDivGen<T> {
     pub fn new(gen: T, value: T::Sample) -> Self {
         Self { gen, value }
     }
 }
-impl<T: Gen + Parameterable<T::Sample>> Gen for WrVDivGen<T> {
+impl<T: Gen> Gen for WrVDivGen<T> {
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -436,9 +394,6 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrVDivGen<T> {
             }
         }
     }
-}
-
-impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrVDivGen<T> {
     type Parameters = T::Parameters;
 
     fn param_descriptions(
@@ -446,11 +401,6 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrVDivGen<T
         T::param_descriptions()
     }
 
-    fn param_default_values(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterValue, Self::Parameters>
-    {
-        T::param_default_values()
-    }
 
     fn param_range(
     ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
@@ -470,16 +420,16 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrVDivGen<T
 }
 
 /// `gen.powf(value)`
-pub struct WrPowf<T: Gen + Parameterable<T::Sample>> {
+pub struct WrPowf<T: Gen> {
     gen: T,
     value: T::Sample,
 }
-impl<T: Gen + Parameterable<T::Sample>> WrPowf<T> {
+impl<T: Gen> WrPowf<T> {
     pub fn new(gen: T, value: T::Sample) -> Self {
         Self { gen, value }
     }
 }
-impl<T: Gen + Parameterable<T::Sample>> Gen for WrPowf<T> {
+impl<T: Gen> Gen for WrPowf<T> {
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -515,9 +465,6 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrPowf<T> {
             }
         }
     }
-}
-
-impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrPowf<T> {
     type Parameters = T::Parameters;
 
     fn param_descriptions(
@@ -525,11 +472,6 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrPowf<T> {
         T::param_descriptions()
     }
 
-    fn param_default_values(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterValue, Self::Parameters>
-    {
-        T::param_default_values()
-    }
 
     fn param_range(
     ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
@@ -549,16 +491,16 @@ impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrPowf<T> {
 }
 
 /// `gen.powi(value)`
-pub struct WrPowi<T: Gen + Parameterable<T::Sample>> {
+pub struct WrPowi<T: Gen> {
     gen: T,
     value: i32,
 }
-impl<T: Gen + Parameterable<T::Sample>> WrPowi<T> {
+impl<T: Gen> WrPowi<T> {
     pub fn new(gen: T, value: i32) -> Self {
         Self { gen, value }
     }
 }
-impl<T: Gen + Parameterable<T::Sample>> Gen for WrPowi<T> {
+impl<T: Gen> Gen for WrPowi<T> {
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -593,22 +535,12 @@ impl<T: Gen + Parameterable<T::Sample>> Gen for WrPowi<T> {
             }
         }
     }
-}
-
-impl<T: Gen + Parameterable<T::Sample>> Parameterable<T::Sample> for WrPowi<T> {
     type Parameters = T::Parameters;
 
     fn param_descriptions(
     ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
-
-    fn param_default_values(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterValue, Self::Parameters>
-    {
-        T::param_default_values()
-    }
-
     fn param_range(
     ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
     {

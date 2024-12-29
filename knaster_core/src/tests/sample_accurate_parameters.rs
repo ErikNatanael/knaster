@@ -1,6 +1,6 @@
 use knaster_primitives::{Block, VecBlock};
 
-use crate::{tests::utils::TestInPlusParamGen, wrappers::{GenWrapperExt, WrHiResParams}, AudioCtx, BlockAudioCtx, Gen, GenFlags, Parameterable};
+use crate::{tests::utils::TestInPlusParamGen, wrappers::{GenWrapperExt, WrHiResParams}, AudioCtx, BlockAudioCtx, Gen, GenFlags};
 
 
 #[test]

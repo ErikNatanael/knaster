@@ -2,7 +2,10 @@ use std::time::Duration;
 
 use anyhow::Result;
 use knaster_core::{
-    osc::SinNumeric, typenum::{U0, U2}, wrappers::{GenWrapperExt, WrSmoothParams}, ParameterSmoothing, Parameterable
+    osc::SinNumeric,
+    typenum::{U0, U2},
+    wrappers::{GenWrapperExt, WrSmoothParams},
+    Gen, ParameterSmoothing,
 };
 use knaster_graph::{
     audio_backend::{

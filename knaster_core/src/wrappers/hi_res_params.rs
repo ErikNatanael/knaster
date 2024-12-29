@@ -1,6 +1,6 @@
 use knaster_primitives::{numeric_array::NumericArray, Frame};
 
-use crate::{AudioCtx, Gen, GenFlags, ParameterValue, Parameterable};
+use crate::{AudioCtx, Gen, GenFlags, ParameterValue};
 
 /// Enables sample accurate parameter changes within a block. Changes must be
 /// scheduled in the order they are to be applied.
@@ -9,7 +9,7 @@ use crate::{AudioCtx, Gen, GenFlags, ParameterValue, Parameterable};
 /// be scheduled per block.
 ///
 /// This wrapper needs to be outside of other wrappers that can run partial blocks, such as [`WrSmoothParams`] and [`WrArParams`]
-pub struct WrHiResParams<const DELAYED_CHANGES_PER_BLOCK: usize, T: Gen + Parameterable<T::Sample>> {
+pub struct WrHiResParams<const DELAYED_CHANGES_PER_BLOCK: usize, T: Gen> {
     gen: T,
     // frame in block, parameter index, value
     waiting_changes: [Option<(u16, usize, ParameterValue)>; DELAYED_CHANGES_PER_BLOCK],
@@ -17,61 +17,20 @@ pub struct WrHiResParams<const DELAYED_CHANGES_PER_BLOCK: usize, T: Gen + Parame
     next_delay: NumericArray<u16, T::Parameters>,
     // The number of delayed changes this block to avoid unnecessary loops
     next_delay_i: usize,
-
 }
 
-impl<T: Gen + Parameterable<T::Sample>, const DELAYED_CHANGES_PER_BLOCK: usize>
-    WrHiResParams<DELAYED_CHANGES_PER_BLOCK, T> {
-        pub fn new(gen: T) -> Self {
-            WrHiResParams {
-                gen,
-                waiting_changes: [None; DELAYED_CHANGES_PER_BLOCK],
-                next_delay: NumericArray::default(),
-                next_delay_i: 0,
-            }
+impl<T: Gen, const DELAYED_CHANGES_PER_BLOCK: usize> WrHiResParams<DELAYED_CHANGES_PER_BLOCK, T> {
+    pub fn new(gen: T) -> Self {
+        WrHiResParams {
+            gen,
+            waiting_changes: [None; DELAYED_CHANGES_PER_BLOCK],
+            next_delay: NumericArray::default(),
+            next_delay_i: 0,
         }
-    }
-
-impl<T: Gen + Parameterable<T::Sample>, const DELAYED_CHANGES_PER_BLOCK: usize> Parameterable<T::Sample>
-    for WrHiResParams<DELAYED_CHANGES_PER_BLOCK, T>
-{
-    type Parameters = T::Parameters;
-
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
-        T::param_descriptions()
-    }
-
-    fn param_default_values() -> NumericArray<ParameterValue, Self::Parameters> {
-        T::param_default_values()
-    }
-
-    fn param_range() -> NumericArray<crate::parameters::ParameterRange, Self::Parameters> {
-        T::param_range()
-    }
-
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
-        if self.next_delay[index] == 0 {
-            self.gen.param_apply(ctx, index, value);
-        } else {
-            if self.next_delay_i < DELAYED_CHANGES_PER_BLOCK{
-                    self.waiting_changes[self.next_delay_i] = Some((self.next_delay[index], index, value));
-                    self.next_delay_i += 1;
-            } else {
-                // TODO: Proper error reporting
-                eprintln!("Warning: Not enough space for echeduled changes in WrHiResParams, change ignored. Allocate more space for saving scheduled changes by setting the generic DelayedChangesPerBlock to a higher number.");
-            }
-        }
-    }
-
-    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
-        self.gen.set_ar_param_buffer(index, buffer)
-    }
-
-    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
-        self.next_delay[index] = delay;
     }
 }
-impl<T: Gen + Parameterable<T::Sample>, const DELAYED_CHANGES_PER_BLOCK: usize> Gen
+
+impl<T: Gen, const DELAYED_CHANGES_PER_BLOCK: usize> Gen
     for WrHiResParams<DELAYED_CHANGES_PER_BLOCK, T>
 {
     type Sample = T::Sample;
@@ -96,7 +55,7 @@ impl<T: Gen + Parameterable<T::Sample>, const DELAYED_CHANGES_PER_BLOCK: usize> 
                 self.gen.param_apply(ctx, index, value);
             }
         }
-        self.gen.process(ctx, flags,  input)
+        self.gen.process(ctx, flags, input)
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
@@ -112,7 +71,7 @@ impl<T: Gen + Parameterable<T::Sample>, const DELAYED_CHANGES_PER_BLOCK: usize> 
         let mut change_i = 0;
         let num_changes_scheduled = self.next_delay_i;
         loop {
-        let mut local_frames_to_process = ctx.frames_to_process() - block_i;
+            let mut local_frames_to_process = ctx.frames_to_process() - block_i;
             // Process the next delyed change
             while change_i < num_changes_scheduled {
                 if let Some((delay, index, value)) = &self.waiting_changes[change_i] {
@@ -143,5 +102,38 @@ impl<T: Gen + Parameterable<T::Sample>, const DELAYED_CHANGES_PER_BLOCK: usize> 
         }
         //
         self.next_delay_i = 0;
+    }
+
+    type Parameters = T::Parameters;
+
+    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+        T::param_descriptions()
+    }
+
+    fn param_range() -> NumericArray<crate::parameters::ParameterRange, Self::Parameters> {
+        T::param_range()
+    }
+
+    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+        if self.next_delay[index] == 0 {
+            self.gen.param_apply(ctx, index, value);
+        } else {
+            if self.next_delay_i < DELAYED_CHANGES_PER_BLOCK {
+                self.waiting_changes[self.next_delay_i] =
+                    Some((self.next_delay[index], index, value));
+                self.next_delay_i += 1;
+            } else {
+                // TODO: Proper error reporting
+                eprintln!("Warning: Not enough space for echeduled changes in WrHiResParams, change ignored. Allocate more space for saving scheduled changes by setting the generic DelayedChangesPerBlock to a higher number.");
+            }
+        }
+    }
+
+    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
+        self.gen.set_ar_param_buffer(index, buffer)
+    }
+
+    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
+        self.next_delay[index] = delay;
     }
 }

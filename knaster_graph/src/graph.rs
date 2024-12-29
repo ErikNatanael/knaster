@@ -24,7 +24,7 @@ use crate::inspection::{EdgeInspection, EdgeSource, GraphInspection, NodeInspect
 use knaster_core::{
     math::{Add, MathGen},
     typenum::*,
-    AudioCtx, Float, Gen, Parameterable, Size,
+    AudioCtx, Float, Gen, Size,
 };
 use rtrb::RingBuffer;
 use slotmap::{new_key_type, SecondaryMap, SlotMap};
@@ -295,7 +295,7 @@ impl<F: Float> Graph<F> {
     /// Push something implementing [`Gen`] or a [`Graph`] to the graph with the
     /// id provided, storing its address in the NodeAddress provided. The node
     /// will start processing at the `start_time`.
-    pub fn push<T: Gen<Sample = F> + Parameterable<F> + 'static>(
+    pub fn push<T: Gen<Sample = F> + 'static>(
         &mut self,
         gen: T,
     ) -> Result<Handle<T>, GraphError> {

@@ -10,7 +10,7 @@ use crate::{
 use std::sync::Arc;
 
 use knaster_core::{
-    numeric_array::NumericArray, typenum::U0, Float, Gen, GenFlags, Parameterable, Size,
+    numeric_array::NumericArray, typenum::U0, Float, Gen, GenFlags,Size,
 };
 use slotmap::SlotMap;
 
@@ -249,16 +249,9 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         unreachable!()
     }
-}
-
-impl<F: Float, Inputs: Size, Outputs: Size> Parameterable<F> for GraphGen<F, Inputs, Outputs> {
     type Parameters = U0;
 
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
-        [].into()
-    }
-
-    fn param_default_values() -> NumericArray<knaster_core::ParameterValue, Self::Parameters> {
         [].into()
     }
 

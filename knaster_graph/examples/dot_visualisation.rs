@@ -5,7 +5,7 @@ use std::io::Write;
 
 use anyhow::Result;
 use knaster_core::{
-    osc::SinNumeric, typenum::{U0, U2}, wrappers::{GenWrapperExt, WrSmoothParams}, ParameterSmoothing, Parameterable
+    osc::SinNumeric, typenum::{U0, U2}, wrappers::{GenWrapperExt, WrSmoothParams}, ParameterSmoothing,Gen,
 };
 use knaster_graph::{
     audio_backend::{

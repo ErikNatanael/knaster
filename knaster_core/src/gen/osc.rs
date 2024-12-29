@@ -9,7 +9,7 @@ use knaster_primitives::{
 use wavetable_vec::*;
 
 use crate::{
-    PFloat, Param, ParameterError, ParameterRange, ParameterType, ParameterValue, Parameterable,
+    PFloat, Param, ParameterError, ParameterRange, ParameterType, ParameterValue,
 };
 
 use super::{AudioCtx, Gen, GenFlags};
@@ -25,7 +25,7 @@ mod wavetable_vec {
     };
 
     use crate::{
-        dsp::wavetable::{NonAaWavetable, Wavetable, WavetablePhase, FRACTIONAL_PART, TABLE_SIZE}, AudioCtx, Gen, GenFlags, PFloat, ParameterRange, ParameterType, ParameterValue, Parameterable
+        dsp::wavetable::{NonAaWavetable, Wavetable, WavetablePhase, FRACTIONAL_PART, TABLE_SIZE}, AudioCtx, Gen, GenFlags, PFloat, ParameterRange, ParameterType, ParameterValue,
     };
 
     /// Osciallator with an owned Wavetable
@@ -102,8 +102,6 @@ mod wavetable_vec {
                 *out = self.next_sample();
             }
         }
-    }
-    impl<F: Float> Parameterable<F> for OscWt<F> {
         type Parameters = U3;
 
         fn param_types() -> NumericArray<ParameterType, Self::Parameters> {
@@ -118,13 +116,7 @@ mod wavetable_vec {
             NumericArray::from(["freq", "phase_offset", "reset_phase"])
         }
 
-        fn param_default_values() -> NumericArray<ParameterValue, Self::Parameters> {
-            NumericArray::from([
-                ParameterValue::Float(440. as PFloat),
-                ParameterValue::Float(0.),
-                ParameterValue::Trigger,
-            ])
-        }
+
 
         fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
             NumericArray::from([
@@ -220,9 +212,6 @@ mod wavetable_vec {
         ) -> Frame<Self::Sample, Self::Outputs> {
             [self.next_sample()].into()
         }
-    }
-
-    impl<F: Float> Parameterable<F> for SinWt<F> {
         type Parameters = U3;
 
         fn param_types() -> NumericArray<ParameterType, Self::Parameters> {
@@ -237,16 +226,13 @@ mod wavetable_vec {
             NumericArray::from(["freq", "phase_offset", "reset_phase"])
         }
 
-        fn param_default_values() -> NumericArray<ParameterValue, Self::Parameters> {
-            NumericArray::from([
-                ParameterValue::Float(440. as PFloat),
-                ParameterValue::Float(0.),
-                ParameterValue::Trigger,
-            ])
-        }
-
         fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
-            todo!()
+
+            NumericArray::from([
+                ParameterRange::Float(0., PFloat::INFINITY),
+                ParameterRange::Float(PFloat::NEG_INFINITY, PFloat::INFINITY),
+                ParameterRange::Trigger,
+            ])
         }
 
         fn param_apply(&mut self, _ctx: AudioCtx, index: usize, value: ParameterValue) {
@@ -309,19 +295,13 @@ impl<F: Float> Gen for Phasor<F> {
         }
         out
     }
-}
-impl<F: Float> Parameterable<F> for Phasor<F> {
+
+
     type Parameters = U1;
 
     fn param_descriptions(
     ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         ["freq"].into()
-    }
-
-    fn param_default_values(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterValue, Self::Parameters>
-    {
-        [ParameterValue::Float(1.)].into()
     }
 
     fn param_range(
@@ -391,30 +371,12 @@ impl<F: Float> Gen for SinNumeric<F> {
         }
         NumericArray::from([out])
     }
-}
-
-impl<F: Float> Parameterable<F> for SinNumeric<F> {
     type Parameters = U3;
-
-    fn param_types() -> NumericArray<ParameterType, Self::Parameters> {
-        NumericArray::from([
-            ParameterType::Float,
-            ParameterType::Float,
-            ParameterType::Trigger,
-        ])
-    }
 
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         NumericArray::from(["freq", "phase_offset", "reset_phase"])
     }
 
-    fn param_default_values() -> NumericArray<ParameterValue, Self::Parameters> {
-        NumericArray::from([
-            ParameterValue::Float(440. as PFloat),
-            ParameterValue::Float(0.),
-            ParameterValue::Trigger,
-        ])
-    }
 
     fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
         NumericArray::from([

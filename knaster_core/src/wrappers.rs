@@ -17,13 +17,13 @@ pub use audio_rate::*;
 mod smooth_params;
 pub use smooth_params::*;
 
-use crate::{Gen, Parameterable};
+use crate::Gen;
 
 /// Adds methods as shortcuts for adding a range of wrappers to any `Gen + Parameterable`
 ///
 /// The methods all take `self`, returning the new wrapper. Math operation
 /// wrappers start with `wr_` to disambiguate them from `std::ops::*`
-pub trait GenWrapperExt<T: Gen + Parameterable<T::Sample>> {
+pub trait GenWrapperExt<T: Gen> {
     fn wr<C: FnMut(T::Sample) -> T::Sample + 'static>(self, c: C) -> WrClosure<T, C>;
     fn wr_mul(self, v: T::Sample) -> WrMul<T>;
     fn wr_add(self, v: T::Sample) -> WrAdd<T>;
@@ -39,7 +39,7 @@ pub trait GenWrapperExt<T: Gen + Parameterable<T::Sample>> {
     fn ar_params(self) -> WrArParams<T>;
 }
 
-impl<T: Gen + Parameterable<T::Sample>> GenWrapperExt<T> for T {
+impl<T: Gen> GenWrapperExt<T> for T {
     fn wr_mul(self, v: T::Sample) -> WrMul<T> {
         WrMul::new(self, v)
     }

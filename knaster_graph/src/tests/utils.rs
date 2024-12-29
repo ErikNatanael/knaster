@@ -1,5 +1,5 @@
 use knaster_core::{
-    typenum::{U0, U1}, Float, Gen, GenFlags, PFloat, ParameterRange, Parameterable
+    typenum::{U0, U1}, Float, Gen, GenFlags, PFloat, ParameterRange,
 };
 
 /// Outputs a static number every frame
@@ -26,18 +26,10 @@ impl<F: Float> Gen for TestNumGen<F> {
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         [self.number].into()
     }
-}
-impl<F: Float> Parameterable<F> for TestNumGen<F> {
     type Parameters = U0;
 
     fn param_descriptions(
     ) -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
-        [].into()
-    }
-
-    fn param_default_values(
-    ) -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterValue, Self::Parameters>
-    {
         [].into()
     }
 
@@ -83,19 +75,11 @@ impl<F: Float> Gen for TestInPlusParamGen<F> {
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         [self.number + input[0]].into()
     }
-}
-impl<F: Float> Parameterable<F> for TestInPlusParamGen<F> {
     type Parameters = U1;
 
     fn param_descriptions(
     ) -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
         ["number"].into()
-    }
-
-    fn param_default_values(
-    ) -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterValue, Self::Parameters>
-    {
-        [knaster_core::ParameterValue::Float(0.5)].into()
     }
 
     fn param_range(

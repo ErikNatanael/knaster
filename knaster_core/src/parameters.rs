@@ -14,87 +14,6 @@ use crate::AudioCtx;
 
 pub type PFloat = f64;
 
-/// This is the interface to modifying parameters of a [`Gen`].
-///
-/// A wrapper will pass on parameters to an inner type, unless it is a wrapper
-/// with special treatment of parameters.
-pub trait Parameterable<F> {
-    type Parameters: Size;
-    fn param_types() -> NumericArray<ParameterType, Self::Parameters> {
-        Self::param_default_values()
-            .into_iter()
-            .map(|v| v.ty())
-            .collect()
-    }
-    /// Specifies a name per parameter which can be used to refer to that parameter
-    /// when calling [`Parameterable::param`].
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters>;
-    fn param_default_values() -> NumericArray<ParameterValue, Self::Parameters>;
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters>;
-    /// Set the parameter value without range or type checks.
-    /// See Parameterable::param for a safer and more ergonomic interface.
-    ///
-    /// Tries to apply the parameter change without checking the validity of the
-    /// values. May panic or do nothing given unexpected values.
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue);
-    /// Set an audio buffer to control a parameter. Does nothing unless an
-    /// `ArParams` wrapper or alternative wrapper making use of this value wraps the Gen.
-    ///
-    /// There is little use in calling this directly unless you are implementing
-    /// a graph. If you are not using a `Graph`, using the ArParams wrapper and
-    /// this function is equivalent to running frame-by-frame and setting the
-    /// value every frame.
-    ///
-    /// # Safety:
-    /// The caller guarantees that the pointer will point to a
-    /// contiguous allocation of at least block size until it is replaced,
-    /// disabled, or the inner struct is dropped.
-    #[allow(unused)]
-    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const F) {
-        // TODO: Proper errors
-        eprintln!("Warning: Audio rate parameter buffer set, but did not reach a WrArParams and will have no effect.");
-    }
-    /// Sets a delay to what frame within the next block the next parameter
-    /// change should take effect.
-    ///
-    /// This will not have any effect unless a [`WrHiResParams`] wrapper is
-    /// used, or the [`Gen`] supports it internally (none of the Knaster proper
-    /// Gens do).
-    ///
-    /// Wrappers must propagagte this call.
-    #[allow(unused)]
-    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
-        // TODO: Proper errors
-        eprintln!("Warning: Parameter delay set, but did not reach a WrHiResParams and will have no effect.");
-    }
-    /// Apply a parameter change. Typechecks and bounds checks the arguments and
-    /// provides sensible errors. Calls [`Parameterable::param_apply`] under the hood.
-    fn param(
-        &mut self,
-        ctx: AudioCtx,
-        param: impl Into<Param>,
-        value: impl Into<ParameterValue>,
-    ) -> Result<(), ParameterError> {
-        match param.into() {
-            Param::Index(i) => {
-                if i >= Self::Parameters::USIZE {
-                    return Err(ParameterError::ParameterIndexOutOfBounds);
-                }
-                self.param_apply(ctx, i, value.into());
-                Ok(())
-            }
-            Param::Desc(desc) => {
-                for (i, d) in Self::param_descriptions().into_iter().enumerate() {
-                    if d == desc {
-                        self.param_apply(ctx, i, value.into());
-                        return Ok(());
-                    }
-                }
-                Err(ParameterError::DescriptionNotFound(desc))
-            }
-        }
-    }
-}
 #[derive(Debug, Clone, Error)]
 pub enum ParameterError {
     #[error("The parameter description `{0}` does not match any parameter on this `Gen`")]
@@ -125,8 +44,15 @@ pub enum ParameterRange {
     Float(PFloat, PFloat),
     Trigger,
     Index(usize, usize),
-    // etc?
+}
+impl ParameterRange {
+    pub fn ty(self) -> ParameterType {
+        match self {
+            ParameterRange::Float(_, _) => ParameterType::Float,
+            ParameterRange::Trigger => ParameterType::Trigger,
+            ParameterRange::Index(_, _) => ParameterType::Index,
+        }
+    }
 }
 #[derive(Copy, Clone, Debug)]
 pub struct Trigger;
-

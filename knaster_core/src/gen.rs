@@ -4,6 +4,8 @@ pub mod osc;
 use core::ops::Deref;
 
 use knaster_primitives::{typenum::*, Block, BlockRead, Float, Frame, Size};
+use crate::numeric_array::NumericArray;
+use crate::{Param, ParameterError, ParameterRange, ParameterType, ParameterValue};
 
 /// Contains basic metadata about the context in which an audio process is
 /// running which is often necessary for correct calculation, initialisation etc.
@@ -218,6 +220,8 @@ pub trait Gen {
     type Inputs: Size;
     /// The number of output audio channels.
     type Outputs: Size;
+    /// The number of parameters this Gen has.
+    type Parameters: Size;
     /// `init()` is the place where you should implement initialisation of
     /// internal state with knowledge of the sample rate and the block size. It
     /// is safe to allocate here.
@@ -233,8 +237,7 @@ pub trait Gen {
     /// Processes one block of frames
     ///
     /// Knaster supports adaptive partial blocks. This means that block
-    /// the `Gen::process_block` function may run more than once per global block
-    /// size number of frames.
+    /// the `Gen::process_block` function may run more than once per global block.
     ///
     /// `process_block` will be run at least once per global block.
     ///
@@ -258,6 +261,87 @@ pub trait Gen {
             let out_frame = self.process(ctx.into(), flags, in_frame);
             for i in 0..Self::Outputs::USIZE {
                 output.write(out_frame[i], i, frame);
+            }
+        }
+    }
+
+    /// Specifies which [`ParameterType`] each parameter is. If the types given to [`Gen::param_apply`] match
+    /// these types, it is assumed that the parameter will be correctly applied by the Gen. It
+    /// is also used by some wrappers to implement type specific functionality.
+    ///
+    /// If not manually implemented, types are inferred from [`Gen::param_range`]
+    fn param_types() -> NumericArray<ParameterType, Self::Parameters> {
+        Self::param_range().into_iter().map(|r| r.ty()).collect()
+    }
+    /// Specifies a name per parameter which can be used to refer to that parameter
+    /// when calling [`Gen::param`].
+    ///
+    /// Not required to be implemented, but provides a better developer experience.
+    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+        NumericArray::default()
+    }
+    /// Specifies the range that is valid for each parameter.
+    fn param_range() -> NumericArray<ParameterRange, Self::Parameters>;
+    /// Set the parameter value without range or type checks.
+    /// See Parameterable::param for a safer and more ergonomic interface.
+    ///
+    /// Tries to apply the parameter change without checking the validity of the
+    /// values. May panic or do nothing given unexpected values.
+    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue);
+    /// Set an audio buffer to control a parameter. Does nothing unless an
+    /// `ArParams` wrapper or alternative wrapper making use of this value wraps the Gen.
+    ///
+    /// There is little use in calling this directly unless you are implementing
+    /// a graph. If you are not using a `Graph`, using the ArParams wrapper and
+    /// this function is equivalent to running frame-by-frame and setting the
+    /// value every frame.
+    ///
+    /// # Safety:
+    /// The caller guarantees that the pointer will point to a
+    /// contiguous allocation of at least block size until it is replaced,
+    /// disabled, or the inner struct is dropped.
+    #[allow(unused)]
+    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const Self::Sample) {
+        // TODO: Proper errors
+        eprintln!("Warning: Audio rate parameter buffer set, but did not reach a WrArParams and will have no effect.");
+    }
+    /// Sets a delay to what frame within the next block the next parameter
+    /// change should take effect.
+    ///
+    /// This will not have any effect unless a [`WrHiResParams`] wrapper is
+    /// used, or the [`Gen`] supports it internally (none of the Knaster proper
+    /// Gens do).
+    ///
+    /// Wrappers must propagagte this call.
+    #[allow(unused)]
+    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
+        // TODO: Proper errors
+        eprintln!("Warning: Parameter delay set, but did not reach a WrHiResParams and will have no effect.");
+    }
+    /// Apply a parameter change. Typechecks and bounds checks the arguments and
+    /// provides sensible errors. Calls [`Gen::param_apply`] under the hood.
+    fn param(
+        &mut self,
+        ctx: AudioCtx,
+        param: impl Into<Param>,
+        value: impl Into<ParameterValue>,
+    ) -> Result<(), ParameterError> {
+        match param.into() {
+            Param::Index(i) => {
+                if i >= Self::Parameters::USIZE {
+                    return Err(ParameterError::ParameterIndexOutOfBounds);
+                }
+                self.param_apply(ctx, i, value.into());
+                Ok(())
+            }
+            Param::Desc(desc) => {
+                for (i, d) in Self::param_descriptions().into_iter().enumerate() {
+                    if d == desc {
+                        self.param_apply(ctx, i, value.into());
+                        return Ok(());
+                    }
+                }
+                Err(ParameterError::DescriptionNotFound(desc))
             }
         }
     }

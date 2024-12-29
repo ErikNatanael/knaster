@@ -2,7 +2,11 @@
 
 use anyhow::Result;
 use knaster_core::{
-    empty_block, numeric_array::NumericArray, typenum::{Unsigned, U0, U1, U3}, AudioCtx, Block, BlockAudioCtx, Float, Frame, Gen, GenFlags, PFloat, Param, ParameterError, ParameterRange, ParameterType, ParameterValue, Parameterable, VecBlock
+    empty_block,
+    numeric_array::NumericArray,
+    typenum::{Unsigned, U0, U1, U3},
+    AudioCtx, Block, BlockAudioCtx, Float, Frame, Gen, GenFlags, Param, ParameterError,
+    ParameterRange, ParameterType, ParameterValue, VecBlock,
 };
 fn main() -> Result<()> {
     // Let's pretend we're running an audio backend at 48kHz with a block size of 64.
@@ -17,7 +21,7 @@ fn main() -> Result<()> {
 
     // # Generating audio
     // We can generate frames one by one:
-    let output = osc.process(ctx.into(), &mut flags,[].into());
+    let output = osc.process(ctx.into(), &mut flags, [].into());
     assert_eq!(output[0], 0.0);
     // Or in blocks
     let mut output_block = VecBlock::new(1, 64);
@@ -78,9 +82,6 @@ impl<F: Float> Gen for Osc<F> {
         }
         NumericArray::from([out])
     }
-}
-
-impl<F: Float> Parameterable<F> for Osc<F> {
     type Parameters = U3;
 
     fn param_types() -> NumericArray<ParameterType, Self::Parameters> {
@@ -93,14 +94,6 @@ impl<F: Float> Parameterable<F> for Osc<F> {
 
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         NumericArray::from(["freq", "phase_offset", "reset_phase"])
-    }
-
-    fn param_default_values() -> NumericArray<ParameterValue, Self::Parameters> {
-        NumericArray::from([
-            ParameterValue::Float(440. as PFloat),
-            ParameterValue::Float(0.),
-            ParameterValue::Trigger,
-        ])
     }
 
     fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
