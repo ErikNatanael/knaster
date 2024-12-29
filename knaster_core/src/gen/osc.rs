@@ -9,7 +9,7 @@ use knaster_primitives::{
 use wavetable_vec::*;
 
 use crate::{
-    PFloat, Param, ParameterError, ParameterRange, ParameterType, ParameterValue,
+    PFloat, Param, ParameterError, ParameterRange, ParameterValue,
 };
 
 use super::{AudioCtx, Gen, GenFlags};

@@ -6,12 +6,6 @@ pub use types::*;
 
 use thiserror::Error;
 
-use knaster_primitives::numeric_array::NumericArray;
-use knaster_primitives::typenum::*;
-use knaster_primitives::Size;
-
-use crate::AudioCtx;
-
 pub type PFloat = f64;
 
 #[derive(Debug, Clone, Error)]

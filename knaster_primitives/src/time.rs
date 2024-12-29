@@ -2,7 +2,10 @@
 //!
 //! Inspired by BillyDM's blog post: https://billydm.github.io/blog/time-keeping/
 
-use std::{ops, time::Duration};
+use crate::core::{ops, cmp, time::Duration};
+// Required for some float operations when not using std
+# [allow(unused)]
+use num_traits::Float;
 
 /// How many subsecond tesimals fit in one second
 pub const SUBSECOND_TESIMALS_PER_SECOND: u32 = 282_240_000;
@@ -17,7 +20,7 @@ pub const SUBBEAT_TESIMALS_PER_BEAT: u32 = 1_476_034_560;
 ///
 /// "tesimal" is a made up word to refer to a very short amount of time.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde_derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct Seconds {
     seconds: u32,
     subsecond_tesimals: u32,
@@ -111,12 +114,12 @@ impl From<Duration> for Seconds {
     }
 }
 impl PartialOrd for Seconds {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 impl Ord for Seconds {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
         if self.seconds == other.seconds {
             self.subsecond_tesimals.cmp(&other.subsecond_tesimals)
         } else {
@@ -210,7 +213,7 @@ impl ops::Mul<Seconds> for f32 {
 ///
 /// Inspired by BillyDM's blog post https://billydm.github.io/blog/time-keeping/
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serde-derive", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde_derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct Beats {
     beats: u32,
     beat_tesimals: u32,
@@ -284,18 +287,18 @@ impl Beats {
         }
     }
 }
-impl std::iter::Sum for Beats {
+impl crate::core::iter::Sum for Beats {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         iter.fold(Beats::ZERO, |acc, elem| acc + elem)
     }
 }
 impl PartialOrd for Beats {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 impl Ord for Beats {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
         if self.beats == other.beats {
             self.beat_tesimals.cmp(&other.beat_tesimals)
         } else {

@@ -7,8 +7,10 @@ edition = "2021"
 default = ["std", "cpal"]
 std = ["knaster_core/std", "slotmap/std", "thiserror/std"]
 jack = ["dep:jack"]
+assert_no_alloc = ["dep:assert_no_alloc"]
 
 [dependencies]
+assert_no_alloc = { version = "1.1.2", optional = true }
 cpal = { version = "0.15.3", default-features = false, optional = true }
 jack = { version = "0.13.0", optional = true }
 knaster_core = { path = "../knaster_core" }
