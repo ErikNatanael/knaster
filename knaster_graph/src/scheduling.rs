@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use crate::{core::sync::atomic::AtomicBool, graph::NodeKey};
 
-use knaster_core::{Seconds, Param, ParameterError, ParameterSmoothing, ParameterValue};
+use knaster_core::{Seconds, ParameterError, ParameterSmoothing, ParameterValue};
 
 pub struct SchedulingEvent {
     pub(crate) node_key: NodeKey,
@@ -34,13 +34,6 @@ pub struct SchedulingEvent {
 pub(crate) type SchedulingChannelProducer = rtrb::Producer<SchedulingEvent>;
 // Every GraphGen has one of these for receiving parameter changes.
 pub(crate) type SchedulingChannelConsumer = rtrb::Consumer<SchedulingEvent>;
-
-/// Receives and applies scheduled events on the audio thread.
-///
-/// One of these is run at the start of every block for every graph.
-pub struct AudioThreadScheduler {
-    incoming_events: SchedulingChannelConsumer,
-}
 
 pub enum SchedulingError {
     ParameterError(ParameterError),

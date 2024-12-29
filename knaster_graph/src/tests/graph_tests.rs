@@ -45,8 +45,8 @@ fn graph_inputs_to_nodes_to_outputs() {
     graph.connect_input_to_output(0, 1, 2, false).unwrap();
     let g0 = graph.push(TestInPlusParamGen::new()).unwrap();
     let g1 = graph.push(TestInPlusParamGen::new()).unwrap();
-    g0.set(("number", 0.75));
-    g1.set(("number", 0.5));
+    g0.set(("number", 0.75)).unwrap();
+    g1.set(("number", 0.5)).unwrap();
     graph.connect_node_to_output(&g0, 0, 2, 1, true).unwrap();
     graph.connect_input_to_node(&g1, 2, 0, 1, false).unwrap();
     graph.connect_node_to_output(&g1, 0, 0, 1, false).unwrap();

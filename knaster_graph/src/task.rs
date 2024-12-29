@@ -29,11 +29,6 @@ impl<F: Float> Task<F> {
     }
 }
 
-pub(crate) struct InputToOutputTask {
-    pub(crate) graph_input_index: usize,
-    pub(crate) graph_output_index: usize,
-}
-
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum BlockOrGraphInput<F> {
     Block(*mut F),

@@ -9,7 +9,7 @@ use crate::{
     SchedulingEvent, SchedulingTime, SchedulingToken,
 };
 use knaster_core::{
-    numeric_array, typenum::Unsigned, AudioCtx, Gen, Param, ParameterError, ParameterRange,
+    typenum::Unsigned, Gen, Param, ParameterError,
     ParameterSmoothing, ParameterValue,
 };
 

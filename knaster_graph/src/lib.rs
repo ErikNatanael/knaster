@@ -27,7 +27,7 @@ mod core {
 }
 
 pub mod audio_backend;
-mod block;
+pub mod block;
 mod buffer_allocator;
 pub mod connectable;
 mod dyngen;

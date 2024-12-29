@@ -12,11 +12,11 @@ use crate::{
     connectable::{ChainElement, ChainSinkKind, ConnectionChain},
     core::sync::atomic::AtomicU64,
     dyngen::DynGen,
-    edge::{Edge, FeedbackEdge, InternalGraphEdge, NodeKeyOrGraph, ParameterEdge},
-    graph_gen::{self, GraphGen},
+    edge::{Edge, NodeKeyOrGraph, ParameterEdge},
+    graph_gen::{GraphGen},
     handle::{Handle, UntypedHandle},
     node::Node,
-    task::{ArParameterChange, BlockOrGraphInput, InputToOutputTask, OutputTask, Task, TaskData},
+    task::{ArParameterChange, BlockOrGraphInput, OutputTask, Task, TaskData},
     SchedulingChannelProducer,
 };
 

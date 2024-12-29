@@ -25,7 +25,6 @@ pub(crate) struct Node<F> {
     pub(crate) gen: *mut dyn DynGen<F>,
     pub(crate) inputs: usize,
     pub(crate) outputs: usize,
-    pub(crate) parameters: usize,
     /// true if the node was not pushed manually to the Graph. Such nodes may
     /// also be removed automatically.
     pub(crate) auto_added: bool,
@@ -48,7 +47,6 @@ impl<F: Float> Node<F> {
         let parameter_descriptions = gen.param_descriptions().into_iter().map(|s| s.to_string()).collect();
         let inputs = gen.inputs();
         let outputs = gen.outputs();
-        let parameters = gen.parameters();
         let boxed_gen = Box::new(gen);
         let ptr = Box::into_raw(boxed_gen);
 
@@ -58,7 +56,6 @@ impl<F: Float> Node<F> {
             gen: ptr,
             inputs,
             outputs,
-            parameters,
             node_inputs: vec![crate::core::ptr::null_mut(); inputs],
             node_output: NodeOutput::Offset(0),
             remove_me: None,
