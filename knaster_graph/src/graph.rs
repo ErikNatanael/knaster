@@ -432,9 +432,20 @@ impl<F: Float> Graph<F> {
             if !nodes.contains_key(source) {
                 return Err(GraphError::NodeNotFound);
             }
+            if so_from + channels > nodes[source].outputs {
+                return Err(GraphError::OutputOutOfBounds(so_from+channels-1));
+            }
+        } else {
+            if so_from + channels > self.num_inputs {
+                return Err(GraphError::GraphInputOutOfBounds(so_from+channels-1));
+            }
+            
         }
         if !nodes.contains_key(sink) {
             return Err(GraphError::NodeNotFound);
+        }
+        if si_from + channels > nodes[sink].inputs{
+            return Err(GraphError::InputOutOfBounds(si_from+channels-1));
         }
 
         self.recalculation_required = true;
@@ -497,6 +508,9 @@ impl<F: Float> Graph<F> {
             let nodes = self.get_nodes();
             if !nodes.contains_key(source) {
                 return Err(GraphError::NodeNotFound);
+            }
+            if so_from + channels > nodes[source].outputs {
+                return Err(GraphError::OutputOutOfBounds(so_from+channels-1));
             }
         }
 
@@ -1371,6 +1385,8 @@ pub enum GraphError {
     InputOutOfBounds(usize),
     #[error("Tried to connect to a graph output that doesn't exist: `{0}`")]
     OutputOutOfBounds(usize),
+    #[error("Tried to connect a graph input that doesn't exist (`{0}`) to some destination")]
+    GraphInputOutOfBounds(usize),
 }
 #[derive(thiserror::Error, Debug)]
 pub enum PushError {}
