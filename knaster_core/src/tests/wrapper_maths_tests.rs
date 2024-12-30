@@ -1,5 +1,5 @@
 use crate::tests::utils::TestNumGen;
-use crate::wrappers::GenWrapperExt;
+use crate::wrappers_core::GenWrapperExt;
 use crate::{AudioCtx, Gen, GenFlags};
 
 #[test]

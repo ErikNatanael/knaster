@@ -3,7 +3,7 @@ use crate::{BlockAudioCtx, Gen, GenFlags};
 
 /// Applies the closure to every sample of every channel in the [`Gen`] output
 ///
-/// This is almost certainly not as performant as using wrappers dedicated to a specific
+/// This is almost certainly not as performant as using wrappers_graph dedicated to a specific
 /// math operation, but good for prototyping and for when performance is not so important.
 pub struct WrClosure<T: Gen, C: FnMut(T::Sample) -> T::Sample + 'static>
 {

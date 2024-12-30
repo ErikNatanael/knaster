@@ -8,7 +8,7 @@ use std::ops::Add;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
-/// Wrapper that can free a node once it has been marked as done. Unlike most wrappers, this one
+/// Wrapper that can free a node once it has been marked as done. Unlike most wrappers_graph, this one
 /// can only be added by the [`Graph`] when pushing a node using the corresponding function.
 /// 
 /// Adds a parameter, which is always the last parameter and always called "done_action", for

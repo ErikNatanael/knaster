@@ -8,7 +8,7 @@ use crate::{AudioCtx, Gen, GenFlags, ParameterValue};
 /// `DelayedChangesPerBlock` determines the maximum number of changes that can
 /// be scheduled per block.
 ///
-/// This wrapper needs to be outside of other wrappers that can run partial blocks, such as [`WrSmoothParams`] and [`WrArParams`]
+/// This wrapper needs to be outside of other wrappers_graph that can run partial blocks, such as [`WrSmoothParams`] and [`WrArParams`]
 pub struct WrHiResParams<const DELAYED_CHANGES_PER_BLOCK: usize, T: Gen> {
     gen: T,
     // frame in block, parameter index, value

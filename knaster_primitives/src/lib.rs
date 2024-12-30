@@ -37,6 +37,9 @@ pub use num_traits::Float as FloatMethods;
 pub use numeric_array;
 pub use numeric_array::typenum;
 
+pub use num_traits as num_traits;
+pub use num_derive as num_derive;
+
 pub trait Size: ArrayLength + Clone + Sync + Send {}
 impl<T: ArrayLength + Clone + Sync + Send> Size for T {}
 

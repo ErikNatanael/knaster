@@ -1,6 +1,6 @@
 use knaster_primitives::{Block, VecBlock};
 
-use crate::{tests::utils::TestInPlusParamGen, wrappers::{GenWrapperExt, WrHiResParams}, AudioCtx, BlockAudioCtx, Gen, GenFlags};
+use crate::{tests::utils::TestInPlusParamGen, wrappers_core::{GenWrapperExt, WrHiResParams}, AudioCtx, BlockAudioCtx, Gen, GenFlags};
 
 
 #[test]
@@ -36,7 +36,7 @@ fn sample_accurate_parameters_with_wrappers_test() {
 
     let mut flags = GenFlags::new();
     let g = WrHiResParams::<10, _>::new(TestInPlusParamGen::new());
-    // Add arithmetic wrappers that have no effect to test that they all pass the delay through properly
+    // Add arithmetic wrappers_graph that have no effect to test that they all pass the delay through properly
     let mut g = g.wr_add(0.0).wr_sub(0.0).wr_div(1.0).wr_mul(1.0).wr_powf(1.0).wr_powi(1).wr(|v| v);
     g.set_delay_within_block_for_param(0, 5);
     g.param((ctx).into(), 0, 5.).unwrap();

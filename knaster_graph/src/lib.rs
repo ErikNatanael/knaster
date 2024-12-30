@@ -19,12 +19,14 @@
 extern crate alloc;
 
 // Switches between std and core based on features. This reduces boilerplate when importing.
-mod core {
+mod core  {
     #[cfg(not(feature = "std"))]
     pub use core::*;
     #[cfg(feature = "std")]
     pub use std::*;
 }
+
+pub use knaster_core::*;
 
 pub mod audio_backend;
 pub mod block;
@@ -42,6 +44,6 @@ mod task;
 #[cfg(test)]
 mod tests;
 pub mod inspection;
-pub mod wrappers;
+pub mod wrappers_graph;
 
 pub use scheduling::*;

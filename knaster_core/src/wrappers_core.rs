@@ -19,10 +19,10 @@ pub use smooth_params::*;
 
 use crate::Gen;
 
-/// Adds methods as shortcuts for adding a range of wrappers to any `Gen + Parameterable`
+/// Adds methods as shortcuts for adding a range of wrappers_graph to any `Gen + Parameterable`
 ///
 /// The methods all take `self`, returning the new wrapper. Math operation
-/// wrappers start with `wr_` to disambiguate them from `std::ops::*`
+/// wrappers_graph start with `wr_` to disambiguate them from `std::ops::*`
 pub trait GenWrapperExt<T: Gen> {
     fn wr<C: FnMut(T::Sample) -> T::Sample + 'static>(self, c: C) -> WrClosure<T, C>;
     fn wr_mul(self, v: T::Sample) -> WrMul<T>;

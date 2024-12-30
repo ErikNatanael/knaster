@@ -21,7 +21,7 @@ use crate::{
 };
 
 use crate::inspection::{EdgeInspection, EdgeSource, GraphInspection, NodeInspection};
-use crate::wrappers::done::WrDone;
+use crate::wrappers_graph::done::WrDone;
 use knaster_core::{
     math::{Add, MathGen},
     typenum::*,
@@ -366,8 +366,8 @@ impl<F: Float> Graph<F> {
         &mut self,
         source: impl Into<NodeId>,
         sink: impl Into<NodeId>,
-        source_from_channel: usize,
-        sink_from_channel: usize,
+        source_start_channel: usize,
+        sink_start_channel: usize,
         channels: usize,
         additive: bool,
     ) -> Result<(), GraphError> {
@@ -382,8 +382,8 @@ impl<F: Float> Graph<F> {
         self.connect_to_node_internal(
             NodeKeyOrGraph::Node(source.key()),
             sink.key(),
-            source_from_channel,
-            sink_from_channel,
+            source_start_channel,
+            sink_start_channel,
             channels,
             additive,
         )
@@ -391,15 +391,15 @@ impl<F: Float> Graph<F> {
     /// Connect a graph input directly to a graph output
     pub fn connect_input_to_output(
         &mut self,
-        source_from_channel: usize,
-        sink_from_channel: usize,
+        source_start_channel: usize,
+        sink_start_channel: usize,
         channels: usize,
         additive: bool,
     ) -> Result<(), GraphError> {
         self.connect_to_output_internal(
             NodeKeyOrGraph::Graph,
-            source_from_channel,
-            sink_from_channel,
+            source_start_channel,
+            sink_start_channel,
             channels,
             additive,
         )
@@ -407,8 +407,8 @@ impl<F: Float> Graph<F> {
     pub fn connect_node_to_output(
         &mut self,
         source: impl Into<NodeId>,
-        source_from_channel: usize,
-        sink_from_channel: usize,
+        source_start_channel: usize,
+        sink_start_channel: usize,
         channels: usize,
         additive: bool,
     ) -> Result<(), GraphError> {
@@ -418,8 +418,8 @@ impl<F: Float> Graph<F> {
         }
         self.connect_to_output_internal(
             NodeKeyOrGraph::Node(source.key()),
-            source_from_channel,
-            sink_from_channel,
+            source_start_channel,
+            sink_start_channel,
             channels,
             additive,
         )
@@ -427,8 +427,8 @@ impl<F: Float> Graph<F> {
     pub fn connect_input_to_node(
         &mut self,
         sink: impl Into<NodeId>,
-        source_from_channel: usize,
-        sink_from_channel: usize,
+        source_start_channel: usize,
+        sink_start_channel: usize,
         channels: usize,
         additive: bool,
     ) -> Result<(), GraphError> {
@@ -439,8 +439,8 @@ impl<F: Float> Graph<F> {
         self.connect_to_node_internal(
             NodeKeyOrGraph::Graph,
             sink.key(),
-            source_from_channel,
-            sink_from_channel,
+            source_start_channel,
+            sink_start_channel,
             channels,
             additive,
         )

@@ -27,7 +27,7 @@ mod gen;
 mod parameters;
 #[cfg(test)]
 mod tests;
-pub mod wrappers;
+pub mod wrappers_core;
 
 pub use gen::*;
 pub use knaster_primitives::*;
