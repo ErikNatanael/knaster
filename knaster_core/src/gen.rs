@@ -1,6 +1,7 @@
 pub mod math;
 pub mod osc;
 pub mod envelopes;
+mod svf;
 
 use core::ops::Deref;
 
@@ -133,7 +134,7 @@ impl<'a> From<&'a mut BlockAudioCtx> for &'a AudioCtx {
         &val.audio_ctx
     }
 }
-/// Output state used for carrying some basic state up through the tree of Gens and wrappers.
+/// Output state used for carrying some basic state up through the tree of Gens and wrappers_graph.
 /// Currently only used for freeing nodes.
 /// 
 /// When a node wants to signal that it should be freed, it will set the flag 
@@ -294,7 +295,7 @@ pub trait Gen {
 
     /// Specifies which [`ParameterType`] each parameter is. If the types given to [`Gen::param_apply`] match
     /// these types, it is assumed that the parameter will be correctly applied by the Gen. It
-    /// is also used by some wrappers to implement type specific functionality.
+    /// is also used by some wrappers_graph to implement type specific functionality.
     ///
     /// If not manually implemented, types are inferred from [`Gen::param_range`]
     fn param_types() -> NumericArray<ParameterType, Self::Parameters> {
