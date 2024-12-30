@@ -6,7 +6,7 @@ use std::{
     collections::HashSet,
     sync::{Arc, Mutex},
 };
-
+use std::collections::VecDeque;
 use crate::{
     buffer_allocator::BufferAllocator,
     connectable::{ChainElement, ChainSinkKind, ConnectionChain},
@@ -279,7 +279,7 @@ impl<F: Float> Graph<F> {
                 task_data_to_be_dropped_producer,
                 new_task_data_consumer,
                 freed: false,
-                waiting_parameter_changes: Vec::with_capacity(ring_buffer_size),
+                waiting_parameter_changes: VecDeque::with_capacity(ring_buffer_size),
                 _arc_nodes: graph.nodes.clone(),
                 _arc_buffer_allocation_ptr: graph.buffer_allocator.buffer(),
                 _channels: core::marker::PhantomData,

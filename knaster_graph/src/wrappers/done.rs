@@ -57,6 +57,7 @@ where
         flags: &mut GenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
+        flags.mark_remove_self_supported();
         let out = self.gen.process(ctx, flags, input);
         self.process_flags(flags);
         out
@@ -72,6 +73,7 @@ where
         InBlock: BlockRead<Sample = Self::Sample>,
         OutBlock: Block<Sample = Self::Sample>,
     {
+        flags.mark_remove_self_supported();
         self.gen.process_block(ctx, flags, input, output);
         self.process_flags(flags);
     }

@@ -33,8 +33,8 @@ impl<F: Float> Asr<F> {
             state: AsrState::Stopped,
             t: F::ZERO,
             attack_seconds: F::ZERO,
-            attack_rate: F::ZERO,
-            release_rate: F::ZERO,
+            attack_rate: F::ONE,
+            release_rate: F::ONE,
             release_seconds: F::ZERO,
             release_scale: F::ONE,
         }
@@ -118,16 +118,24 @@ impl<F: Float> Gen for Asr<F> {
                 let atk = F::new(value.float().unwrap());
                 if self.attack_seconds != atk {
                     self.attack_seconds = atk;
-                    self.attack_rate =
-                        F::ONE / (self.attack_seconds * F::from(ctx.sample_rate).unwrap());
+                    if atk == F::ZERO {
+                        self.attack_rate = F::ONE;
+                    } else {
+                        self.attack_rate =
+                            F::ONE / (self.attack_seconds * F::from(ctx.sample_rate).unwrap());
+                    }
                 }
             }
             Self::RELEASE_TIME => {
                 let rel = F::new(value.float().unwrap());
                 if self.release_seconds != rel {
                     self.release_seconds = rel;
-                    self.release_rate =
-                        F::ONE / (self.release_seconds * F::from(ctx.sample_rate).unwrap());
+                    if rel == F::ZERO {
+                        self.release_rate = F::ONE;
+                    } else {
+                        self.release_rate =
+                            F::ONE / (self.release_seconds * F::from(ctx.sample_rate).unwrap());
+                    }
                 }
             }
             Self::T_RELEASE => match self.state {

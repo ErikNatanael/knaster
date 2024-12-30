@@ -1,10 +1,11 @@
-use knaster_core::{typenum::U3, Block};
-use knaster_core::math::{Add, MathGen, Mul};
-use knaster_core::typenum::{U1, U2};
+use crate::tests::utils::TestNumGen;
 use crate::{
     graph::GraphSettings, handle::HandleTrait, runner::Runner, tests::utils::TestInPlusParamGen,
 };
-use crate::tests::utils::TestNumGen;
+use knaster_core::envelopes::Asr;
+use knaster_core::math::{Add, MathGen, Mul};
+use knaster_core::typenum::{U0, U1, U2};
+use knaster_core::{typenum::U3, Block, Done, Trigger};
 
 #[test]
 fn graph_inputs_to_outputs() {
@@ -62,9 +63,6 @@ fn graph_inputs_to_nodes_to_outputs() {
     ];
     unsafe { runner.run(&input_pointers) };
     let output = runner.output_block();
-    dbg!(output.channel_as_slice(0));
-    dbg!(output.channel_as_slice(1));
-    dbg!(output.channel_as_slice(2));
     assert_eq!(output.read(0, 0), 2.5);
     assert_eq!(output.read(1, 0), 2.0);
     assert_eq!(output.read(2, 0), 2.75);
@@ -81,7 +79,7 @@ fn multichannel_nodes() {
     });
 
     let v0_0 = graph.push(TestNumGen::new(0.125)).unwrap();
-    let v0_1= graph.push(TestNumGen::new(1.)).unwrap();
+    let v0_1 = graph.push(TestNumGen::new(1.)).unwrap();
     let v1_0 = graph.push(TestNumGen::new(0.5)).unwrap();
     let v1_1 = graph.push(TestNumGen::new(4.125)).unwrap();
     // two channel output
@@ -120,4 +118,39 @@ fn multichannel_nodes() {
     let output = runner.output_block();
     assert_eq!(output.read(0, 0), 0.625 * 0.5);
     assert_eq!(output.read(1, 0), 5.125 * 0.125);
+}
+
+#[test]
+fn free_node_when_done() {
+    let block_size = 16;
+    let (mut graph, mut runner) = Runner::<f32>::new::<U0, U2>(GraphSettings {
+        block_size,
+        sample_rate: 48000,
+        ring_buffer_size: 50,
+        ..Default::default()
+    });
+    let asr = graph
+        .push_with_done_action(Asr::new(), Done::FreeSelf)
+        .unwrap();
+    asr.set(("attack_time", 0.0)).unwrap();
+    asr.set(("release_time", 0.0)).unwrap();
+    asr.set(("t_restart", Trigger)).unwrap();
+    asr.set(("t_release", Trigger)).unwrap();
+    graph.commit_changes().unwrap();
+    assert_eq!(graph.inspection().nodes.len(), 1);
+    for _ in 0..10 {
+        unsafe {
+            runner.run(&[]);
+        }
+    }
+    // Run the code to free old nodes
+    graph.commit_changes().unwrap();
+    assert_eq!(graph.inspection().nodes[0].pending_removal, true);
+    // Apply the new TaskData on the audio thread so that the node can be removed
+    unsafe {
+        runner.run(&[]);
+    }
+    // Now the node is removed
+    graph.commit_changes().unwrap();
+    assert_eq!(graph.inspection().nodes.len(), 0);
 }

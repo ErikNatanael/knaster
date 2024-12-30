@@ -220,6 +220,9 @@ impl GenFlags {
         self.done = true;
         self.done_frame_in_block = from_frame;
     }
+    pub fn mark_remove_self_supported(&mut self) {
+        self.remove_self_supported = true;
+    }
     pub fn clear_graph_flags(&mut self) {
         self.remove_parent = false;
         self.remove_parent_from_frame_in_block = u32::MAX;
