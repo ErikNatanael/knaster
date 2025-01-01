@@ -190,7 +190,6 @@ impl<T: Gen> Gen for WrSmoothParams<T> {
         T::param_descriptions()
     }
 
-
     fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
         T::param_range()
     }
@@ -201,7 +200,7 @@ impl<T: Gen> Gen for WrSmoothParams<T> {
         }
         // Received a new parameter change.
         match value {
-            ParameterValue::Index(_) | ParameterValue::Trigger => {
+            ParameterValue::Integer(_) | ParameterValue::Trigger => {
                 self.gen.param_apply(ctx, index, value)
             }
             ParameterValue::Float(float_value) => {

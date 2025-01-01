@@ -7,7 +7,7 @@ use crate::num_derive::{FromPrimitive, ToPrimitive};
 use crate::num_traits::FromPrimitive;
 use crate::numeric_array::NumericArray;
 use crate::typenum::{U1, U4, U5};
-use crate::{AudioCtx, BlockAudioCtx, Gen, GenFlags, PFloat, ParameterRange, ParameterValue};
+use crate::{AudioCtx, BlockAudioCtx, Gen, GenFlags, PFloat, PInteger, PIntegerConvertible, ParameterRange, ParameterValue};
 use knaster_primitives::num_traits;
 use knaster_primitives::{Block, BlockRead, Float, Frame};
 
@@ -38,6 +38,23 @@ pub enum SvfFilterType {
 impl SvfFilterType {
     /// The number corresponding to the largest value when converting to an index
     const MAX: usize = 8;
+}
+impl From<PInteger> for SvfFilterType {
+    fn from(value: PInteger) -> Self {
+        Self::from_usize(value.0).unwrap_or(SvfFilterType::Low)
+    }
+}
+impl From<SvfFilterType> for PInteger {
+
+    fn from(value: SvfFilterType) -> Self {
+        PInteger(value as usize)
+
+    }
+}
+impl PIntegerConvertible for SvfFilterType {
+    fn pinteger_range() -> (PInteger, PInteger) {
+        (PInteger(SvfFilterType::Low as usize), PInteger(SvfFilterType::MAX as usize))
+    }
 }
 /// A versatile EQ filter implementation
 ///
@@ -231,7 +248,7 @@ impl<F: Float> Gen for SvfFilter<F> {
             ParameterRange::Float(20., 20000.),
             ParameterRange::Float(0.0, PFloat::INFINITY),
             ParameterRange::Float(PFloat::NEG_INFINITY, PFloat::INFINITY),
-            ParameterRange::Index(0, SvfFilterType::MAX),
+            ParameterRange::from_pinteger::<SvfFilterType>(),
             ParameterRange::Trigger,
         ]
         .into()
@@ -254,7 +271,7 @@ impl<F: Float> Gen for SvfFilter<F> {
             }
             Self::Q => self.q = F::new(value.float().unwrap()),
             Self::GAIN => self.gain_db = F::new(value.float().unwrap()),
-            Self::FILTER => self.ty = SvfFilterType::from_usize(value.index().unwrap()).unwrap(),
+            Self::FILTER => self.ty = SvfFilterType::from(value.integer().unwrap()),
             Self::T_CALCULATE_COEFFICIENTS => self.set_coeffs(
                 self.cutoff_freq,
                 self.q,

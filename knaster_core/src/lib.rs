@@ -54,6 +54,7 @@ pub enum Rate {
 /// Some Gens have a "done" state. This enum represents a list of standardised actions to take
 /// when done.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[repr(u8)]
 pub enum Done {
     None = 0,
     /// Free only the current Gen node.
@@ -66,13 +67,23 @@ impl Default for Done {
         Done::None
     }
 }
-impl From<usize> for Done {
-    fn from(value: usize) -> Self {
-        match value {
+impl From<PInteger> for Done {
+    fn from(value: PInteger) -> Self {
+        match value.0 {
             0 => Done::None,
             1 => Done::FreeSelf,
             2 => Done::FreeParent,
             _ => Done::None,
         }
+    }
+}
+impl From<Done> for PInteger {
+    fn from(value: Done) -> Self {
+        PInteger(value as usize)
+    }
+}
+impl PIntegerConvertible for Done {
+    fn pinteger_range() -> (PInteger, PInteger) {
+        (PInteger(0), PInteger(2))
     }
 }

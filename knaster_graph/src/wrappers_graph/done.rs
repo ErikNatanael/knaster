@@ -95,13 +95,13 @@ where
         for i in 0..T::Parameters::USIZE {
             d[i] = gd[i];
         }
-        d[T::Parameters::USIZE] = ParameterRange::done();
+        d[T::Parameters::USIZE] = ParameterRange::from_pinteger::<Done>();
         d
     }
 
     fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
         if index == T::Parameters::USIZE {
-            self.done_action = value.index().unwrap().into();
+            self.done_action = value.integer().unwrap().into();
         } else {
             self.gen.param_apply(ctx, index, value);
         }

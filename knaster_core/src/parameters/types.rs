@@ -1,4 +1,4 @@
-use crate::Rate;
+use crate::{PInteger, PIntegerConvertible, Rate};
 
 use super::{PFloat, Trigger};
 
@@ -6,18 +6,23 @@ use super::{PFloat, Trigger};
 pub enum ParameterType {
     Float,
     Trigger,
-    Index,
+    Integer,
     // etc?
 }
 #[derive(Copy, Clone, Debug)]
 pub enum ParameterValue {
     Float(PFloat),
     Trigger,
-    Index(usize),
+    Integer(PInteger),
     /// The smoothing setting for a Float parameter. Smoothing is not built into all Gens, you generally need a Wrapper to do smoothing for you.
     Smoothing(ParameterSmoothing, Rate),
 }
 
+impl<T: PIntegerConvertible> From<T> for ParameterValue {
+    fn from(val: T) -> Self {
+        ParameterValue::Integer(val.into())
+    }
+}
 impl From<f32> for ParameterValue {
     fn from(val: f32) -> Self {
         ParameterValue::Float(val as PFloat)
@@ -26,11 +31,6 @@ impl From<f32> for ParameterValue {
 impl From<f64> for ParameterValue {
     fn from(val: f64) -> Self {
         ParameterValue::Float(val as PFloat)
-    }
-}
-impl From<usize> for ParameterValue {
-    fn from(val: usize) -> Self {
-        ParameterValue::Index(val)
     }
 }
 impl From<Trigger> for ParameterValue {
@@ -45,9 +45,9 @@ impl ParameterValue {
             _ => None,
         }
     }
-    pub fn index(self) -> Option<usize> {
+    pub fn integer(self) -> Option<PInteger> {
         match self {
-            ParameterValue::Index(value) => Some(value),
+            ParameterValue::Integer(value) => Some(value),
             _ => None,
         }
     }
@@ -55,7 +55,7 @@ impl ParameterValue {
         match self {
             ParameterValue::Float(_) => ParameterType::Float,
             ParameterValue::Trigger => ParameterType::Trigger,
-            ParameterValue::Index(_) => ParameterType::Index,
+            ParameterValue::Integer(_) => ParameterType::Integer,
             ParameterValue::Smoothing(_, _) => ParameterType::Float,
         }
     }
