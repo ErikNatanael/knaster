@@ -1,12 +1,3 @@
-use core::{
-    cell::UnsafeCell,
-    sync::atomic::{AtomicBool, Ordering},
-};
-use std::{
-    collections::HashSet,
-    sync::{Arc, Mutex},
-};
-use std::collections::VecDeque;
 use crate::{
     buffer_allocator::BufferAllocator,
     connectable::{ChainElement, ChainSinkKind, ConnectionChain},
@@ -18,6 +9,15 @@ use crate::{
     node::Node,
     task::{ArParameterChange, BlockOrGraphInput, OutputTask, Task, TaskData},
     SchedulingChannelProducer,
+};
+use core::{
+    cell::UnsafeCell,
+    sync::atomic::{AtomicBool, Ordering},
+};
+use std::collections::VecDeque;
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex},
 };
 
 use crate::inspection::{EdgeInspection, EdgeSource, GraphInspection, NodeInspection};
@@ -54,6 +54,13 @@ pub struct NodeId {
     pub(crate) graph: GraphId,
 }
 impl NodeId {
+    pub(crate) fn top_level_graph_node_id() -> Self {
+        Self {
+            key: NodeKey::default(),
+            // We should never reach the max of a u64, see comment for GraphId
+            graph: GraphId::MAX,
+        }
+    }
     pub fn key(&self) -> NodeKey {
         self.key
     }
@@ -162,11 +169,17 @@ pub struct Graph<F: Float> {
     /// and aliased in the inputs_buffers
     buffer_allocator: BufferAllocator<F>,
     graph_gen_communicator: GraphGenCommunicator<F>,
+    /// The nodeId of the Graph node in the parent. Only the top level Graph has an invalid NodeId
+    /// which will not allow any action.
+    self_node_id: NodeId,
 }
 
 impl<F: Float> Graph<F> {
     /// Create a new empty [`Graph`] with a unique atomically generated [`GraphId`]
-    pub fn new<Inputs: Size, Outputs: Size>(options: GraphSettings) -> (Self, Node<F>) {
+    pub fn new<Inputs: Size, Outputs: Size>(
+        options: GraphSettings,
+        node_id: NodeId,
+    ) -> (Self, Node<F>) {
         let GraphSettings {
             name,
             block_size,
@@ -220,6 +233,7 @@ impl<F: Float> Graph<F> {
             buffers_to_free_when_safe: vec![],
             new_inputs_buffers_ptr: false,
             buffer_allocator,
+            self_node_id: node_id,
         };
         // graph_gen
         let task_data = graph.generate_task_data(Arc::new(AtomicBool::new(false)), Vec::new());
@@ -294,7 +308,7 @@ impl<F: Float> Graph<F> {
     }
 
     /// Push something implementing [`Gen`] to the graph.
-    pub fn push<T: Gen<Sample = F> + 'static>(&mut self, gen: T) -> Result<Handle<T>, GraphError> {
+    pub fn push<T: Gen<Sample = F> + 'static>(&mut self, gen: T) -> Handle<T> {
         let name = std::any::type_name::<T>();
         let name = shorten_name(name);
         let node = Node::new(name.to_owned(), gen);
@@ -308,7 +322,7 @@ impl<F: Float> Graph<F> {
                 .scheduling_event_producer
                 .clone(),
         ));
-        Ok(handle)
+        handle
     }
     /// Push something implementing [`Gen`] to the graph, adding the [`WrDone`] wrapper. This
     /// enables the node to free itself if it marks itself as done or for removal using [`GenFlags`].
@@ -316,7 +330,7 @@ impl<F: Float> Graph<F> {
         &mut self,
         gen: T,
         default_done_action: Done,
-    ) -> Result<Handle<T>, GraphError>
+    ) -> Handle<WrDone<T>>
     where
         // Make sure we can add a parameter
         <T as Gen>::Parameters: crate::core::ops::Add<B1>,
@@ -342,7 +356,7 @@ impl<F: Float> Graph<F> {
                 .scheduling_event_producer
                 .clone(),
         ));
-        Ok(handle)
+        handle
     }
 
     /// Add a node to this Graph. The Node will be (re)initialised with the
@@ -366,9 +380,8 @@ impl<F: Float> Graph<F> {
         &mut self,
         source: impl Into<NodeId>,
         sink: impl Into<NodeId>,
-        source_start_channel: usize,
-        sink_start_channel: usize,
-        channels: usize,
+        source_channel: usize,
+        sink_channel: usize,
         additive: bool,
     ) -> Result<(), GraphError> {
         let source = source.into();
@@ -379,214 +392,226 @@ impl<F: Float> Graph<F> {
         if !sink.graph == self.id {
             return Err(GraphError::WrongGraph);
         }
+
+        let nodes = self.get_nodes();
+        if !nodes.contains_key(source.key()) {
+            return Err(GraphError::NodeNotFound);
+        }
+        if source_channel >= nodes[source.key()].outputs {
+            return Err(GraphError::OutputOutOfBounds(
+                source_channel,
+            ));
+        }
+        if !nodes.contains_key(sink.key()) {
+            return Err(GraphError::NodeNotFound);
+        }
+        if sink_channel >= nodes[sink.key()].inputs {
+            return Err(GraphError::InputOutOfBounds(
+                sink_channel,
+            ));
+        }
         self.connect_to_node_internal(
             NodeKeyOrGraph::Node(source.key()),
             sink.key(),
-            source_start_channel,
-            sink_start_channel,
-            channels,
+            source_channel,
+            sink_channel,
             additive,
-        )
+        );
+        Ok(())
     }
     /// Connect a graph input directly to a graph output
     pub fn connect_input_to_output(
         &mut self,
-        source_start_channel: usize,
-        sink_start_channel: usize,
-        channels: usize,
+        source_channel: usize,
+        sink_channel: usize,
         additive: bool,
     ) -> Result<(), GraphError> {
+        if source_channel >= self.num_inputs {
+            return Err(GraphError::OutputOutOfBounds(source_channel));
+        }
+        if sink_channel >= self.num_outputs {
+            return Err(GraphError::OutputOutOfBounds(sink_channel));
+        }
         self.connect_to_output_internal(
             NodeKeyOrGraph::Graph,
-            source_start_channel,
-            sink_start_channel,
-            channels,
+            source_channel,
+            sink_channel,
             additive,
-        )
+        );
+        Ok(())
     }
     pub fn connect_node_to_output(
         &mut self,
         source: impl Into<NodeId>,
-        source_start_channel: usize,
-        sink_start_channel: usize,
-        channels: usize,
+        source_channel: usize,
+        sink_channel: usize,
         additive: bool,
     ) -> Result<(), GraphError> {
         let source = source.into();
         if !source.graph == self.id {
             return Err(GraphError::WrongGraph);
         }
+        if sink_channel > self.num_outputs {
+            return Err(GraphError::OutputOutOfBounds(sink_channel));
+        }
+        let nodes = self.get_nodes();
+        if !nodes.contains_key(source.key()) {
+            return Err(GraphError::NodeNotFound);
+        }
+        if source_channel >= nodes[source.key()].outputs {
+            return Err(GraphError::OutputOutOfBounds(
+                source_channel,
+            ));
+        }
         self.connect_to_output_internal(
             NodeKeyOrGraph::Node(source.key()),
-            source_start_channel,
-            sink_start_channel,
-            channels,
+            source_channel,
+            sink_channel,
             additive,
-        )
+        );
+        Ok(())
     }
     pub fn connect_input_to_node(
         &mut self,
         sink: impl Into<NodeId>,
-        source_start_channel: usize,
-        sink_start_channel: usize,
-        channels: usize,
+        source_channel: usize,
+        sink_channel: usize,
         additive: bool,
     ) -> Result<(), GraphError> {
         let sink = sink.into();
         if !sink.graph == self.id {
             return Err(GraphError::WrongGraph);
         }
-        self.connect_to_node_internal(
+        dbg!(self.num_inputs, source_channel);
+        if source_channel >= self.num_inputs {
+            return Err(GraphError::OutputOutOfBounds(source_channel));
+        }
+        let nodes = self.get_nodes();
+        if !nodes.contains_key(sink.key()) {
+            return Err(GraphError::NodeNotFound);
+        }
+        if sink_channel >= nodes[sink.key()].inputs {
+            return Err(GraphError::OutputOutOfBounds(sink_channel));
+        }
+
+        Ok(self.connect_to_node_internal(
             NodeKeyOrGraph::Graph,
             sink.key(),
-            source_start_channel,
-            sink_start_channel,
-            channels,
+            source_channel,
+            sink_channel,
             additive,
-        )
+        ))
     }
 
     /// Make a connection between two nodes in the Graph when it is certain that
     /// the NodeKeys are from this graph
+    ///
+    /// Assumes that the parameters are valid. Use the public functions for error checking. This
+    /// enables a statically checked API.
     fn connect_to_node_internal(
         &mut self,
         source: NodeKeyOrGraph,
         sink: NodeKey,
-        so_from: usize,
-        si_from: usize,
-        channels: usize,
+        so_channel: usize,
+        si_channel: usize,
         additive: bool,
-    ) -> Result<(), GraphError> {
+    ) {
         let nodes = self.get_nodes();
-        if let NodeKeyOrGraph::Node(source) = source {
-            if !nodes.contains_key(source) {
-                return Err(GraphError::NodeNotFound);
-            }
-            if so_from + channels > nodes[source].outputs {
-                return Err(GraphError::OutputOutOfBounds(so_from + channels - 1));
-            }
-        } else {
-            if so_from + channels > self.num_inputs {
-                return Err(GraphError::GraphInputOutOfBounds(so_from + channels - 1));
-            }
-        }
-        if !nodes.contains_key(sink) {
-            return Err(GraphError::NodeNotFound);
-        }
-        if si_from + channels > nodes[sink].inputs {
-            return Err(GraphError::InputOutOfBounds(si_from + channels - 1));
-        }
 
         self.recalculation_required = true;
         // Fast and common path
         if !additive {
-            for i in 0..channels {
-                self.node_input_edges[sink][si_from + i] = Some(Edge {
-                    source,
-                    channel_in_source: so_from + i,
-                    is_feedback: false,
-                });
-            }
-            return Ok(());
+            self.node_input_edges[sink][si_channel] = Some(Edge {
+                source,
+                channel_in_source: so_channel,
+                is_feedback: false,
+            });
+            return;
         }
         // Connect additively
         // If no input exists for the channel, connect directly.
         // If an input does exist, create a new add node and connect it up, replacing the current edge.
 
-        for i in 0..channels {
-            if let Some(existing_edge) = self.node_input_edges[sink][si_from + i] {
-                // Put an add node in between the input and the previous input,
-                // adding the new source together with the old
-                let add_gen = MathGen::<F, U1, Add>::new();
-                // TODO: We don't need a full handle here
-                let add_handle = self.push(add_gen)?;
-                let add_node = add_handle.untyped_handle.node.key;
-                self.node_input_edges[add_node][0] = Some(existing_edge);
-                self.node_input_edges[add_node][1] = Some(Edge {
-                    source,
-                    channel_in_source: so_from + i,
-                    is_feedback: false,
-                });
-                self.node_input_edges[sink][si_from + i] = Some(Edge {
-                    source: NodeKeyOrGraph::Node(add_node),
-                    channel_in_source: 0,
-                    is_feedback: false,
-                });
-            } else {
-                self.node_input_edges[sink][si_from + i] = Some(Edge {
-                    source,
-                    channel_in_source: so_from + i,
-                    is_feedback: false,
-                });
-            }
+        if let Some(existing_edge) = self.node_input_edges[sink][si_channel] {
+            // Put an add node in between the input and the previous input,
+            // adding the new source together with the old
+            let add_gen = MathGen::<F, U1, Add>::new();
+            // TODO: We don't need a full handle here
+            let add_handle = self.push(add_gen);
+            let add_node = add_handle.untyped_handle.node.key;
+            self.node_input_edges[add_node][0] = Some(existing_edge);
+            self.node_input_edges[add_node][1] = Some(Edge {
+                source,
+                channel_in_source: so_channel,
+                is_feedback: false,
+            });
+            self.node_input_edges[sink][si_channel] = Some(Edge {
+                source: NodeKeyOrGraph::Node(add_node),
+                channel_in_source: 0,
+                is_feedback: false,
+            });
+        } else {
+            self.node_input_edges[sink][si_channel] = Some(Edge {
+                source,
+                channel_in_source: so_channel,
+                is_feedback: false,
+            });
         }
-        Ok(())
     }
     // TODO: This would be much cleaner if the output was represented by a node
     // in the graph, created in `new`.
     /// The internal function for connecting a node to the output
+    ///
+    /// Assumes that the parameters are valid. Use the public functions for error checking. This
+    /// enables a statically checked API.
     fn connect_to_output_internal(
         &mut self,
         source: NodeKeyOrGraph,
-        so_from: usize,
-        si_from: usize,
-        channels: usize,
+        so_channel: usize,
+        si_channel: usize,
         additive: bool,
-    ) -> Result<(), GraphError> {
-        if let NodeKeyOrGraph::Node(source) = source {
-            let nodes = self.get_nodes();
-            if !nodes.contains_key(source) {
-                return Err(GraphError::NodeNotFound);
-            }
-            if so_from + channels > nodes[source].outputs {
-                return Err(GraphError::OutputOutOfBounds(so_from + channels - 1));
-            }
-        }
+    ) {
+        // Only the pob functions do input checking on nodes and channels. This enables
 
         self.recalculation_required = true;
         // Fast and common path
         if !additive {
-            for i in 0..channels {
-                self.output_edges[si_from + i] = Some(Edge {
-                    source,
-                    channel_in_source: so_from + i,
-                    is_feedback: false,
-                });
-            }
-            return Ok(());
+            self.output_edges[si_channel] = Some(Edge {
+                source,
+                channel_in_source: so_channel,
+                is_feedback: false,
+            });
+            return;
         }
         // Connect additively
         // If no input exists for the channel, connect directly.
         // If an input does exist, create a new add node and connect it up, replacing the current edge.
 
-        for i in 0..channels {
-            if let Some(existing_edge) = self.output_edges[si_from + i] {
-                // Put an add node in between the input and the previous input,
-                // adding the new source together with the old
-                let add_gen = MathGen::<F, U1, Add>::new();
-                // TODO: We don't need a full handle here
-                let add_handle = self.push(add_gen)?;
-                let add_node = add_handle.untyped_handle.node.key;
-                self.node_input_edges[add_node][0] = Some(existing_edge);
-                self.node_input_edges[add_node][1] = Some(Edge {
-                    source,
-                    channel_in_source: so_from + i,
-                    is_feedback: false,
-                });
-                self.output_edges[si_from + i] = Some(Edge {
-                    source: NodeKeyOrGraph::Node(add_node),
-                    channel_in_source: 0,
-                    is_feedback: false,
-                });
-            } else {
-                self.output_edges[si_from + i] = Some(Edge {
-                    source,
-                    channel_in_source: so_from + i,
-                    is_feedback: false,
-                });
-            }
+        if let Some(existing_edge) = self.output_edges[si_channel] {
+            // Put an add node in between the input and the previous input,
+            // adding the new source together with the old
+            let add_gen = MathGen::<F, U1, Add>::new();
+            // TODO: We don't need a full handle here
+            let add_handle = self.push(add_gen);
+            let add_node = add_handle.untyped_handle.node.key;
+            self.node_input_edges[add_node][0] = Some(existing_edge);
+            self.node_input_edges[add_node][1] = Some(Edge {
+                source,
+                channel_in_source: so_channel,
+                is_feedback: false,
+            });
+            self.output_edges[si_channel] = Some(Edge {
+                source: NodeKeyOrGraph::Node(add_node),
+                channel_in_source: 0,
+                is_feedback: false,
+            });
+        } else {
+            self.output_edges[si_channel] = Some(Edge {
+                source,
+                channel_in_source: so_channel,
+                is_feedback: false,
+            });
         }
-        Ok(())
     }
 
     pub fn connect(&mut self, chain: impl Into<ConnectionChain>) -> Result<(), GraphError> {
@@ -611,14 +636,15 @@ impl<F: Float> Graph<F> {
                         },
                     ) => {
                         let channels: usize = (*so_channels).min(si_channels);
-                        self.connect_to_node_internal(
-                            NodeKeyOrGraph::Node(*source_node),
-                            sink_node,
-                            *so_from,
-                            si_from,
-                            channels,
-                            additive,
-                        )?;
+                        for i in 0..channels {
+                            self.connect_to_node_internal(
+                                NodeKeyOrGraph::Node(*source_node),
+                                sink_node,
+                                *so_from + i,
+                                si_from + i,
+                                additive,
+                            );
+                        }
                     }
                     (
                         ChainSinkKind::Node {
@@ -632,13 +658,14 @@ impl<F: Float> Graph<F> {
                         },
                     ) => {
                         let channels: usize = (*so_channels).min(si_channels);
-                        self.connect_to_output_internal(
-                            NodeKeyOrGraph::Node(*source_node),
-                            *so_from,
-                            si_from,
-                            channels,
-                            additive,
-                        )?;
+                        for i in 0..channels {
+                            self.connect_to_output_internal(
+                                NodeKeyOrGraph::Node(*source_node),
+                                *so_from + i,
+                                si_from + i,
+                                additive,
+                            );
+                        }
                     }
                     (
                         ChainSinkKind::GraphConnection {
@@ -673,10 +700,17 @@ impl<F: Float> Graph<F> {
     }
 
     pub fn subgraph<Inputs: Size, Outputs: Size>(&mut self, options: GraphSettings) -> Self {
-        let (subgraph, graph_gen) = Self::new::<Inputs, Outputs>(options);
+        let temporary_invalid_node_id = NodeId::top_level_graph_node_id();
+        let (mut subgraph, graph_gen) =
+            Self::new::<Inputs, Outputs>(options, temporary_invalid_node_id);
         // TODO: Store node key in graph
         let node_key = self.push_node(graph_gen);
         self.get_nodes_mut()[node_key].is_graph = Some(subgraph.id);
+        // Set the real NodeId of the Graph
+        subgraph.self_node_id = NodeId {
+            key: node_key,
+            graph: self.id,
+        };
 
         subgraph
     }
@@ -1351,6 +1385,8 @@ fn shorten_name(name: &str) -> String {
     short
 }
 
+unsafe impl<F: Float> Send for Graph<F> {}
+
 struct GraphGenCommunicator<F: Float> {
     /// The ring buffer for sending scheduled changes to the audio thread
     scheduling_event_producer: Arc<Mutex<SchedulingChannelProducer>>,
@@ -1428,4 +1464,10 @@ pub enum FreeError {
     ImmortalNode,
     // #[error("The free action required making a new connection, but the connection failed.")]
     // ConnectionError(#[from] Box<connection::ConnectionError>),
+}
+
+impl<F: Float> From<&Graph<F>> for NodeId {
+    fn from(value: &Graph<F>) -> Self {
+        value.self_node_id
+    }
 }

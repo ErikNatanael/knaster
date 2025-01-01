@@ -28,6 +28,11 @@ impl<F: Float> Task<F> {
         }
     }
 }
+/// # Safety
+/// 
+/// All the pointers are guaranteed to be kept alive for as long as necessary. GraphGen contains an
+/// Arc to the nodes which own the DynGens, and an Arc to the buffer allocation underlying the *mut F.
+unsafe impl<F: Float> Send for Task<F> {}
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum BlockOrGraphInput<F> {
@@ -102,6 +107,12 @@ impl<F: Float> TaskData<F> {
         }
     }
 }
+/// # Safety:
+/// 
+/// Pointers within ArParameterChange are guaranteed to be valid for as long as necessary because
+/// TaskData also contains an Arc to the underlying allocation `current_buffer_allocation` which
+/// is then stored in the GraphGen.
+unsafe impl<F: Float> Send for ArParameterChange<F> {}
 
 #[derive(Clone, Copy)]
 pub(crate) struct ArParameterChange<F> {

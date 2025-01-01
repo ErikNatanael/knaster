@@ -111,3 +111,10 @@ pub(crate) enum NodeOutput<F> {
     Pointer(*mut F),
     Offset(usize),
 }
+
+/// # Safety
+/// 
+/// Nodes are only accessed from Graph which maintains the pointers within. Nodes own their DynGen
+/// and an atomic flag is used to make sure nothing else points to the same allocation before it is
+/// dropped. See Graph::node_keys_to_free_when_safe and references to it for implementation info.
+unsafe impl<F> Send for Node<F>  {}

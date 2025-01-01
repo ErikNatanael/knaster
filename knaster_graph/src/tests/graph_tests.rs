@@ -18,7 +18,8 @@ fn graph_inputs_to_outputs() {
     });
 
     // Connect input 1 to 0, 2, to 1
-    graph.connect_input_to_output(1, 0, 2, false).unwrap();
+    graph.connect_input_to_output(1, 0, false).unwrap();
+    graph.connect_input_to_output(2, 1, false).unwrap();
     graph.commit_changes().unwrap();
 
     let input_allocation = vec![1.0; 16 * 3];
@@ -45,14 +46,15 @@ fn graph_inputs_to_nodes_to_outputs() {
     });
 
     // Connect input 1 to 0, 2, to 1
-    graph.connect_input_to_output(0, 1, 2, false).unwrap();
-    let g0 = graph.push(TestInPlusParamGen::new()).unwrap();
-    let g1 = graph.push(TestInPlusParamGen::new()).unwrap();
+    graph.connect_input_to_output(0, 1, false).unwrap();
+    graph.connect_input_to_output(0, 2, false).unwrap();
+    let g0 = graph.push(TestInPlusParamGen::new());
+    let g1 = graph.push(TestInPlusParamGen::new());
     g0.set(("number", 0.75)).unwrap();
     g1.set(("number", 0.5)).unwrap();
-    graph.connect_node_to_output(&g0, 0, 2, 1, true).unwrap();
-    graph.connect_input_to_node(&g1, 2, 0, 1, false).unwrap();
-    graph.connect_node_to_output(&g1, 0, 0, 1, false).unwrap();
+    graph.connect_node_to_output(&g0, 0, 2, true).unwrap();
+    graph.connect_input_to_node(&g1, 2, 0, false).unwrap();
+    graph.connect_node_to_output(&g1, 0, 0, false).unwrap();
     graph.commit_changes().unwrap();
 
     let input_allocation = vec![2.0; 16 * 3];
@@ -78,18 +80,19 @@ fn multichannel_nodes() {
         ..Default::default()
     });
 
-    let v0_0 = graph.push(TestNumGen::new(0.125)).unwrap();
-    let v0_1 = graph.push(TestNumGen::new(1.)).unwrap();
-    let v1_0 = graph.push(TestNumGen::new(0.5)).unwrap();
-    let v1_1 = graph.push(TestNumGen::new(4.125)).unwrap();
+    let v0_0 = graph.push(TestNumGen::new(0.125));
+    let v0_1 = graph.push(TestNumGen::new(1.));
+    let v1_0 = graph.push(TestNumGen::new(0.5));
+    let v1_1 = graph.push(TestNumGen::new(4.125));
     // two channel output
-    let m = graph.push(MathGen::<f64, U2, Add>::new()).unwrap();
+    let m = graph.push(MathGen::<f64, U2, Add>::new());
     // Connect input 1 to 0, 2, to 1
-    graph.connect_nodes(&v0_0, &m, 0, 0, 1, false).unwrap();
-    graph.connect_nodes(&v0_1, &m, 0, 1, 1, false).unwrap();
-    graph.connect_nodes(&v1_0, &m, 0, 2, 1, false).unwrap();
-    graph.connect_nodes(&v1_1, &m, 0, 3, 1, false).unwrap();
-    graph.connect_node_to_output(&m, 0, 0, 2, false).unwrap();
+    graph.connect_nodes(&v0_0, &m, 0, 0,  false).unwrap();
+    graph.connect_nodes(&v0_1, &m, 0, 1,  false).unwrap();
+    graph.connect_nodes(&v1_0, &m, 0, 2,  false).unwrap();
+    graph.connect_nodes(&v1_1, &m, 0, 3,  false).unwrap();
+    graph.connect_node_to_output(&m, 0, 0, false).unwrap();
+    graph.connect_node_to_output(&m, 1, 1, false).unwrap();
     graph.commit_changes().unwrap();
 
     let input_allocation = vec![1.0; 16 * 3];
@@ -104,15 +107,15 @@ fn multichannel_nodes() {
     assert_eq!(output.read(1, 0), 5.125);
 
     // Change the graph so that the output of m is multiplied by 0.5 and 0.125 respectively, but using two different nodes
-    let m2 = graph.push(MathGen::<f64, U1, Mul>::new()).unwrap();
-    let m3 = graph.push(MathGen::<f64, U1, Mul>::new()).unwrap();
-    graph.connect_nodes(&m, &m2, 0, 0, 1, false).unwrap();
-    graph.connect_nodes(&m, &m3, 1, 0, 1, false).unwrap();
-    graph.connect_nodes(&v1_0, &m2, 0, 1, 1, false).unwrap();
-    graph.connect_nodes(&v0_0, &m3, 0, 1, 1, false).unwrap();
+    let m2 = graph.push(MathGen::<f64, U1, Mul>::new());
+    let m3 = graph.push(MathGen::<f64, U1, Mul>::new());
+    graph.connect_nodes(&m, &m2, 0, 0,  false).unwrap();
+    graph.connect_nodes(&m, &m3, 1, 0,  false).unwrap();
+    graph.connect_nodes(&v1_0, &m2, 0, 1,  false).unwrap();
+    graph.connect_nodes(&v0_0, &m3, 0, 1,  false).unwrap();
     // These should replace the previous input edges to the graph outputs
-    graph.connect_node_to_output(&m2, 0, 0, 1, false).unwrap();
-    graph.connect_node_to_output(&m3, 0, 1, 1, false).unwrap();
+    graph.connect_node_to_output(&m2, 0, 0,  false).unwrap();
+    graph.connect_node_to_output(&m3, 0, 1,  false).unwrap();
     graph.commit_changes().unwrap();
     unsafe { runner.run(&input_pointers) };
     let output = runner.output_block();
@@ -130,8 +133,7 @@ fn free_node_when_done() {
         ..Default::default()
     });
     let asr = graph
-        .push_with_done_action(Asr::new(), Done::FreeSelf)
-        .unwrap();
+        .push_with_done_action(Asr::new(), Done::FreeSelf);
     asr.set(("attack_time", 0.0)).unwrap();
     asr.set(("release_time", 0.0)).unwrap();
     asr.set(("t_restart", Trigger)).unwrap();
