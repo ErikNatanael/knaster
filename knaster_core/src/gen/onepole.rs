@@ -124,7 +124,6 @@ impl<F: Float> Gen for OnePoleLpf<F> {
             0 => self.op.set_freq_lowpass(F::new(value.float().unwrap()), F::from(ctx.sample_rate).unwrap()),
             _ => ()
         }
-        dbg!(index, value);
     }
 }
 

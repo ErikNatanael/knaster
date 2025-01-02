@@ -351,6 +351,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
+name = "fastrand"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
+
+[[package]]
 name = "generic-array"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -532,6 +538,7 @@ name = "knaster_core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "fastrand",
  "knaster_primitives",
  "target-features",
  "thiserror 2.0.4",
