@@ -4,9 +4,11 @@ use anyhow::Result;
 use knaster_core::{
     osc::SinNumeric,
     typenum::{U0, U2},
-    wrappers_core::{GenWrapperExt, WrSmoothParams},
+    wrappers_core::{GenWrapperCoreExt, WrSmoothParams},
     Gen, ParameterSmoothing,
 };
+use knaster_core::noise::{BrownNoise, PinkNoise, WhiteNoise};
+use knaster_core::onepole::{OnePoleHpf, OnePoleLpf};
 use knaster_graph::{
     audio_backend::{
         cpal::{CpalBackend, CpalBackendOptions},
@@ -39,10 +41,21 @@ fn main() -> Result<()> {
     let osc2 = graph.push(osc2.wr_mul(0.2));
     let osc3 = graph.push(SinNumeric::new().wr_mul(0.2));
     osc3.set(("freq", 200. * 4.))?;
+    let modulator = graph.push(SinNumeric::new().wr_powi(2).wr_mul(5000.).wr_add(300.));
+    modulator.set(("freq", 0.5))?;
+    let lpf = graph.push(OnePoleHpf::new().ar_params());
+    graph.connect_node_to_parameter(&modulator, &lpf, 0, "cutoff_freq", false)?;
+    let noise = graph.push(WhiteNoise::new().wr_mul(0.2));
+    // let noise = graph.push(PinkNoise::new().wr_mul(0.2));
+    // let noise = graph.push(BrownNoise::new().wr_mul(0.2));
+
     // connect them together
-    graph.connect(osc1.to(graph.output()))?;
-    graph.connect(osc3.add_to(graph.output()))?;
-    graph.connect(osc2.add_to(graph.output()))?;
+    // graph.connect(osc1.to(&lpf))?;
+    // graph.connect(osc3.add_to(&lpf))?;
+    // graph.connect(osc2.add_to(&lpf))?;
+    graph.connect(noise.add_to(&lpf))?;
+    graph.connect_node_to_output(&lpf, 0, 0, false)?;
+    graph.connect_node_to_output(&lpf, 0, 1, false)?;
     graph.commit_changes()?;
 
     let mut freq = 200.;
