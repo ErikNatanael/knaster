@@ -13,6 +13,11 @@ pub(crate) enum NodeKeyOrGraph {
     Node(NodeKey),
     Graph,
 }
+impl From<NodeKey> for NodeKeyOrGraph {
+    fn from(value: NodeKey) -> Self {
+       Self::Node(value)
+    }
+}
 
 // #[derive(Clone, Debug, Copy)]
 // pub(crate) enum EdgeKind {
