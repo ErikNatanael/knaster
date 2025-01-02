@@ -87,13 +87,13 @@ impl<T: Gen  > Gen for WrArParams<T> {
 /// sample. This disables block based processing and any optimisations related
 /// to that for the inner [`Gen`]
 ///
-/// For use in `knaster_graph`, prefer
-pub struct ArParamToInput<T, ParamIndex> {
+/// For use in `knaster_graph`, prefer 
+pub struct WrArParamToInput<T, ParamIndex> {
     gen: T,
     _index: PhantomData<ParamIndex>,
 }
 
-impl<T: Gen  , ParamIndex: Unsigned> Gen for ArParamToInput<T, ParamIndex>
+impl<T: Gen  , ParamIndex: Unsigned> Gen for WrArParamToInput<T, ParamIndex>
 where
     // ParamIndex must be less than the number of parameters. This is as much as
     // we can check statically, remaining checks will be done at runtime.

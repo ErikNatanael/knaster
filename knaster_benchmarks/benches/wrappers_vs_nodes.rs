@@ -7,7 +7,7 @@ use knaster_graph::graph::GraphSettings;
 use knaster_graph::math::{MathGen, Mul};
 use knaster_graph::runner::Runner;
 use knaster_graph::typenum::{*};
-use knaster_graph::wrappers_core::GenWrapperExt;
+use knaster_graph::wrappers_core::GenWrapperCoreExt;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let block_size = 32;

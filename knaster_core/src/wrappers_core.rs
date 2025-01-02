@@ -23,7 +23,7 @@ use crate::Gen;
 ///
 /// The methods all take `self`, returning the new wrapper. Math operation
 /// wrappers_graph start with `wr_` to disambiguate them from `std::ops::*`
-pub trait GenWrapperExt<T: Gen> {
+pub trait GenWrapperCoreExt<T: Gen> {
     fn wr<C: FnMut(T::Sample) -> T::Sample + 'static>(self, c: C) -> WrClosure<T, C>;
     fn wr_mul(self, v: T::Sample) -> WrMul<T>;
     fn wr_add(self, v: T::Sample) -> WrAdd<T>;
@@ -39,7 +39,7 @@ pub trait GenWrapperExt<T: Gen> {
     fn ar_params(self) -> WrArParams<T>;
 }
 
-impl<T: Gen> GenWrapperExt<T> for T {
+impl<T: Gen> GenWrapperCoreExt<T> for T {
     fn wr_mul(self, v: T::Sample) -> WrMul<T> {
         WrMul::new(self, v)
     }
