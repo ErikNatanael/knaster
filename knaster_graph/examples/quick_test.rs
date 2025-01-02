@@ -7,7 +7,7 @@ use knaster_core::{
     wrappers_core::{GenWrapperCoreExt, WrSmoothParams},
     Gen, ParameterSmoothing,
 };
-use knaster_core::noise::{BrownNoise, PinkNoise, WhiteNoise};
+use knaster_core::noise::{BrownNoise, PinkNoise, RandomLin, WhiteNoise};
 use knaster_core::onepole::{OnePoleHpf, OnePoleLpf};
 use knaster_graph::{
     audio_backend::{
@@ -43,8 +43,11 @@ fn main() -> Result<()> {
     osc3.set(("freq", 200. * 4.))?;
     let modulator = graph.push(SinNumeric::new().wr_powi(2).wr_mul(5000.).wr_add(300.));
     modulator.set(("freq", 0.5))?;
+    let random_lin_modulator = graph.push(RandomLin::new().wr_powi(2).wr_mul(5000.).wr_add(100.));
+    random_lin_modulator.set(("freq", 4.0))?;
     let lpf = graph.push(OnePoleHpf::new().ar_params());
-    graph.connect_node_to_parameter(&modulator, &lpf, 0, "cutoff_freq", false)?;
+    // graph.connect_node_to_parameter(&modulator, &lpf, 0, "cutoff_freq", false)?;
+    graph.connect_node_to_parameter(&random_lin_modulator, &lpf, 0, "cutoff_freq", false)?;
     let noise = graph.push(WhiteNoise::new().wr_mul(0.2));
     // let noise = graph.push(PinkNoise::new().wr_mul(0.2));
     // let noise = graph.push(BrownNoise::new().wr_mul(0.2));
