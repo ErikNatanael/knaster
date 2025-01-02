@@ -189,3 +189,74 @@ impl<F: Float> Gen for BrownNoise<F> {
 
     fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {}
 }
+/// Random numbers with linear interpolation with new values at some frequency. Freq is sampled at control rate only.
+pub struct RandomLin<F: Copy = f32> {
+    rng: fastrand::Rng,
+    current_value: F,
+    current_change_width: F,
+    // when phase reaches 1 we choose a new value
+    phase: F,
+    phase_step: F,
+    freq_to_phase_inc: F,
+}
+
+impl<F: Float> RandomLin<F> {
+    /// Create a new RandomLin, seeding it from the global atomic seed.
+    pub fn new() -> Self {
+        let mut rng = fastrand::Rng::with_seed(next_randomness_seed() * 94 + 53);
+        Self {
+            current_value: F::new(rng.f32()),
+            phase: F::ZERO,
+            rng,
+            freq_to_phase_inc: F::ZERO,
+            current_change_width: F::ZERO,
+            phase_step: F::ONE,
+        }
+    }
+
+    #[inline]
+    fn new_value(&mut self) {
+        let old_target = self.current_value + self.current_change_width;
+        let new = F::new(self.rng.f32());
+        self.current_value = old_target;
+        self.current_change_width = new - old_target;
+        self.phase = F::new(0.0);
+    }
+}
+
+impl<F: Float> Gen for RandomLin<F> {
+    type Sample = F;
+    type Inputs = U0;
+    type Outputs = U1;
+    type Parameters = U1;
+
+    fn init(&mut self, ctx: &AudioCtx) {
+        self.freq_to_phase_inc = F::ONE / F::from(ctx.sample_rate).unwrap();
+        self.new_value();
+    }
+    fn process(&mut self, ctx: AudioCtx, _flags: &mut GenFlags, _input: Frame<Self::Sample, Self::Inputs>) -> Frame<Self::Sample, Self::Outputs> {
+        let out = self.current_value + self.phase * self.current_change_width;
+        self.phase += self.phase_step;
+
+        if self.phase >= F::ONE {
+            self.new_value();
+        }
+        [out].into()
+    }
+
+    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
+        [ParameterRange::positive_infinite_float()].into()
+    }
+    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+        ["freq"].into()
+    }
+
+    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+        match index {
+            0 => {
+                self.phase_step = F::new(value.float().unwrap()) * self.freq_to_phase_inc;
+            }
+            _ => {}
+        }
+    }
+}
