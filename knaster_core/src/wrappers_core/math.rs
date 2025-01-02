@@ -1,6 +1,6 @@
 use knaster_primitives::FloatMethods;
 
-use crate::{Gen, GenFlags};
+use crate::{AudioCtx, Gen, GenFlags};
 
 // TODO: SIMD implementations for blocks
 // TODO: SIMD implementations for multi channel frame by frame outputs
@@ -20,6 +20,10 @@ impl<T: Gen> Gen for WrMul<T> {
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
+
+    fn init(&mut self, ctx: &AudioCtx) {
+        self.gen.init(ctx);
+    }
 
     fn process(
         &mut self,
@@ -89,6 +93,9 @@ impl<T: Gen> Gen for WrAdd<T> {
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
 
+    fn init(&mut self, ctx: &AudioCtx) {
+        self.gen.init(ctx);
+    }
     fn process(
         &mut self,
         ctx: crate::AudioCtx,
@@ -158,6 +165,9 @@ impl<T: Gen> Gen for WrSub<T> {
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
 
+    fn init(&mut self, ctx: &AudioCtx) {
+        self.gen.init(ctx);
+    }
     fn process(
         &mut self,
         ctx: crate::AudioCtx,
@@ -226,6 +236,9 @@ impl<T: Gen> Gen for WrVSubGen<T> {
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
 
+    fn init(&mut self, ctx: &AudioCtx) {
+        self.gen.init(ctx);
+    }
     fn process(
         &mut self,
         ctx: crate::AudioCtx,
@@ -295,6 +308,9 @@ impl<T: Gen> Gen for WrDiv<T> {
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
 
+    fn init(&mut self, ctx: &AudioCtx) {
+        self.gen.init(ctx);
+    }
     fn process(
         &mut self,
         ctx: crate::AudioCtx,
@@ -364,6 +380,9 @@ impl<T: Gen> Gen for WrVDivGen<T> {
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
 
+    fn init(&mut self, ctx: &AudioCtx) {
+        self.gen.init(ctx);
+    }
     fn process(
         &mut self,
         ctx: crate::AudioCtx,
@@ -434,6 +453,9 @@ impl<T: Gen> Gen for WrPowf<T> {
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
 
+    fn init(&mut self, ctx: &AudioCtx) {
+        self.gen.init(ctx);
+    }
     fn process(
         &mut self,
         ctx: crate::AudioCtx,
@@ -505,6 +527,9 @@ impl<T: Gen> Gen for WrPowi<T> {
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
 
+    fn init(&mut self, ctx: &AudioCtx) {
+        self.gen.init(ctx);
+    }
     fn process(
         &mut self,
         ctx: crate::AudioCtx,
