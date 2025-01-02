@@ -22,11 +22,7 @@ use std::{
 
 use crate::inspection::{EdgeInspection, EdgeSource, GraphInspection, NodeInspection};
 use crate::wrappers_graph::done::WrDone;
-use knaster_core::{
-    math::{Add, MathGen},
-    typenum::*,
-    AudioCtx, Done, Float, Gen, Size,
-};
+use knaster_core::{math::{Add, MathGen}, typenum::*, AudioCtx, Done, Float, Gen, Param, Size};
 use rtrb::RingBuffer;
 use slotmap::{new_key_type, SecondaryMap, SlotMap};
 
@@ -372,6 +368,7 @@ impl<F: Float> Graph<F> {
             .insert(key, vec![None; node_inputs].into_boxed_slice());
         // self.node_feedback_edges.insert(key, vec![]);
         self.node_mortality.insert(key, true);
+        self.node_parameter_edges.insert(key, vec![]);
 
         key
     }
@@ -451,7 +448,7 @@ impl<F: Float> Graph<F> {
         if !source.graph == self.id {
             return Err(GraphError::WrongGraph);
         }
-        if sink_channel > self.num_outputs {
+        if sink_channel >= self.num_outputs {
             return Err(GraphError::OutputOutOfBounds(sink_channel));
         }
         let nodes = self.get_nodes();
@@ -469,6 +466,89 @@ impl<F: Float> Graph<F> {
             sink_channel,
             additive,
         );
+        Ok(())
+    }
+    pub fn connect_node_to_parameter(
+        &mut self,
+        source: impl Into<NodeId>,
+        sink: impl Into<NodeId>,
+        source_channel: usize,
+        parameter: impl Into<Param>,
+        additive: bool,
+    ) -> Result<(), GraphError> {
+        let source = source.into();
+        if !source.graph == self.id {
+            return Err(GraphError::WrongGraph);
+        }
+        let sink= sink.into();
+        if !sink.graph == self.id {
+            return Err(GraphError::WrongGraph);
+        }
+        let nodes = self.get_nodes();
+        let sink_node = &nodes[sink.key()];
+        let param = parameter.into();
+        let param_index = match param {
+            Param::Index(param_index) => {
+                param_index
+            }
+            Param::Desc(desc) => {
+                if let Some(index) = sink_node.parameter_descriptions.iter().position(|s| s == desc) {
+                    if index >= sink_node.parameter_descriptions.len() {
+                        return Err(GraphError::ParameterIndexOutOfBounds(index));
+                    }
+                    index
+                } else {
+                    return Err(GraphError::ParameterDescriptionNotFound(desc.to_string()))
+                }
+            }
+        };
+        let nodes = self.get_nodes();
+        if !nodes.contains_key(source.key()) {
+            return Err(GraphError::NodeNotFound);
+        }
+        if source_channel >= nodes[source.key()].outputs {
+            return Err(GraphError::OutputOutOfBounds(
+                source_channel,
+            ));
+        }
+
+        let edges = self.node_parameter_edges.get_mut(sink.key()).expect("All nodes should have parameter edges");
+        if additive {
+            if let Some(pos) = edges.iter().position(|pe| pe.parameter_index == param_index)  {
+                let existing_edge = edges.swap_remove(pos);
+                let add_gen = MathGen::<F, U1, Add>::new();
+                // TODO: We don't need a full handle here
+                let add_handle = self.push(add_gen);
+                let add_node = add_handle.untyped_handle.node.key;
+                self.node_input_edges[add_node][0] = Some(Edge { source: existing_edge.source.into(), channel_in_source: existing_edge.channel_in_source, is_feedback: false });
+                self.node_input_edges[add_node][1] = Some(Edge {
+                    source: source.key().into(),
+                    channel_in_source: source_channel,
+                    is_feedback: false,
+                });
+                // Need to fetch again not to borrow self twice
+                let edges = self.node_parameter_edges.get_mut(sink.key()).expect("All nodes should have parameter edges");
+                edges.push(ParameterEdge{
+                    source: add_node,
+                    channel_in_source: 0,
+                    parameter_index: param_index,
+                });
+            } else {
+
+                edges.push(ParameterEdge{
+                    source: source.key(),
+                    channel_in_source: source_channel,
+                    parameter_index: param_index,
+                });
+            }
+        } else {
+            edges.retain(|pe| pe.parameter_index != param_index);
+            edges.push(ParameterEdge{
+                source: source.key(),
+                channel_in_source: source_channel,
+                parameter_index: param_index,
+            });
+        }
         Ok(())
     }
     pub fn connect_input_to_node(
@@ -1449,6 +1529,10 @@ pub enum GraphError {
     OutputOutOfBounds(usize),
     #[error("Tried to connect a graph input that doesn't exist (`{0}`) to some destination")]
     GraphInputOutOfBounds(usize),
+    #[error("The parameter `{0}` is not a valid parameter description for the node")]
+    ParameterDescriptionNotFound(String),
+    #[error("The parameter `{0}` is not a valid parameter index for the node")]
+    ParameterIndexOutOfBounds(usize),
 }
 #[derive(thiserror::Error, Debug)]
 pub enum PushError {}
