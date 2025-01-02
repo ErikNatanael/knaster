@@ -3,6 +3,8 @@ pub mod osc;
 pub mod envelopes;
 pub mod svf;
 pub mod onepole;
+pub mod noise;
+
 use core::ops::Deref;
 
 use knaster_primitives::{typenum::*, Block, BlockRead, Float, Frame, Size};
@@ -224,7 +226,7 @@ impl GenFlags {
     pub fn mark_remove_self_supported(&mut self) {
         self.remove_self_supported = true;
     }
-    pub fn clear_graph_flags(&mut self) {
+    pub fn clear_parent_flags(&mut self) {
         self.remove_parent = false;
         self.remove_parent_from_frame_in_block = u32::MAX;
     }
