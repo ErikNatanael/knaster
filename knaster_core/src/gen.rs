@@ -4,6 +4,8 @@ pub mod envelopes;
 pub mod svf;
 pub mod onepole;
 pub mod noise;
+mod delay;
+mod polyblep;
 
 use core::ops::Deref;
 

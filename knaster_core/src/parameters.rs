@@ -110,6 +110,9 @@ impl ParameterRange {
     pub fn negative_infinite_float() -> Self {
         ParameterRange::Float(PFloat::NEG_INFINITY, 0.)
     }
+    pub fn one() -> Self {
+        ParameterRange::Float(0., 1.)
+    }
     pub fn ty(self) -> ParameterType {
         match self {
             ParameterRange::Float(_, _) | ParameterRange::Nyquist => ParameterType::Float,

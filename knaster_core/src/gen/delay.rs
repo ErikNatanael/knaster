@@ -1,0 +1,306 @@
+use crate::numeric_array::NumericArray;
+use crate::typenum::{U1, U2};
+use crate::{AudioCtx, Gen, GenFlags, PFloat, ParameterRange, ParameterValue};
+use knaster_primitives::{Float, Frame, Seconds};
+
+/// Delay by an integer number of samples, no interpolation. This is good for e.g. triggers.
+///
+/// Delay time is given in seconds and converted to samples internally.
+pub struct SampleDelay<F: Copy = f32> {
+    buffer: Vec<F>,
+    write_position: usize,
+    delay_samples: usize,
+    max_delay_length: Seconds,
+}
+
+impl<F: Float> SampleDelay<F> {
+    pub const DELAY_TIME: usize = 0;
+    /// Create a new SampleDelay with a maximum delay time.
+    pub fn new(max_delay_length: Seconds) -> Self {
+        Self {
+            buffer: vec![F::ZERO; 0],
+            max_delay_length,
+            write_position: 0,
+            delay_samples: 0,
+        }
+    }
+}
+impl<F: Float> Gen for SampleDelay<F> {
+    type Sample = F;
+    type Inputs = U1;
+    type Outputs = U1;
+    type Parameters = U1;
+    fn process(
+        &mut self,
+        ctx: AudioCtx,
+        flags: &mut GenFlags,
+        input: Frame<Self::Sample, Self::Inputs>,
+    ) -> Frame<Self::Sample, Self::Outputs> {
+        self.buffer[self.write_position] = input[0];
+        let out = self.buffer
+            [(self.write_position + self.buffer.len() - self.delay_samples) % self.buffer.len()];
+        self.write_position = (self.write_position + 1) % self.buffer.len();
+        [out].into()
+    }
+    fn init(&mut self, ctx: &AudioCtx) {
+        self.buffer = vec![
+            F::ZERO;
+            (self.max_delay_length.to_seconds_f64() * ctx.sample_rate as f64)
+                as usize
+        ];
+        self.write_position = 0;
+    }
+
+    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+        ["delay_time"].into()
+    }
+    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
+        [ParameterRange::positive_infinite_float()].into()
+    }
+
+    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+        match index {
+            0 => {
+                self.delay_samples = (value.float().unwrap() * ctx.sample_rate as PFloat) as usize;
+            }
+            _ => (),
+        }
+    }
+}
+
+/// Schroeder (?) allpass interpolation
+#[derive(Clone, Copy, Debug)]
+pub struct AllpassInterpolator<F: Copy = f32> {
+    coeff: F,
+    prev_input: F,
+    prev_output: F,
+}
+
+impl<F: Float> AllpassInterpolator<F> {
+    /// Create a new and reset AllpassInterpolator
+    pub fn new() -> Self {
+        Self {
+            coeff: F::ONE,
+            prev_input: F::ONE,
+            prev_output: F::ONE,
+        }
+    }
+    /// Reset any state to 0
+    pub fn clear(&mut self) {
+        self.prev_input = F::ONE;
+        self.prev_output = F::ONE;
+    }
+    /// Set the fractional number of frames in the delay time that we want to interpolate over
+    pub fn set_delta(&mut self, delta: F) {
+        self.coeff = (F::ONE - delta) / (F::ONE + delta);
+    }
+    /// Interpolate between the input sample and the previous value using the last set delta.
+    pub fn process_sample(&mut self, input: F) -> F {
+        let output = self.coeff * (input - self.prev_output) + self.prev_input;
+        self.prev_output = output;
+        self.prev_input = input;
+        output
+    }
+}
+#[derive(Clone, Debug)]
+pub struct AllpassDelay<F: Copy = f32> {
+    buffer: Vec<F>,
+    write_frame: usize,
+    read_frame: usize,
+    num_frames: usize,
+    clear_nr_of_samples_left: usize,
+    allpass: AllpassInterpolator<F>,
+    max_delay_seconds: Seconds,
+}
+
+impl<F: Float> AllpassDelay<F> {
+    pub const DELAY_TIME: usize = 0;
+    pub fn new(max_delay_seconds: Seconds) -> Self {
+        let buffer = vec![F::ZERO; 0];
+        Self {
+            buffer,
+            write_frame: 0,
+            read_frame: 0,
+            num_frames: 1,
+            allpass: AllpassInterpolator::new(),
+            clear_nr_of_samples_left: 0,
+            max_delay_seconds,
+        }
+    }
+    pub fn init(&mut self, sample_rate: u64) {
+        let max_delay_samples = self.max_delay_seconds.to_samples(sample_rate) ;
+        self.buffer = vec![F::ZERO; max_delay_samples as usize];
+    }
+    /// Read the current frame from the delay and allpass interpolate. Read before `write_and_advance` for the correct sample.
+    #[inline]
+    pub fn read(&mut self) -> F {
+        if self.clear_nr_of_samples_left > 0 {
+            // Instead of clearing the whole buffer, we amortise the cost and clear only what we need.
+            // Samples between the read pointer and the write pointer will be 0 when cleared.
+            self.clear_nr_of_samples_left -= 1;
+            self.read_frame = (self.read_frame + 1) % self.buffer.len();
+            F::ZERO
+        } else {
+            let v = self.allpass.process_sample(self.buffer[self.read_frame]);
+            self.read_frame = (self.read_frame + 1) % self.buffer.len();
+            v
+        }
+    }
+    #[inline]
+    pub fn set_delay_in_frames(&mut self, num_frames: F) {
+        let num_frames_float = num_frames.floor();
+        self.num_frames = num_frames_float.to_usize().unwrap();
+        let mut delta = num_frames - num_frames_float;
+        if num_frames > F::new(0.5) && delta < F::new(0.5) {
+            delta += F::ONE;
+            self.num_frames -= 1;
+        }
+        self.read_frame = if self.write_frame >= self.num_frames {
+            self.write_frame - self.num_frames
+        } else {
+            self.buffer.len() - self.num_frames + self.write_frame
+        };
+        self.allpass.set_delta(delta);
+    }
+    #[inline]
+    /// Call after set_delay_in_frames. Only data that won't be overwritten before read is cleared.
+    pub fn clear(&mut self) {
+        // We only need to clear memory from now until where the write pointer overwrites memory, which is self.num_frames into the future.
+        // Samples between the read pointer and the write pointer will be 0 when cleared.
+        // Zeroing memory is surprisingly expensive.
+        self.clear_nr_of_samples_left = self.num_frames;
+        // self.buffer.fill(0.0);
+        // for sample in &mut self.buffer {
+        //     *sample = 0.0;
+        // }
+        self.allpass.clear();
+    }
+    /// Reset the delay with a new length in frames
+    pub fn set_delay_in_frames_and_clear(&mut self, num_frames: F) {
+        for sample in &mut self.buffer {
+            *sample = F::ZERO;
+        }
+        self.set_delay_in_frames(num_frames);
+        // println!(
+        //     "num_frames: {}, delta: {}",
+        //     self.num_frames,
+        //     (num_frames - self.num_frames as f64)
+        // );
+    }
+    /// Write a new value into the delay after incrementing the sample pointer.
+    #[inline]
+    pub fn write_and_advance(&mut self, input: F) {
+        self.buffer[self.write_frame] = input;
+        self.write_frame = (self.write_frame + 1) % self.buffer.len();
+    }
+}
+impl<F: Float> Gen for AllpassDelay<F> {
+    type Sample = F;
+    type Inputs = U1;
+    type Outputs = U1;
+    type Parameters = U1;
+
+    fn process(&mut self, ctx: AudioCtx, flags: &mut GenFlags, input: Frame<Self::Sample, Self::Inputs>) -> Frame<Self::Sample, Self::Outputs> {
+        let out = self.read();
+        self.write_and_advance(input[0]);
+        [out].into()
+    }
+
+    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
+        [ParameterRange::positive_infinite_float()].into()
+    }
+
+    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+        match index {
+           Self::DELAY_TIME => {
+               let delay_frames = (value.float().unwrap() * ctx.sample_rate as PFloat);
+               if (delay_frames as usize) < self.buffer.len() {
+                   self.set_delay_in_frames(F::new(delay_frames));
+               }
+           }
+            _ => ()
+        }
+    }
+}
+
+/// A Schroeder allpass delay with feedback. Wraps the `AllpassDelay`
+#[derive(Clone, Debug)]
+pub struct AllpassFeedbackDelay<F: Copy = f32> {
+    /// The feedback value of the delay. Can be set directly.
+    feedback: F,
+    previous_delay_time: F,
+    allpass_delay: AllpassDelay<F>,
+}
+impl<F: Float> AllpassFeedbackDelay<F> {
+    pub const DELAY_TIME: usize = 0;
+    pub const FEEDBACK: usize = 1;
+    #[allow(missing_docs)]
+    #[must_use]
+    pub fn new(max_delay_time: Seconds) -> Self {
+        let allpass_delay = AllpassDelay::new(max_delay_time);
+        let s = Self {
+            feedback: F::ZERO,
+            allpass_delay,
+            previous_delay_time: F::from(max_delay_time.to_seconds_f64()).unwrap(),
+        };
+        s
+    }
+    /// Set the delay length counted in frames/samples
+    pub fn set_delay_in_frames(&mut self, delay_length: F) {
+        self.allpass_delay.set_delay_in_frames(delay_length);
+    }
+    /// Clear any values in the delay
+    pub fn clear(&mut self) {
+        self.allpass_delay.clear();
+    }
+    // fn calculate_values(&mut self) {
+    //     self.feedback = (0.001 as Sample).powf(self.delay_time / self.decay_time.abs())
+    //         * self.decay_time.signum();
+    //     let delay_samples = self.delay_time * self.sample_rate;
+    //     self.allpass_delay.set_num_frames(delay_samples as f64);
+    // }
+    /// Process on sample
+    pub fn process_sample(&mut self, input: F) -> F {
+        let delayed_sig = self.allpass_delay.read();
+        let delay_write = delayed_sig * self.feedback + input;
+        self.allpass_delay.write_and_advance(delay_write);
+
+        delayed_sig - self.feedback * delay_write
+    }
+}
+impl<F: Float> Gen for AllpassFeedbackDelay<F> {
+    type Sample = F;
+    type Inputs = U1;
+    type Outputs = U1;
+    type Parameters = U2;
+
+    fn process(
+        &mut self,
+        _ctx: AudioCtx,
+        _flags: &mut GenFlags,
+        input: Frame<Self::Sample, Self::Inputs>,
+    ) -> Frame<Self::Sample, Self::Outputs> {
+        [self.process_sample(input[0])].into()
+    }
+
+    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
+        [
+            ParameterRange::positive_infinite_float(),
+            ParameterRange::one(),
+        ]
+        .into()
+    }
+
+    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+        match index {
+            0 => {
+                self.set_delay_in_frames(F::new(value.float().unwrap() as f64 * ctx.sample_rate as f64));
+                self.previous_delay_time = F::new(value.float().unwrap());
+            }
+            1 => {
+                self.feedback = F::new(value.float().unwrap());
+            }
+            _ => (),
+        }
+    }
+}
