@@ -1,8 +1,8 @@
 pub mod math;
 pub mod osc;
 pub mod envelopes;
-mod svf;
-
+pub mod svf;
+pub mod onepole;
 use core::ops::Deref;
 
 use knaster_primitives::{typenum::*, Block, BlockRead, Float, Frame, Size};
