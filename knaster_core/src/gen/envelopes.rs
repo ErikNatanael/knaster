@@ -13,6 +13,7 @@ enum AsrState {
 }
 
 /// Simple ASR envelope with a linear attack and a cubic release
+#[derive(Debug, Clone)]
 pub struct Asr<F: Copy> {
     state: AsrState,
     t: F,
@@ -24,10 +25,10 @@ pub struct Asr<F: Copy> {
     release_scale: F,
 }
 impl<F: Float> Asr<F> {
-    const ATTACK_TIME: usize = 0;
-    const RELEASE_TIME: usize = 1;
-    const T_RELEASE: usize = 2;
-    const T_RESTART: usize = 3;
+    pub const ATTACK_TIME: usize = 0;
+    pub const RELEASE_TIME: usize = 1;
+    pub const T_RELEASE: usize = 2;
+    pub const T_RESTART: usize = 3;
     pub fn new() -> Self {
         Self {
             state: AsrState::Stopped,
@@ -89,10 +90,15 @@ impl<F: Float> Gen for Asr<F> {
         let out = self.next_sample(flags, 0);
         [out].into()
     }
-    fn process_block<InBlock, OutBlock>(&mut self, ctx: BlockAudioCtx, flags: &mut GenFlags, input: &InBlock, output: &mut OutBlock)
-    where
-        InBlock: BlockRead<Sample=Self::Sample>,
-        OutBlock: Block<Sample=Self::Sample>,
+    fn process_block<InBlock, OutBlock>(
+        &mut self,
+        ctx: BlockAudioCtx,
+        flags: &mut GenFlags,
+        input: &InBlock,
+        output: &mut OutBlock,
+    ) where
+        InBlock: BlockRead<Sample = Self::Sample>,
+        OutBlock: Block<Sample = Self::Sample>,
     {
         for (i, out) in output.channel_as_slice_mut(0).iter_mut().enumerate() {
             *out = self.next_sample(flags, i as u32);
