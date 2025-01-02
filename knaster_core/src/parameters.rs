@@ -57,6 +57,8 @@ impl PIntegerConvertible for usize {
 
 #[derive(Debug, Clone, Error)]
 pub enum ParameterError {
+    #[error("Description parameters are not supported in this contect. Please use the parameter index instead. Description: `{0}`")]
+    DescriptionNotSupported(String),
     #[error("The parameter description `{0}` does not match any parameter on this `Gen`")]
     DescriptionNotFound(&'static str),
     #[error("You are trying to set a parameter to a type it does not support.")]
@@ -84,6 +86,9 @@ impl From<&'static str> for Param {
 #[derive(Copy, Clone)]
 pub enum ParameterRange {
     Float(PFloat, PFloat),
+    /// Less than `sample_rate/2`. Some filters blow up above this frequency.
+    Nyquist,
+    /// Triggers do not have a range
     Trigger,
     Integer(PInteger, PInteger),
 }
@@ -93,9 +98,12 @@ impl ParameterRange {
         let range = T::pinteger_range();
         ParameterRange::Integer(range.0, range.1)
     }
+    pub fn nyquist() -> Self {
+        ParameterRange::Nyquist
+    }
     pub fn ty(self) -> ParameterType {
         match self {
-            ParameterRange::Float(_, _) => ParameterType::Float,
+            ParameterRange::Float(_, _) | ParameterRange::Nyquist => ParameterType::Float,
             ParameterRange::Trigger => ParameterType::Trigger,
             ParameterRange::Integer(_, _) => ParameterType::Integer,
         }

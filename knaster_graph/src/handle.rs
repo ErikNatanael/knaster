@@ -36,10 +36,17 @@ impl UntypedHandle {
 /// Handle with type data intact, without owning a T. Enables interacting with a
 /// live node in a Graph, e.g. freeing and parameter changes. Allows local error
 /// checking.
-#[derive(Clone)]
 pub struct Handle<T> {
     _phantom: PhantomData<fn(&mut T) -> ()>,
     pub(crate) untyped_handle: UntypedHandle,
+}
+impl<T> Clone for Handle<T> {
+    fn clone(&self) -> Self {
+        Self {
+            _phantom: self._phantom,
+            untyped_handle: self.untyped_handle.clone(),
+        }
+    }
 }
 
 impl<T: Gen> Handle<T> {
@@ -49,7 +56,7 @@ impl<T: Gen> Handle<T> {
             untyped_handle,
         }
     }
-    pub fn erase_type(self) -> UntypedHandle {
+    pub fn untype(self) -> UntypedHandle {
         self.untyped_handle
     }
     pub fn inputs(&self) -> usize {
@@ -99,6 +106,34 @@ impl<T: Gen> HandleTrait for Handle<T> {
 
     fn from_untyped(untyped_handle: UntypedHandle) -> Self {
         Self::new(untyped_handle)
+    }
+}
+impl HandleTrait for UntypedHandle {
+    fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), ParameterError> {
+        let c = change.into();
+        let param_index = match c.param {
+            knaster_core::Param::Index(param_i) => param_i,
+            knaster_core::Param::Desc(desc) => {
+                return Err(ParameterError::DescriptionNotSupported(desc.to_string()));
+            }
+        };
+        // TODO: Error handling
+        let mut sender = self.sender.lock().unwrap();
+        sender
+            .push(SchedulingEvent {
+                node_key: self.node.key(),
+                parameter: param_index,
+                value: c.value,
+                smoothing: c.smoothing,
+                token: c.token,
+                time: c.time,
+            })
+            .unwrap();
+        Ok(())
+    }
+
+    fn from_untyped(untyped_handle: UntypedHandle) -> Self {
+        untyped_handle
     }
 }
 pub trait Handleable: Sized {

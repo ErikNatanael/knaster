@@ -191,9 +191,10 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
             }
         }
 
+        let mut new_flags = GenFlags::default();
         // Run the tasks
         for task in tasks.iter_mut() {
-            task.run(ctx, flags);
+            task.run(ctx, &mut new_flags);
         }
 
         // Set the output of the graph
@@ -221,7 +222,7 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
         }
 
         // Check if the free graph flag has been set
-        if let Some(frame_num) = flags.remove_graph() {
+        if let Some(frame_num) = new_flags.remove_graph() {
             if (frame_num as usize) < self.block_size {
                 // output zeroes from the frame it's supposed to be freed
                 for channel in output.iter_mut() {

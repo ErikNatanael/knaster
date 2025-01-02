@@ -101,6 +101,19 @@ impl<G: Gen > Connectable for Handle<G> {
         todo!()
     }
 }
+impl<G: Gen> From<&Handle<G>> for ChainElement {
+    fn from(value: &Handle<G>) -> Self {
+        Self {
+            kind: ChainSinkKind::Node {
+                key: value.untyped_handle.node.key(),
+                from_chan: 0,
+                channels: value.inputs(),
+            },
+            inputs: value.inputs(),
+            outputs: value.outputs(),
+        }
+    }
+}
 
 // #[derive(Clone, Debug)]
 // pub struct ChainSource {
