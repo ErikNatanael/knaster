@@ -9,11 +9,11 @@ use super::Gen;
 /// between -1 and 1, 0 being in the center.
 ///
 // TODO: Implement multiple different pan laws, maybe as a generic.
-pub struct PanMonoToStereo<F: Copy> {
+pub struct Pan2<F: Copy> {
     pan: f32,
     _phantom: PhantomData<F>,
 }
-impl<F: Float> PanMonoToStereo<F> {
+impl<F: Float> Pan2<F> {
     pub fn new(pan: f32) -> Self {
         Self {
             pan: pan * 0.5 + 0.5,
@@ -21,7 +21,7 @@ impl<F: Float> PanMonoToStereo<F> {
         }
     }
 }
-impl<F: Float> Gen for PanMonoToStereo<F> {
+impl<F: Float> Gen for Pan2<F> {
     type Sample = F;
 
     type Inputs = U1;
