@@ -74,6 +74,7 @@ impl GraphInspection {
 
         // Generate every node
         for (i, node) in self.nodes.iter().enumerate() {
+            let color = if node.pending_removal { "red" } else { "black" };
             s.push_str(&format!(
                 "\"{i}_{}\" [
                 style = \"filled\" penwidth = 5 fillcolor = \"white\" shape = \"plain\"
@@ -87,18 +88,17 @@ impl GraphInspection {
                 }
                 s.push_str("</tr>\n");
             }
-            s.push_str(
-                &format!("<tr><td bgcolor='black' colspan='{}'><font color='white'>\n", node.inputs.max(node.outputs))
-            );
+            s.push_str(&format!(
+                "<tr><td bgcolor='{color}' colspan='{}'><font color='white'>\n",
+                node.inputs.max(node.outputs)
+            ));
             // Can't use < or > inside label names so we replace them with their HTML codes
             let name = node.name.clone();
             let name = name.replace("<", "&#60;");
             let name = name.replace(">", "&#62;");
             s.push_str(&format!("{i}: {}\n", name));
-            s.push_str(
-                "</font></td></tr>\n",
-            );
-            if node.outputs> 0 {
+            s.push_str("</font></td></tr>\n");
+            if node.outputs > 0 {
                 s.push_str("<tr>");
                 for j in 0..node.outputs {
                     s.push_str(&format!("<td port='o{j}'>{j}</td>"));

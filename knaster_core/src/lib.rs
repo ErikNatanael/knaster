@@ -53,19 +53,15 @@ pub enum Rate {
 ///
 /// Some Gens have a "done" state. This enum represents a list of standardised actions to take
 /// when done.
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Default, Debug, PartialEq, Eq, Copy, Clone)]
 #[repr(u8)]
 pub enum Done {
+    #[default]
     None = 0,
     /// Free only the current Gen node.
     FreeSelf,
     /// Free the structure that contains the node. In knaster_graph, that is the `Graph`.
     FreeParent,
-}
-impl Default for Done {
-    fn default() -> Self {
-        Done::None
-    }
 }
 impl From<PInteger> for Done {
     fn from(value: PInteger) -> Self {
@@ -87,3 +83,4 @@ impl PIntegerConvertible for Done {
         (PInteger(0), PInteger(2))
     }
 }
+

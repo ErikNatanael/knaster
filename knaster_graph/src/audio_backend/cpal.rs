@@ -26,6 +26,15 @@ pub struct CpalBackend {
     device: cpal::Device,
 }
 
+/// # Safety
+/// CPAL streams aren't Send or Sync. The reasons for this are vague, mentioning that the Android AAudio API "prohibits calling certain
+/// functions within the callback". I think the CpalBackend encapsulation is adequate.
+///
+/// More info:
+/// https://github.com/RustAudio/cpal/blob/582e93c41d6073df5d5da871989c5fd581ea04b8/src/platform/mod.rs
+unsafe impl Send for CpalBackend {}
+unsafe impl Sync for CpalBackend {}
+
 impl CpalBackend {
     /// Create a new CpalBackend using the default host, getting a device, but not a stream.
     pub fn new(options: CpalBackendOptions) -> Result<Self, AudioBackendError> {

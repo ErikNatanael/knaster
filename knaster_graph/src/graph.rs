@@ -5,10 +5,10 @@ use crate::{
     dyngen::DynGen,
     edge::{Edge, NodeKeyOrGraph, ParameterEdge},
     graph_gen::GraphGen,
-    handle::{Handle, UntypedHandle},
+    handle::{AnyHandle, Handle, RawHandle},
     node::Node,
     task::{ArParameterChange, BlockOrGraphInput, OutputTask, Task, TaskData},
-    SchedulingChannelProducer,
+    SchedulingChannelProducer, SharedFrameClock,
 };
 use core::{
     cell::UnsafeCell,
@@ -179,6 +179,7 @@ impl<F: Float> Graph<F> {
     pub fn new<Inputs: Size, Outputs: Size>(
         options: GraphSettings,
         node_id: NodeId,
+        shared_frame_clock: SharedFrameClock,
     ) -> (Self, Node<F>) {
         let GraphSettings {
             name,
@@ -208,6 +209,7 @@ impl<F: Float> Graph<F> {
             task_data_to_be_dropped_consumer,
             new_task_data_producer,
             next_change_flag: Arc::new(AtomicBool::new(false)),
+            shared_frame_clock,
         };
         let mut graph = Self {
             id,
@@ -313,7 +315,7 @@ impl<F: Float> Graph<F> {
         let name = shorten_name(name);
         let node = Node::new(name.to_owned(), gen);
         let node_key = self.push_node(node);
-        let handle = Handle::new(UntypedHandle::new(
+        let handle = Handle::new(RawHandle::new(
             NodeId {
                 key: node_key,
                 graph: self.id,
@@ -321,6 +323,7 @@ impl<F: Float> Graph<F> {
             self.graph_gen_communicator
                 .scheduling_event_producer
                 .clone(),
+            self.graph_gen_communicator.shared_frame_clock.clone(),
         ));
         handle
     }
@@ -347,7 +350,7 @@ impl<F: Float> Graph<F> {
         let mut node = Node::new(name.to_owned(), gen);
         node.remove_me = Some(free_self_flag);
         let node_key = self.push_node(node);
-        let handle = Handle::new(UntypedHandle::new(
+        Handle::new(RawHandle::new(
             NodeId {
                 key: node_key,
                 graph: self.id,
@@ -355,8 +358,8 @@ impl<F: Float> Graph<F> {
             self.graph_gen_communicator
                 .scheduling_event_producer
                 .clone(),
-        ));
-        handle
+            self.graph_gen_communicator.shared_frame_clock.clone(),
+        ))
     }
 
     /// Add a node to this Graph. The Node will be (re)initialised with the
@@ -581,13 +584,14 @@ impl<F: Float> Graph<F> {
             return Err(GraphError::OutputOutOfBounds(sink_channel));
         }
 
-        Ok(self.connect_to_node_internal(
+        self.connect_to_node_internal(
             NodeKeyOrGraph::Graph,
             sink.key(),
             source_channel,
             sink_channel,
             additive,
-        ))
+        );
+        Ok(())
     }
 
     /// Make a connection between two nodes in the Graph when it is certain that
@@ -603,8 +607,6 @@ impl<F: Float> Graph<F> {
         si_channel: usize,
         additive: bool,
     ) {
-        let nodes = self.get_nodes();
-
         self.recalculation_required = true;
         // Fast and common path
         if !additive {
@@ -699,7 +701,7 @@ impl<F: Float> Graph<F> {
         let add_gen = MathGen::<F, U1, Add>::new();
         // TODO: We don't need a full handle here
         let add_handle = self.push(add_gen);
-        let add_node = add_handle.untyped_handle.node.key;
+        let add_node = add_handle.raw_handle.node.key;
         self.get_nodes_mut()[add_node].auto_added = true;
         add_node
     }
@@ -791,8 +793,11 @@ impl<F: Float> Graph<F> {
 
     pub fn subgraph<Inputs: Size, Outputs: Size>(&mut self, options: GraphSettings) -> Self {
         let temporary_invalid_node_id = NodeId::top_level_graph_node_id();
-        let (mut subgraph, graph_gen) =
-            Self::new::<Inputs, Outputs>(options, temporary_invalid_node_id);
+        let (mut subgraph, graph_gen) = Self::new::<Inputs, Outputs>(
+            options,
+            temporary_invalid_node_id,
+            self.graph_gen_communicator.shared_frame_clock.clone(),
+        );
         // TODO: Store node key in graph
         let node_key = self.push_node(graph_gen);
         self.get_nodes_mut()[node_key].is_graph = Some(subgraph.id);
@@ -1249,6 +1254,14 @@ impl<F: Float> Graph<F> {
                                     }
                                 }
                             }
+                            for edge in &mut self.output_edges {
+                                let edge = edge.as_mut().unwrap();
+                                if let NodeKeyOrGraph::Node(source) = &edge.source {
+                                    if *source == key {
+                                        *edge = input_edge;
+                                    }
+                                }
+                            }
                             self.free_node_from_key(key).ok();
                         }
                         (None, None) => {
@@ -1510,6 +1523,14 @@ fn shorten_name(name: &str) -> String {
 }
 
 unsafe impl<F: Float> Send for Graph<F> {}
+/// # Safety
+///
+/// The UnsafeCell within, making Graph !Sync, is actually only
+/// mutateable using &mut Graph and not from any other threads. UnsafeCell
+/// is used to give us free interior mutability inside the Arc. The Arc is there
+/// to ensure the nodes aren't dropped if Graph is dropped, but GraphGen is still
+/// alive.
+unsafe impl<F: Float> Sync for Graph<F> {}
 
 struct GraphGenCommunicator<F: Float> {
     /// The ring buffer for sending scheduled changes to the audio thread
@@ -1522,6 +1543,7 @@ struct GraphGenCommunicator<F: Float> {
     /// corresponds to the update when that node was removed from the Tasks
     /// list.
     next_change_flag: Arc<AtomicBool>,
+    shared_frame_clock: SharedFrameClock,
 
     task_data_to_be_dropped_consumer: rtrb::Consumer<TaskData<F>>,
     new_task_data_producer: rtrb::Producer<TaskData<F>>,
@@ -1566,9 +1588,9 @@ pub enum GraphError {
     NodeNotFound,
     #[error("An id was given to a node in a different Graph")]
     WrongGraph,
-    #[error("Tried to connect a graph input that doesn't exist: `{0}`")]
+    #[error("Tried to connect a node input that doesn't exist: `{0}`")]
     InputOutOfBounds(usize),
-    #[error("Tried to connect to a graph output that doesn't exist: `{0}`")]
+    #[error("Tried to connect to a output that doesn't exist: `{0}`")]
     OutputOutOfBounds(usize),
     #[error("Tried to connect a graph input that doesn't exist (`{0}`) to some destination")]
     GraphInputOutOfBounds(usize),

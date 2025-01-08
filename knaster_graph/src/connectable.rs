@@ -80,12 +80,12 @@ impl Connectable for ConnectionChain {
         }
     }
 }
-impl<G: Gen > Connectable for Handle<G> {
+impl<G: Gen> Connectable for Handle<G> {
     fn to<T: Into<ChainElement>>(&self, other: T) -> ConnectionChain {
         ConnectionChain {
             source: Some(Box::new(ConnectionChain::chain_start(ChainElement {
                 kind: ChainSinkKind::Node {
-                    key: self.untyped_handle.node.key(),
+                    key: self.raw_handle.node.key(),
                     from_chan: 0,
                     channels: self.outputs(),
                 },
@@ -105,7 +105,7 @@ impl<G: Gen> From<&Handle<G>> for ChainElement {
     fn from(value: &Handle<G>) -> Self {
         Self {
             kind: ChainSinkKind::Node {
-                key: value.untyped_handle.node.key(),
+                key: value.raw_handle.node.key(),
                 from_chan: 0,
                 channels: value.inputs(),
             },

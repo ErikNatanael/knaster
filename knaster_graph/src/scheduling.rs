@@ -19,9 +19,12 @@ use alloc::sync::Arc;
 #[cfg(feature = "std")]
 use std::sync::Arc;
 
-use crate::{core::sync::atomic::AtomicBool, graph::NodeKey};
+use crate::{
+    core::sync::atomic::{AtomicBool, AtomicU64},
+    graph::NodeKey,
+};
 
-use knaster_core::{Seconds, ParameterError, ParameterSmoothing, ParameterValue};
+use knaster_core::{ParameterError, ParameterSmoothing, ParameterValue, Seconds};
 
 pub struct SchedulingEvent {
     pub(crate) node_key: NodeKey,
@@ -40,12 +43,69 @@ pub enum SchedulingError {
 }
 
 #[derive(Clone, Debug)]
+pub struct SharedFrameClock(Arc<AtomicU64>);
+impl SharedFrameClock {
+    pub(crate) fn new() -> Self {
+        Self(Arc::new(AtomicU64::new(0)))
+    }
+    /// Only the Runner should set the time using this function
+    pub(crate) fn store_new_time(&mut self, new_time: u64) {
+        self.0
+            .store(new_time, core::sync::atomic::Ordering::Relaxed);
+    }
+    pub fn get(&self) -> u64 {
+        self.0.load(core::sync::atomic::Ordering::Relaxed)
+    }
+}
+
+/// The time something should be scheduled to start.
+///
+/// The time can be relative to when the event is received on the audio thread, or in absolute
+/// samples. When converting from primitives
+#[derive(Clone, Debug)]
 pub struct SchedulingTime {
     seconds: Seconds,
+    absolute: bool,
 }
 impl SchedulingTime {
-    pub fn to_samples(&self, sample_rate: u64) -> u64 {
-        self.seconds.to_samples(sample_rate)
+    /// Returns the number of samples until this event should be applied. If the timing is
+    /// relative, the counter is also decremented.
+    pub fn to_samples_until_due(
+        &mut self,
+        block_size: u64,
+        sample_rate: u64,
+        frame_clock: u64,
+    ) -> u64 {
+        if self.absolute {
+            let t = self.seconds.to_samples(sample_rate);
+            t.saturating_sub(frame_clock)
+        } else {
+            let samples = self.seconds.to_samples(sample_rate);
+            self.seconds = self
+                .seconds
+                .saturating_sub(Seconds::from_samples(block_size, sample_rate));
+            samples
+        }
+    }
+    pub fn absolute(seconds: Seconds) -> Self {
+        Self {
+            seconds,
+            absolute: true,
+        }
+    }
+    pub fn relative(seconds: Seconds) -> Self {
+        Self {
+            seconds,
+            absolute: false,
+        }
+    }
+}
+impl From<Seconds> for SchedulingTime {
+    fn from(value: Seconds) -> Self {
+        SchedulingTime {
+            seconds: value,
+            absolute: false,
+        }
     }
 }
 

@@ -4,15 +4,16 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use anyhow::Result;
-use knaster_core::envelopes::Asr;
+use knaster_core::envelopes::EnvAsr;
 use knaster_core::math::{MathGen, Mul};
+use knaster_core::typenum::U1;
 use knaster_core::{
     osc::SinNumeric,
     typenum::{U0, U2},
     wrappers_core::{GenWrapperCoreExt, WrSmoothParams},
     Done, Gen, ParameterSmoothing, Trigger,
 };
-use knaster_core::typenum::U1;
+use knaster_graph::handle::AnyHandle;
 use knaster_graph::{
     audio_backend::{
         cpal::{CpalBackend, CpalBackendOptions},
@@ -23,7 +24,6 @@ use knaster_graph::{
     handle::HandleTrait,
     runner::Runner,
 };
-use knaster_graph::handle::UntypedHandle;
 
 fn main() -> Result<()> {
     let mut backend = CpalBackend::new(CpalBackendOptions::default())?;
@@ -43,13 +43,13 @@ fn main() -> Result<()> {
     top_graph.commit_changes()?;
     std::thread::spawn(move || -> Result<()> {
         let mut i = 0;
-        let mut previous_asr: Option<UntypedHandle> = None;
+        let mut previous_asr: Option<AnyHandle> = None;
         let mut freq = 50.;
         let mut attack_time_phase: f64 = 0.0;
         let mut release_time_phase: f64 = 0.0;
         loop {
             if let Some(asr) = previous_asr.take() {
-                asr.set((Asr::<f32>::T_RELEASE, Trigger))?;
+                asr.set((EnvAsr::<f32>::T_RELEASE, Trigger))?;
             }
             // push some nodes
             let mut graph = second_graph.subgraph::<U0, U1>(GraphSettings::default());
@@ -57,9 +57,8 @@ fn main() -> Result<()> {
             second_graph.commit_changes()?;
             let osc1 = WrSmoothParams::new(SinNumeric::new());
             let osc1 = graph.push(osc1.wr_mul(0.05));
-            osc1.set(("freq", freq * (i+1) as f32))?;
-            let asr = graph
-                .push_with_done_action(Asr::new(), Done::FreeParent);
+            osc1.set(("freq", freq * (i + 1) as f32))?;
+            let asr = graph.push_with_done_action(EnvAsr::new(), Done::FreeParent);
             let attack_time = (attack_time_phase.sin() * 0.1).abs();
             attack_time_phase += 0.001;
             asr.set(("attack_time", attack_time)).unwrap();
@@ -67,20 +66,20 @@ fn main() -> Result<()> {
             release_time_phase += 0.00013;
             asr.set(("release_time", release_time)).unwrap();
             asr.set(("t_restart", Trigger)).unwrap();
-            previous_asr = Some(asr.clone().untype());
+            previous_asr = Some(asr.clone().into_any());
             let mult = graph.push(MathGen::<_, U1, Mul>::new());
             // connect them together
-            graph.connect_nodes(&osc1, &mult, 0, 0,  false)?;
-            graph.connect_nodes(&asr, &mult, 0, 1,  false)?;
-            graph.connect_node_to_output(&mult, 0, 0,  true)?;
+            graph.connect_nodes(&osc1, &mult, 0, 0, false)?;
+            graph.connect_nodes(&asr, &mult, 0, 1, false)?;
+            graph.connect_node_to_output(&mult, 0, 0, true)?;
             graph.commit_changes()?;
             std::thread::sleep(Duration::from_secs_f32(0.005));
             // asr.set(("t_release", Trigger)).unwrap();
             i += 1;
             if i >= 16 {
                 i = 0;
-                freq *= 5./4.;
-                if freq >=2000. {
+                freq *= 5. / 4.;
+                if freq >= 2000. {
                     freq = 25.;
                 }
             }
@@ -99,7 +98,6 @@ fn main() -> Result<()> {
             // open::that("graph.svg").unwrap();
             // std::thread::sleep(Duration::from_secs_f32(0.1));
         }
-        Ok(())
     });
 
     loop {

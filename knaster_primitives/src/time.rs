@@ -2,9 +2,9 @@
 //!
 //! Inspired by BillyDM's blog post: https://billydm.github.io/blog/time-keeping/
 
-use crate::core::{ops, cmp, time::Duration};
+use crate::core::{cmp, ops, time::Duration};
 // Required for some float operations when not using std
-# [allow(unused)]
+#[allow(unused)]
 use num_traits::Float;
 
 /// How many subsecond tesimals fit in one second
@@ -101,6 +101,23 @@ impl Seconds {
                         - (rhs.subsecond_tesimals - self.subsecond_tesimals),
                 )
             })
+        }
+    }
+    /// Returns self - other if self is bigger than or equal to other, otherwise None
+    #[must_use]
+    pub fn saturating_sub(self, rhs: Self) -> Self {
+        if self <= rhs {
+            Seconds::ZERO
+        } else if self.subsecond_tesimals >= rhs.subsecond_tesimals {
+            Self::new(
+                self.seconds - rhs.seconds,
+                self.subsecond_tesimals - rhs.subsecond_tesimals,
+            )
+        } else {
+            Self::new(
+                self.seconds - rhs.seconds - 1,
+                SUBSECOND_TESIMALS_PER_SECOND - (rhs.subsecond_tesimals - self.subsecond_tesimals),
+            )
         }
     }
 }

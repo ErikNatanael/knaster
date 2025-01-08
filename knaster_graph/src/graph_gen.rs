@@ -116,9 +116,13 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
         // Apply parameter changes
         if !self.waiting_parameter_changes.is_empty() {
             let num_waiting_parameter_changes = self.waiting_parameter_changes.len();
-            let mut i = self.waiting_parameter_changes.len() - 1;
-            for i in 0..num_waiting_parameter_changes {
-                let (event, num_blocks_waiting) = self.waiting_parameter_changes.pop_front().expect("There should be at least waiting_parameter_changes elements in the vecdeque");
+            for _i in 0..num_waiting_parameter_changes {
+                let (mut event, num_blocks_waiting) = self
+                    .waiting_parameter_changes
+                    .pop_front()
+                    .expect(
+                    "There should be at least waiting_parameter_changes elements in the vecdeque",
+                );
                 // Remove old changes that aren't applied in time. When a Gen is removed, but has parameter changes queued, they would otherwise pile up.
                 if num_blocks_waiting > self.blocks_to_keep_scheduled_changes {
                     // By not pushing it back to the vecdeque, this change is removed
@@ -126,10 +130,13 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
                 }
                 let mut ready_to_apply = event.token.as_ref().map_or(true, |t| t.ready());
                 let mut delay_in_block = 0;
-                if let Some(time) = &event.time {
-                    let time_in_samples = time.to_samples(self.sample_rate as u64);
-                    ready_to_apply &= time_in_samples < ctx.frame_clock() + self.block_size as u64;
-                    delay_in_block = time_in_samples - ctx.frame_clock();
+                if let Some(time) = &mut event.time {
+                    delay_in_block = time.to_samples_until_due(
+                        self.block_size as u64,
+                        self.sample_rate as u64,
+                        ctx.frame_clock(),
+                    );
+                    ready_to_apply = ready_to_apply && (delay_in_block < self.block_size as u64);
                 }
 
                 let node_key = event.node_key;
@@ -148,14 +155,14 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
                                 g.param_apply(ctx.into(), event.parameter, smoothing.into());
                             }
                             if let Some(value) = event.value {
-                                g.param_apply(ctx.into(), event.parameter, value.into());
+                                g.param_apply(ctx.into(), event.parameter, value);
                             }
                             applied_event = true;
                             break;
                         }
                     }
-                } 
-                
+                }
+
                 if !applied_event {
                     self.waiting_parameter_changes
                         .push_back((event, num_blocks_waiting + 1));

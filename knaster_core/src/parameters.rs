@@ -3,7 +3,6 @@
 
 mod types;
 
-use std::f32::consts::PI;
 pub use types::*;
 
 use thiserror::Error;
@@ -29,7 +28,7 @@ pub struct PInteger(pub usize);
 pub trait PIntegerConvertible: From<PInteger> + Into<PInteger> {
     // fn to_pinteger(self) -> PInteger;
     // fn from_pinteger(val: PInteger) -> Self;
-    fn pinteger_range() -> (PInteger, PInteger) ;
+    fn pinteger_range() -> (PInteger, PInteger);
 }
 impl From<PInteger> for usize {
     fn from(val: PInteger) -> Self {
@@ -65,6 +64,10 @@ pub enum ParameterError {
     WrongParameterType,
     #[error("The parameter index is out of bounds.")]
     ParameterIndexOutOfBounds,
+    #[error("The graph within which the node you are trying to set parameters for does not exist anymore.")]
+    GraphWasFreed,
+    #[error("There was an error sending the change: `{0}`")]
+    PushError(String),
 }
 #[derive(Debug, Clone, Copy)]
 pub enum Param {
@@ -93,7 +96,6 @@ pub enum ParameterRange {
     Integer(PInteger, PInteger),
 }
 impl ParameterRange {
-
     pub fn from_pinteger<T: PIntegerConvertible>() -> ParameterRange {
         let range = T::pinteger_range();
         ParameterRange::Integer(range.0, range.1)

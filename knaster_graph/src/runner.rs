@@ -1,11 +1,12 @@
 use knaster_core::{typenum::NonZero, AudioCtx, BlockAudioCtx, Float, GenFlags, Size};
 
+use crate::graph::NodeId;
+use crate::SharedFrameClock;
 use crate::{
     block::{AggregateBlockRead, RawBlock},
     graph::{Graph, GraphSettings, OwnedRawBuffer},
     node::Node,
 };
-use crate::graph::NodeId;
 
 /// Top level runner for Knaster. Put this on the audio thread and run it.
 pub struct Runner<F: Float> {
@@ -17,18 +18,21 @@ pub struct Runner<F: Float> {
     _output_buffer: OwnedRawBuffer<F>,
     output_block: RawBlock<F>,
     frame_clock: u64,
+    // The frame clock available on other threads
+    shared_frame_clock: SharedFrameClock,
 }
 impl<F: Float> Runner<F> {
-    pub fn new<Inputs: Size, Outputs: Size>(options: GraphSettings) -> (Graph<F>, Runner<F>)
-    where
-        Outputs: NonZero,
-    {
+    pub fn new<Inputs: Size, Outputs: Size + NonZero>(
+        options: GraphSettings,
+    ) -> (Graph<F>, Runner<F>) {
         let block_size = options.block_size;
         let sample_rate = options.sample_rate;
         assert!(block_size != 0, "The block size must not be 0");
         let output_buffer = OwnedRawBuffer::new(options.block_size * Outputs::USIZE);
         let invalid_node_id = NodeId::top_level_graph_node_id();
-        let (graph, node) = Graph::new::<Inputs, Outputs>(options, invalid_node_id);
+        let shared_frame_clock = SharedFrameClock::new();
+        let (graph, node) =
+            Graph::new::<Inputs, Outputs>(options, invalid_node_id, shared_frame_clock.clone());
         let runner = Runner {
             graph_node: node,
             output_block: unsafe {
@@ -42,13 +46,14 @@ impl<F: Float> Runner<F> {
             sample_rate,
             block_size,
             frame_clock: 0,
+            shared_frame_clock,
         };
         (graph, runner)
     }
 
     /// Produce one block of audio
     ///
-    /// Safety:
+    /// # Safety
     ///
     /// The pointers provided to the input buffer must be valid for the duration
     /// of this function call. Each pointer must point to an allocation of at
@@ -65,6 +70,7 @@ impl<F: Float> Runner<F> {
         let input = unsafe { AggregateBlockRead::new(input_pointers, self.block_size) };
         unsafe { &mut (*gen) }.process_block(ctx, &mut flags, &input, &mut self.output_block);
         self.frame_clock += self.block_size as u64;
+        self.shared_frame_clock.store_new_time(self.frame_clock);
     }
     pub fn output_block(&mut self) -> &mut RawBlock<F> {
         &mut self.output_block
@@ -80,7 +86,11 @@ impl<F: Float> Runner<F> {
     }
 }
 
-// Safety:
+// # Safety
 //
-//
+// Synchronisation with the Graph happens through safe means. See Graph for more info.
 unsafe impl<F: Float> Send for Runner<F> {}
+// # Safety
+//
+// Synchronisation with the Graph happens through safe means. See Graph for more info.
+unsafe impl<F: Float> Sync for Runner<F> {}

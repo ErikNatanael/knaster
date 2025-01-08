@@ -1,17 +1,18 @@
-pub mod math;
-pub mod osc;
+pub mod delay;
 pub mod envelopes;
-pub mod svf;
-pub mod onepole;
+pub mod math;
 pub mod noise;
-mod delay;
-mod polyblep;
+pub mod onepole;
+pub mod osc;
+pub mod pan;
+pub mod polyblep;
+pub mod svf;
 
 use core::ops::Deref;
 
-use knaster_primitives::{typenum::*, Block, BlockRead, Float, Frame, Size};
 use crate::numeric_array::NumericArray;
 use crate::{Param, ParameterError, ParameterRange, ParameterType, ParameterValue};
+use knaster_primitives::{typenum::*, Block, BlockRead, Float, Frame, Size};
 
 /// Contains basic metadata about the context in which an audio process is
 /// running which is often necessary for correct calculation, initialisation etc.
@@ -112,7 +113,7 @@ impl<'a> From<&'a mut BlockAudioCtx> for &'a mut AudioCtx {
         &mut val.audio_ctx
     }
 }
-impl From<AudioCtx> for BlockAudioCtx{
+impl From<AudioCtx> for BlockAudioCtx {
     fn from(val: AudioCtx) -> Self {
         BlockAudioCtx::new(val)
     }
@@ -140,10 +141,10 @@ impl<'a> From<&'a mut BlockAudioCtx> for &'a AudioCtx {
 }
 /// Output state used for carrying some basic state up through the tree of Gens and wrappers_graph.
 /// Currently only used for freeing nodes.
-/// 
-/// When a node wants to signal that it should be freed, it will set the flag 
-/// `remove_self`. When a node wants to signal that its parent should be freed, it will set 
-/// the flag `remove_container`. It is up to the graph implementations how the node will be 
+///
+/// When a node wants to signal that it should be freed, it will set the flag
+/// `remove_self`. When a node wants to signal that its parent should be freed, it will set
+/// the flag `remove_container`. It is up to the graph implementations how the node will be
 /// freed. In knaster_graph, `remove_self` requires a wrapper while `remove_parent` is built in.
 #[derive(Copy, Clone, Debug)]
 pub struct GenFlags {
@@ -328,7 +329,7 @@ pub trait Gen {
     /// this function is equivalent to running frame-by-frame and setting the
     /// value every frame.
     ///
-    /// # Safety:
+    /// # Safety
     /// The caller guarantees that the pointer will point to a
     /// contiguous allocation of at least block size until it is replaced,
     /// disabled, or the inner struct is dropped.

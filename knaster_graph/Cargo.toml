@@ -22,3 +22,8 @@ thiserror = { version = "2.0.4", default-features = false }
 [dev-dependencies]
 anyhow = "1.0.94"
 open = "5.3.1"
+rand = "0.8.5"
+
+[[example]]
+name = "many_sines"
+features = ["alloc"]

@@ -2,7 +2,7 @@ use crate::tests::utils::TestNumGen;
 use crate::{
     graph::GraphSettings, handle::HandleTrait, runner::Runner, tests::utils::TestInPlusParamGen,
 };
-use knaster_core::envelopes::Asr;
+use knaster_core::envelopes::EnvAsr;
 use knaster_core::math::{Add, MathGen, Mul};
 use knaster_core::typenum::{U0, U1, U2};
 use knaster_core::{typenum::U3, Block, Done, Trigger};
@@ -87,10 +87,10 @@ fn multichannel_nodes() {
     // two channel output
     let m = graph.push(MathGen::<f64, U2, Add>::new());
     // Connect input 1 to 0, 2, to 1
-    graph.connect_nodes(&v0_0, &m, 0, 0,  false).unwrap();
-    graph.connect_nodes(&v0_1, &m, 0, 1,  false).unwrap();
-    graph.connect_nodes(&v1_0, &m, 0, 2,  false).unwrap();
-    graph.connect_nodes(&v1_1, &m, 0, 3,  false).unwrap();
+    graph.connect_nodes(&v0_0, &m, 0, 0, false).unwrap();
+    graph.connect_nodes(&v0_1, &m, 0, 1, false).unwrap();
+    graph.connect_nodes(&v1_0, &m, 0, 2, false).unwrap();
+    graph.connect_nodes(&v1_1, &m, 0, 3, false).unwrap();
     graph.connect_node_to_output(&m, 0, 0, false).unwrap();
     graph.connect_node_to_output(&m, 1, 1, false).unwrap();
     graph.commit_changes().unwrap();
@@ -109,13 +109,13 @@ fn multichannel_nodes() {
     // Change the graph so that the output of m is multiplied by 0.5 and 0.125 respectively, but using two different nodes
     let m2 = graph.push(MathGen::<f64, U1, Mul>::new());
     let m3 = graph.push(MathGen::<f64, U1, Mul>::new());
-    graph.connect_nodes(&m, &m2, 0, 0,  false).unwrap();
-    graph.connect_nodes(&m, &m3, 1, 0,  false).unwrap();
-    graph.connect_nodes(&v1_0, &m2, 0, 1,  false).unwrap();
-    graph.connect_nodes(&v0_0, &m3, 0, 1,  false).unwrap();
+    graph.connect_nodes(&m, &m2, 0, 0, false).unwrap();
+    graph.connect_nodes(&m, &m3, 1, 0, false).unwrap();
+    graph.connect_nodes(&v1_0, &m2, 0, 1, false).unwrap();
+    graph.connect_nodes(&v0_0, &m3, 0, 1, false).unwrap();
     // These should replace the previous input edges to the graph outputs
-    graph.connect_node_to_output(&m2, 0, 0,  false).unwrap();
-    graph.connect_node_to_output(&m3, 0, 1,  false).unwrap();
+    graph.connect_node_to_output(&m2, 0, 0, false).unwrap();
+    graph.connect_node_to_output(&m3, 0, 1, false).unwrap();
     graph.commit_changes().unwrap();
     unsafe { runner.run(&input_pointers) };
     let output = runner.output_block();
@@ -132,8 +132,7 @@ fn free_node_when_done() {
         ring_buffer_size: 50,
         ..Default::default()
     });
-    let asr = graph
-        .push_with_done_action(Asr::new(), Done::FreeSelf);
+    let asr = graph.push_with_done_action(EnvAsr::new(), Done::FreeSelf);
     asr.set(("attack_time", 0.0)).unwrap();
     asr.set(("release_time", 0.0)).unwrap();
     asr.set(("t_restart", Trigger)).unwrap();

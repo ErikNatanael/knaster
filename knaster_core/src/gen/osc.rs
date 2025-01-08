@@ -1,3 +1,5 @@
+// use crate::core::marker::PhantomData;
+
 use crate::core::marker::PhantomData;
 
 use knaster_primitives::{
@@ -5,12 +7,10 @@ use knaster_primitives::{
     typenum::{Unsigned, U0, U1, U3},
     Float, Frame,
 };
-#[cfg(feature = "alloc")]
-use wavetable_vec::*;
+#[cfg(any(feature = "alloc", feature = "std"))]
+pub use wavetable_vec::*;
 
-use crate::{
-    PFloat, Param, ParameterError, ParameterRange, ParameterValue,
-};
+use crate::{PFloat, Param, ParameterError, ParameterRange, ParameterValue};
 
 use super::{AudioCtx, Gen, GenFlags};
 #[cfg(any(feature = "alloc", feature = "std"))]
@@ -25,7 +25,8 @@ mod wavetable_vec {
     };
 
     use crate::{
-        dsp::wavetable::{NonAaWavetable, Wavetable, WavetablePhase, FRACTIONAL_PART, TABLE_SIZE}, AudioCtx, Gen, GenFlags, PFloat, ParameterRange, ParameterType, ParameterValue,
+        dsp::wavetable::{NonAaWavetable, Wavetable, WavetablePhase, FRACTIONAL_PART, TABLE_SIZE},
+        AudioCtx, Gen, GenFlags, PFloat, ParameterRange, ParameterType, ParameterValue,
     };
 
     /// Osciallator with an owned Wavetable
@@ -116,8 +117,6 @@ mod wavetable_vec {
             NumericArray::from(["freq", "phase_offset", "reset_phase"])
         }
 
-
-
         fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
             NumericArray::from([
                 ParameterRange::Float(0., PFloat::INFINITY),
@@ -151,17 +150,13 @@ mod wavetable_vec {
         phase_offset: WavetablePhase,
         phase_increment: u32,
         freq_to_phase_inc: f64,
+        freq: F,
         wavetable: &'static NonAaWavetable<f32>,
         _marker: PhantomData<F>,
     }
-    impl<F: Float> Default for SinWt<F> {
-        fn default() -> Self {
-            Self::new()
-        }
-    }
 
     impl<F: Float> SinWt<F> {
-        pub fn new() -> Self {
+        pub fn new(freq: F) -> Self {
             Self {
                 phase: WavetablePhase(0),
                 phase_offset: WavetablePhase(0),
@@ -169,11 +164,13 @@ mod wavetable_vec {
                 _marker: PhantomData,
                 freq_to_phase_inc: 0.0,
                 wavetable: &SINE_WAVETABLE_F32,
+                freq,
             }
         }
         /// Set the frequency of the oscillation. This will be overwritten by the
         /// input frequency if used as a Gen.
         pub fn set_freq(&mut self, freq: F) {
+            self.freq = freq;
             self.phase_increment = (freq.to_f64() * self.freq_to_phase_inc) as u32;
         }
         /// Set the phase offset in a range 0-1
@@ -202,7 +199,12 @@ mod wavetable_vec {
         type Inputs = U0;
         type Outputs = U1;
 
-        fn init(&mut self, _ctx: &AudioCtx) {}
+        fn init(&mut self, ctx: &crate::AudioCtx) {
+            self.reset_phase();
+            self.freq_to_phase_inc =
+                TABLE_SIZE as f64 * FRACTIONAL_PART as f64 * (1.0 / ctx.sample_rate() as f64);
+            self.set_freq(self.freq); // init any frequency set before init was called
+        }
 
         fn process(
             &mut self,
@@ -227,7 +229,6 @@ mod wavetable_vec {
         }
 
         fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
-
             NumericArray::from([
                 ParameterRange::Float(0., PFloat::INFINITY),
                 ParameterRange::Float(PFloat::NEG_INFINITY, PFloat::INFINITY),
@@ -295,7 +296,6 @@ impl<F: Float> Gen for Phasor<F> {
         }
         out
     }
-
 
     type Parameters = U1;
 
@@ -376,7 +376,6 @@ impl<F: Float> Gen for SinNumeric<F> {
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         NumericArray::from(["freq", "phase_offset", "reset_phase"])
     }
-
 
     fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
         NumericArray::from([

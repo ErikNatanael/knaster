@@ -4,13 +4,11 @@
 //! - Typesafe Handle types
 
 use crate::{
-    core::marker::PhantomData,
-    graph::NodeId,
-    SchedulingEvent, SchedulingTime, SchedulingToken,
+    core::marker::PhantomData, graph::NodeId, SchedulingEvent, SchedulingTime, SchedulingToken,
+    SharedFrameClock,
 };
 use knaster_core::{
-    typenum::Unsigned, Gen, Param, ParameterError,
-    ParameterSmoothing, ParameterValue,
+    typenum::Unsigned, Gen, Param, ParameterError, ParameterSmoothing, ParameterValue,
 };
 
 #[cfg(not(feature = "std"))]
@@ -20,16 +18,64 @@ use std::sync::{Arc, Mutex};
 
 use crate::SchedulingChannelProducer;
 
+/// Same as [`Handle<T>`], but the type is removed and instead, all the relevant information is
+/// stored in the struct. This is somewhat less efficient, but often required or significantly more
+/// ergonomic.
+pub struct AnyHandle {
+    raw_handle: RawHandle,
+    parameters: Vec<&'static str>,
+    inputs: usize,
+    outputs: usize,
+}
+
 /// Handle to a node with its type erased. This allows a less safe interaction with the node, but the handle can easily be stored.
 #[derive(Clone)]
-pub struct UntypedHandle {
+pub(crate) struct RawHandle {
     pub(crate) node: NodeId,
     /// Allows us to send parameter changes straight to the audio thread
     sender: Arc<Mutex<SchedulingChannelProducer>>,
+    shared_frame_clock: SharedFrameClock,
 }
-impl UntypedHandle {
-    pub fn new(node: NodeId, sender: Arc<Mutex<SchedulingChannelProducer>>) -> Self {
-        Self { node, sender }
+impl RawHandle {
+    pub fn new(
+        node: NodeId,
+        sender: Arc<Mutex<SchedulingChannelProducer>>,
+        shared_frame_clock: SharedFrameClock,
+    ) -> Self {
+        Self {
+            node,
+            sender,
+            shared_frame_clock,
+        }
+    }
+    pub fn is_alive(&self) -> bool {
+        if let Ok(s) = self.sender.lock() {
+            !s.is_abandoned()
+        } else {
+            false
+        }
+    }
+    pub fn send(&self, event: SchedulingEvent) -> Result<(), ParameterError> {
+        // Lock should never be poisoned, but if it is we don't care.
+        let mut sender = match self.sender.lock() {
+            Ok(s) => s,
+            Err(s) => s.into_inner(),
+        };
+        if sender.is_abandoned() {
+            // A fence might be required, see: https://docs.rs/rtrb/latest/rtrb/struct.Producer.html#method.is_abandoned
+            // std::sync::atomic::fence(std::sync::atomic::Ordering::Acquire);
+            return Err(ParameterError::GraphWasFreed);
+        }
+        sender
+            .push(event)
+            .map_err(|e| ParameterError::PushError(e.to_string()))?;
+        Ok(())
+    }
+    pub fn node_id(&self) -> NodeId {
+        self.node
+    }
+    pub fn current_frame_time(&self) -> u64 {
+        self.shared_frame_clock.get()
     }
 }
 
@@ -38,26 +84,31 @@ impl UntypedHandle {
 /// checking.
 pub struct Handle<T> {
     _phantom: PhantomData<fn(&mut T) -> ()>,
-    pub(crate) untyped_handle: UntypedHandle,
+    pub(crate) raw_handle: RawHandle,
 }
 impl<T> Clone for Handle<T> {
     fn clone(&self) -> Self {
         Self {
             _phantom: self._phantom,
-            untyped_handle: self.untyped_handle.clone(),
+            raw_handle: self.raw_handle.clone(),
         }
     }
 }
 
 impl<T: Gen> Handle<T> {
-    pub fn new(untyped_handle: UntypedHandle) -> Self {
+    pub(crate) fn new(untyped_handle: RawHandle) -> Self {
         Self {
             _phantom: PhantomData,
-            untyped_handle,
+            raw_handle: untyped_handle,
         }
     }
-    pub fn untype(self) -> UntypedHandle {
-        self.untyped_handle
+    pub fn into_any(self) -> AnyHandle {
+        AnyHandle {
+            raw_handle: self.raw_handle,
+            parameters: T::param_descriptions().into_iter().collect(),
+            inputs: T::Inputs::USIZE,
+            outputs: T::Outputs::USIZE,
+        }
     }
     pub fn inputs(&self) -> usize {
         T::Inputs::USIZE
@@ -68,12 +119,24 @@ impl<T: Gen> Handle<T> {
 }
 impl<T> From<&Handle<T>> for NodeId {
     fn from(value: &Handle<T>) -> Self {
-        value.untyped_handle.node
+        value.raw_handle.node
     }
 }
-pub trait HandleTrait {
+pub trait HandleTrait: Sized {
     fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), ParameterError>;
-    fn from_untyped(untyped_handle: UntypedHandle) -> Self;
+    fn change(&self, param: impl Into<Param>) -> Result<ParameterChange2<Self>, ParameterError>;
+    fn schedule_event(&self, event: SchedulingEvent) -> Result<(), ParameterError>;
+    fn node_id(&self) -> NodeId;
+    fn inputs(&self) -> usize;
+    fn outputs(&self) -> usize;
+    /// Returns time of the Runner connected to this
+    fn current_frame_time(&self) -> u64;
+    /// True if it is still possible to send values. This does not necessarily mean that the node
+    /// exists.
+    ///
+    /// Parameter changes sent to non-existing nodes will eventually be cleaned up, but they may
+    /// fill the graph buffer before that.
+    fn can_send(&self) -> bool;
 }
 impl<T: Gen> HandleTrait for Handle<T> {
     fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), ParameterError> {
@@ -89,57 +152,211 @@ impl<T: Gen> HandleTrait for Handle<T> {
                 }
             }
         };
-        // TODO: Error handling
-        let mut sender = self.untyped_handle.sender.lock().unwrap();
-        sender
-            .push(SchedulingEvent {
-                node_key: self.untyped_handle.node.key(),
-                parameter: param_index,
-                value: c.value,
-                smoothing: c.smoothing,
-                token: c.token,
-                time: c.time,
-            })
-            .unwrap();
-        Ok(())
+        let event = SchedulingEvent {
+            node_key: self.raw_handle.node.key(),
+            parameter: param_index,
+            value: c.value,
+            smoothing: c.smoothing,
+            token: c.token,
+            time: c.time,
+        };
+        self.raw_handle.send(event)
     }
 
-    fn from_untyped(untyped_handle: UntypedHandle) -> Self {
-        Self::new(untyped_handle)
+    fn node_id(&self) -> NodeId {
+        self.raw_handle.node_id()
+    }
+
+    fn inputs(&self) -> usize {
+        T::Inputs::USIZE
+    }
+
+    fn outputs(&self) -> usize {
+        T::Outputs::USIZE
+    }
+
+    fn schedule_event(&self, event: SchedulingEvent) -> Result<(), ParameterError> {
+        self.raw_handle.send(event)
+    }
+
+    fn change(&self, param: impl Into<Param>) -> Result<ParameterChange2<Self>, ParameterError> {
+        let param_index = match param.into() {
+            knaster_core::Param::Index(param_i) => {
+                if param_i >= T::Parameters::USIZE {
+                    return Err(ParameterError::ParameterIndexOutOfBounds);
+                } else {
+                    param_i
+                }
+            }
+            knaster_core::Param::Desc(desc) => {
+                if let Some(param_i) = T::param_descriptions().iter().position(|d| *d == desc) {
+                    param_i
+                } else {
+                    // Fail
+                    return Err(ParameterError::DescriptionNotFound(desc));
+                }
+            }
+        };
+        Ok(ParameterChange2 {
+            handle: self,
+            param: param_index,
+            value: None,
+            smoothing: None,
+            token: None,
+            time: None,
+            was_sent: false,
+        })
+    }
+
+    fn can_send(&self) -> bool {
+        self.raw_handle.is_alive()
+    }
+
+    fn current_frame_time(&self) -> u64 {
+        self.raw_handle.current_frame_time()
     }
 }
-impl HandleTrait for UntypedHandle {
+impl HandleTrait for AnyHandle {
     fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), ParameterError> {
         let c = change.into();
         let param_index = match c.param {
             knaster_core::Param::Index(param_i) => param_i,
             knaster_core::Param::Desc(desc) => {
-                return Err(ParameterError::DescriptionNotSupported(desc.to_string()));
+                if let Some(param_i) = self.parameters.iter().position(|d| *d == desc) {
+                    param_i
+                } else {
+                    // Fail
+                    return Err(ParameterError::DescriptionNotFound(desc));
+                }
             }
         };
-        // TODO: Error handling
-        let mut sender = self.sender.lock().unwrap();
-        sender
-            .push(SchedulingEvent {
-                node_key: self.node.key(),
-                parameter: param_index,
-                value: c.value,
-                smoothing: c.smoothing,
-                token: c.token,
-                time: c.time,
-            })
-            .unwrap();
-        Ok(())
+        let event = SchedulingEvent {
+            node_key: self.raw_handle.node.key(),
+            parameter: param_index,
+            value: c.value,
+            smoothing: c.smoothing,
+            token: c.token,
+            time: c.time,
+        };
+        self.raw_handle.send(event)
+    }
+    fn node_id(&self) -> NodeId {
+        self.raw_handle.node_id()
     }
 
-    fn from_untyped(untyped_handle: UntypedHandle) -> Self {
-        untyped_handle
+    fn inputs(&self) -> usize {
+        self.inputs
+    }
+
+    fn outputs(&self) -> usize {
+        self.outputs
+    }
+
+    fn schedule_event(&self, event: SchedulingEvent) -> Result<(), ParameterError> {
+        self.raw_handle.send(event)
+    }
+
+    fn change(&self, param: impl Into<Param>) -> Result<ParameterChange2<Self>, ParameterError> {
+        let param_index = match param.into() {
+            knaster_core::Param::Index(param_i) => {
+                if param_i >= self.parameters.len() {
+                    return Err(ParameterError::ParameterIndexOutOfBounds);
+                } else {
+                    param_i
+                }
+            }
+            knaster_core::Param::Desc(desc) => {
+                if let Some(param_i) = self.parameters.iter().position(|d| *d == desc) {
+                    param_i
+                } else {
+                    return Err(ParameterError::DescriptionNotFound(desc));
+                }
+            }
+        };
+        Ok(ParameterChange2 {
+            handle: self,
+            param: param_index,
+            value: None,
+            smoothing: None,
+            token: None,
+            time: None,
+            was_sent: false,
+        })
+    }
+
+    fn can_send(&self) -> bool {
+        self.raw_handle.is_alive()
+    }
+
+    fn current_frame_time(&self) -> u64 {
+        self.raw_handle.current_frame_time()
     }
 }
-pub trait Handleable: Sized {
-    type HandleType: HandleTrait;
-    fn get_handle(untyped_handle: UntypedHandle) -> Self::HandleType {
-        Self::HandleType::from_untyped(untyped_handle)
+// pub trait Handleable: Sized {
+//     type HandleType: HandleTrait;
+//     fn get_handle(untyped_handle: RawHandle) -> Self::HandleType {
+//         Self::HandleType::from_untyped(untyped_handle)
+//     }
+// }
+//
+#[derive(Debug)]
+pub struct ParameterChange2<'a, H: HandleTrait> {
+    handle: &'a H,
+    param: usize,
+    value: Option<ParameterValue>,
+    smoothing: Option<ParameterSmoothing>,
+    token: Option<SchedulingToken>,
+    time: Option<SchedulingTime>,
+    was_sent: bool,
+}
+impl<H: HandleTrait> ParameterChange2<'_, H> {
+    pub fn trig(mut self) -> Self {
+        self.value = Some(ParameterValue::Trigger);
+        self
+    }
+    pub fn value(mut self, v: impl Into<ParameterValue>) -> Self {
+        self.value = Some(v.into());
+        self
+    }
+    pub fn smooth(mut self, v: impl Into<ParameterSmoothing>) -> Self {
+        self.smoothing = Some(v.into());
+        self
+    }
+    pub fn token(mut self, v: impl Into<SchedulingToken>) -> Self {
+        self.token = Some(v.into());
+        self
+    }
+    pub fn time(mut self, v: impl Into<SchedulingTime>) -> Self {
+        self.time = Some(v.into());
+        self
+    }
+    pub fn send(mut self) -> Result<(), ParameterError> {
+        self.was_sent = true;
+
+        self.handle.schedule_event(SchedulingEvent {
+            node_key: self.handle.node_id().key(),
+            parameter: self.param,
+            value: self.value,
+            smoothing: self.smoothing,
+            token: self.token.take(),
+            time: self.time.take(),
+        })
+    }
+}
+impl<H: HandleTrait> Drop for ParameterChange2<'_, H> {
+    fn drop(&mut self) {
+        if !self.was_sent {
+            if let Err(e) = self.handle.schedule_event(SchedulingEvent {
+                node_key: self.handle.node_id().key(),
+                parameter: self.param,
+                value: self.value,
+                smoothing: self.smoothing,
+                token: self.token.take(),
+                time: self.time.take(),
+            }) {
+                eprintln!("Error sending parameter change: {e}");
+            }
+        }
     }
 }
 #[derive(Clone, Debug)]
