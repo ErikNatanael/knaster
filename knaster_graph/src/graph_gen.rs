@@ -5,12 +5,15 @@ use crate::{
         slice,
         sync::atomic::{AtomicBool, Ordering},
     },
+    dyngen::DynGen,
     SchedulingEvent,
 };
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use knaster_core::{numeric_array::NumericArray, typenum::U0, Float, Gen, GenFlags, Size};
+use knaster_core::{
+    numeric_array::NumericArray, typenum::U0, BlockAudioCtx, Float, Gen, GenFlags, Size,
+};
 use slotmap::SlotMap;
 
 use crate::{
@@ -99,25 +102,12 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
                 }
             }
         }
-
-        // Get new parameter changes
-        let parameter_changes_waiting = self.scheduling_event_receiver.slots();
-        if let Ok(pm_chunk) = self
-            .scheduling_event_receiver
-            .read_chunk(parameter_changes_waiting)
-        {
-            for event in pm_chunk {
-                if self.waiting_parameter_changes.len() < self.waiting_parameter_changes.capacity()
-                {
-                    self.waiting_parameter_changes.push_back((event, 0));
-                }
-            }
-        }
         // Apply parameter changes
         if !self.waiting_parameter_changes.is_empty() {
             let num_waiting_parameter_changes = self.waiting_parameter_changes.len();
+            let gens = &mut self.current_task_data.gens;
             for _i in 0..num_waiting_parameter_changes {
-                let (mut event, num_blocks_waiting) = self
+                let (event, num_blocks_waiting) = self
                     .waiting_parameter_changes
                     .pop_front()
                     .expect(
@@ -128,44 +118,40 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
                     // By not pushing it back to the vecdeque, this change is removed
                     continue;
                 }
-                let mut ready_to_apply = event.token.as_ref().map_or(true, |t| t.ready());
-                let mut delay_in_block = 0;
-                if let Some(time) = &mut event.time {
-                    delay_in_block = time.to_samples_until_due(
-                        self.block_size as u64,
-                        self.sample_rate as u64,
-                        ctx.frame_clock(),
-                    );
-                    ready_to_apply = ready_to_apply && (delay_in_block < self.block_size as u64);
-                }
 
-                let node_key = event.node_key;
-                let mut applied_event = false;
-                if ready_to_apply {
-                    for (key, gen) in &mut self.current_task_data.gens {
-                        if *key == node_key {
-                            let g = unsafe { &mut (**gen) };
-                            if delay_in_block > 0 {
-                                g.set_delay_within_block_for_param(
-                                    event.parameter,
-                                    delay_in_block as u16,
-                                );
-                            }
-                            if let Some(smoothing) = event.smoothing {
-                                g.param_apply(ctx.into(), event.parameter, smoothing.into());
-                            }
-                            if let Some(value) = event.value {
-                                g.param_apply(ctx.into(), event.parameter, value);
-                            }
-                            applied_event = true;
-                            break;
-                        }
-                    }
-                }
-
-                if !applied_event {
+                if let Some(unapplied) = apply_parameter_change(
+                    event,
+                    ctx.block_size() as u64,
+                    ctx.sample_rate() as u64,
+                    ctx,
+                    gens,
+                ) {
                     self.waiting_parameter_changes
-                        .push_back((event, num_blocks_waiting + 1));
+                        .push_back((unapplied, num_blocks_waiting + 1));
+                }
+            }
+        }
+
+        // Get new parameter changes
+        let parameter_changes_waiting = self.scheduling_event_receiver.slots();
+        if let Ok(pm_chunk) = self
+            .scheduling_event_receiver
+            .read_chunk(parameter_changes_waiting)
+        {
+            let gens = &mut self.current_task_data.gens;
+            for event in pm_chunk {
+                if let Some(event) = apply_parameter_change(
+                    event,
+                    ctx.block_size() as u64,
+                    ctx.sample_rate() as u64,
+                    ctx,
+                    gens,
+                ) {
+                    if self.waiting_parameter_changes.len()
+                        < self.waiting_parameter_changes.capacity()
+                    {
+                        self.waiting_parameter_changes.push_back((event, 0));
+                    }
                 }
             }
         }
@@ -268,6 +254,43 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
         _value: knaster_core::ParameterValue,
     ) {
     }
+}
+
+#[inline]
+fn apply_parameter_change<'a, 'b, F: Float>(
+    mut event: SchedulingEvent,
+    block_size: u64,
+    sample_rate: u64,
+    ctx: BlockAudioCtx,
+    // replace implicit 'static with 'b
+    gens: &'a mut [(NodeKey, *mut (dyn DynGen<F> + 'b))],
+) -> Option<SchedulingEvent> {
+    let mut ready_to_apply = event.token.as_ref().map_or(true, |t| t.ready());
+    let mut delay_in_block = 0;
+    if let Some(time) = &mut event.time {
+        delay_in_block = time.to_samples_until_due(block_size, sample_rate, ctx.frame_clock());
+        ready_to_apply = ready_to_apply && (delay_in_block < block_size);
+    }
+
+    let node_key = event.node_key;
+    if ready_to_apply {
+        for (key, gen) in gens.iter_mut() {
+            if *key == node_key {
+                let g = unsafe { &mut (**gen) };
+                if delay_in_block > 0 {
+                    g.set_delay_within_block_for_param(event.parameter, delay_in_block as u16);
+                }
+                if let Some(smoothing) = event.smoothing {
+                    g.param_apply(ctx.into(), event.parameter, smoothing.into());
+                }
+                if let Some(value) = event.value {
+                    g.param_apply(ctx.into(), event.parameter, value);
+                }
+                return None;
+            }
+        }
+    }
+    Some(event)
 }
 
 /// Safety: This impl of Send is required because of the Arc<UnsafeCell<...>> in
