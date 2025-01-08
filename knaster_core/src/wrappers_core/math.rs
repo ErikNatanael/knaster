@@ -1,4 +1,10 @@
-use knaster_primitives::FloatMethods;
+use crate::{core::ops::Add, ParameterRange};
+
+use knaster_primitives::{
+    numeric_array::NumericArray,
+    typenum::{bit::B1, Add1, Unsigned},
+    Float, FloatMethods, Size,
+};
 
 use crate::{AudioCtx, Gen, GenFlags};
 
@@ -16,7 +22,13 @@ impl<T: Gen> WrMul<T> {
         Self { gen, value }
     }
 }
-impl<T: Gen> Gen for WrMul<T> {
+impl<T: Gen> Gen for WrMul<T>
+where
+    // Make sure we can add a parameter
+    <T as Gen>::Parameters: Add<B1>,
+    <<T as Gen>::Parameters as Add<B1>>::Output: Size,
+    T::Sample: Float,
+{
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -54,21 +66,37 @@ impl<T: Gen> Gen for WrMul<T> {
             }
         }
     }
-    type Parameters = T::Parameters;
+    type Parameters = Add1<T::Parameters>;
 
     fn param_descriptions(
     ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
-        T::param_descriptions()
+        let gd = T::param_descriptions();
+        let mut d = NumericArray::default();
+        for i in 0..T::Parameters::USIZE {
+            d[i] = gd[i];
+        }
+        d[T::Parameters::USIZE] = "wr_mul";
+        d
     }
 
     fn param_range(
     ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
     {
-        T::param_range()
+        let gd = T::param_range();
+        let mut d = NumericArray::default();
+        for i in 0..T::Parameters::USIZE {
+            d[i] = gd[i];
+        }
+        d[T::Parameters::USIZE] = ParameterRange::infinite_float();
+        d
     }
 
     fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
-        T::param_apply(&mut self.gen, ctx, index, value)
+        if index == T::Parameters::USIZE {
+            self.value = T::Sample::new(value.float().unwrap());
+        } else {
+            T::param_apply(&mut self.gen, ctx, index, value)
+        }
     }
     unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
         self.gen.set_ar_param_buffer(index, buffer);
@@ -131,7 +159,6 @@ impl<T: Gen> Gen for WrAdd<T> {
     ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
-
 
     fn param_range(
     ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
@@ -203,7 +230,6 @@ impl<T: Gen> Gen for WrSub<T> {
     ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
-
 
     fn param_range(
     ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
@@ -347,7 +373,6 @@ impl<T: Gen> Gen for WrDiv<T> {
         T::param_descriptions()
     }
 
-
     fn param_range(
     ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
     {
@@ -409,7 +434,7 @@ impl<T: Gen> Gen for WrVDivGen<T> {
         self.gen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
             for sample in channel {
-            *sample = self.value / *sample;
+                *sample = self.value / *sample;
             }
         }
     }
@@ -419,7 +444,6 @@ impl<T: Gen> Gen for WrVDivGen<T> {
     ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
-
 
     fn param_range(
     ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
@@ -482,8 +506,7 @@ impl<T: Gen> Gen for WrPowf<T> {
         self.gen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
             for sample in channel {
-
-            *sample = sample.powf(self.value);
+                *sample = sample.powf(self.value);
             }
         }
     }
@@ -493,7 +516,6 @@ impl<T: Gen> Gen for WrPowf<T> {
     ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
-
 
     fn param_range(
     ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
@@ -555,7 +577,6 @@ impl<T: Gen> Gen for WrPowi<T> {
         self.gen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
             for sample in channel {
-
                 *sample = sample.powi(self.value);
             }
         }
