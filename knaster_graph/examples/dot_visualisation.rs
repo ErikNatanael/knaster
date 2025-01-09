@@ -16,7 +16,6 @@ use knaster_graph::{
         cpal::{CpalBackend, CpalBackendOptions},
         AudioBackend,
     },
-    connectable::Connectable,
     graph::GraphSettings,
     handle::HandleTrait,
     runner::Runner,
