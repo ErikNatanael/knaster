@@ -1,11 +1,10 @@
 use crate::{
     buffer_allocator::BufferAllocator,
-    connectable::{ChainElement, ChainSinkKind, ConnectionChain},
+    connectable::{ChainElement, ChainSinkKind, Channels, Sink, Source},
     core::sync::atomic::AtomicU64,
-    dyngen::DynGen,
     edge::{Edge, NodeKeyOrGraph, ParameterEdge},
     graph_gen::GraphGen,
-    handle::{AnyHandle, Handle, RawHandle},
+    handle::{Handle, RawHandle},
     node::Node,
     task::{ArParameterChange, BlockOrGraphInput, OutputTask, Task, TaskData},
     SchedulingChannelProducer, SharedFrameClock,
@@ -427,10 +426,10 @@ impl<F: Float> Graph<F> {
         additive: bool,
     ) -> Result<(), GraphError> {
         if source_channel >= self.num_inputs {
-            return Err(GraphError::OutputOutOfBounds(source_channel));
+            return Err(GraphError::GraphInputOutOfBounds(source_channel));
         }
         if sink_channel >= self.num_outputs {
-            return Err(GraphError::OutputOutOfBounds(sink_channel));
+            return Err(GraphError::GraphOutputOutOfBounds(sink_channel));
         }
         self.connect_to_output_internal(
             NodeKeyOrGraph::Graph,
@@ -452,7 +451,7 @@ impl<F: Float> Graph<F> {
             return Err(GraphError::WrongGraph);
         }
         if sink_channel >= self.num_outputs {
-            return Err(GraphError::OutputOutOfBounds(sink_channel));
+            return Err(GraphError::GraphOutputOutOfBounds(sink_channel));
         }
         let nodes = self.get_nodes();
         if !nodes.contains_key(source.key()) {
@@ -574,7 +573,7 @@ impl<F: Float> Graph<F> {
         }
         dbg!(self.num_inputs, source_channel);
         if source_channel >= self.num_inputs {
-            return Err(GraphError::OutputOutOfBounds(source_channel));
+            return Err(GraphError::GraphInputOutOfBounds(source_channel));
         }
         let nodes = self.get_nodes();
         if !nodes.contains_key(sink.key()) {
@@ -644,8 +643,6 @@ impl<F: Float> Graph<F> {
             });
         }
     }
-    // TODO: This would be much cleaner if the output was represented by a node
-    // in the graph, created in `new`.
     /// The internal function for connecting a node to the output
     ///
     /// Assumes that the parameters are valid. Use the public functions for error checking. This
@@ -706,86 +703,109 @@ impl<F: Float> Graph<F> {
         add_node
     }
 
-    pub fn connect(&mut self, chain: impl Into<ConnectionChain>) -> Result<(), GraphError> {
-        let chain = chain.into();
-        let mut chains_to_connect = vec![chain];
-        while let Some(chain) = chains_to_connect.pop() {
-            let additive = chain.additive_connection();
-            let (source, sink) = chain.deconstruct();
-            if let Some(source_chain) = source {
-                let source = source_chain.sink();
-                match (&source.kind, sink.kind) {
-                    (
-                        ChainSinkKind::Node {
-                            key: source_node,
-                            from_chan: so_from,
-                            channels: so_channels,
-                        },
-                        ChainSinkKind::Node {
-                            key: sink_node,
-                            from_chan: si_from,
-                            channels: si_channels,
-                        },
-                    ) => {
-                        let channels: usize = (*so_channels).min(si_channels);
-                        for i in 0..channels {
-                            self.connect_to_node_internal(
-                                NodeKeyOrGraph::Node(*source_node),
-                                sink_node,
-                                *so_from + i,
-                                si_from + i,
-                                additive,
-                            );
-                        }
-                    }
-                    (
-                        ChainSinkKind::Node {
-                            key: source_node,
-                            from_chan: so_from,
-                            channels: so_channels,
-                        },
-                        ChainSinkKind::GraphConnection {
-                            from_chan: si_from,
-                            channels: si_channels,
-                        },
-                    ) => {
-                        let channels: usize = (*so_channels).min(si_channels);
-                        for i in 0..channels {
-                            self.connect_to_output_internal(
-                                NodeKeyOrGraph::Node(*source_node),
-                                *so_from + i,
-                                si_from + i,
-                                additive,
-                            );
-                        }
-                    }
-                    (
-                        ChainSinkKind::GraphConnection {
-                            from_chan: so_from,
-                            channels: so_channels,
-                        },
-                        ChainSinkKind::Node {
-                            key: sink_node,
-                            from_chan: si_from,
-                            channels: si_channels,
-                        },
-                    ) => {
-                        let channels = (*so_channels).min(si_channels);
-
-                        // TODO: Incorporate graph input edges into normal input edges
-                        todo!();
-                        // self.graph_input_edges[sink_node].push(Edge {
-                        //     source: sink_node,
-                        //     kind: EdgeKind::Audio {
-                        //         channels,
-                        //         channel_offset_in_sink: si_from,
-                        //         channel_offset_in_source: *so_from,
-                        //     },
-                        // })
-                    }
-                    _ => eprintln!("Unhandled connection"),
+    /// Connect a source to a sink with the designated channels.
+    ///
+    /// Replaces any existing connections to the sink at those channels. If you want to add to any
+    /// existing inputs to the sink, use [`Graph::connect_add`]
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// // Connect `sine` to `lpf`, channel 0 to 0
+    /// graph.connect(&sine, 0, 0, &lpf)?;
+    /// // Connect `multi_oscillator` to the graph outputs, channels 1 to 0, 2, 1
+    /// // and 0 to 3.
+    /// graph.connect(&multi_oscillator, [1, 2, 0], [0, 1, 2], Sink::Graph)?;
+    /// ```
+    pub fn connect<N: Size>(
+        &mut self,
+        source: impl Into<Source>,
+        source_channels: impl Into<Channels<N>>,
+        sink_channels: impl Into<Channels<N>>,
+        sink: impl Into<Sink>,
+    ) -> Result<(), GraphError> {
+        match (source.into(), sink.into()) {
+            (Source::Graph, Sink::Node(sink)) => {
+                for (so_chan, si_chan) in source_channels
+                    .into()
+                    .into_iter()
+                    .zip(sink_channels.into().into_iter())
+                {
+                    self.connect_input_to_node(sink, so_chan, si_chan, false)?;
                 }
-                chains_to_connect.push(*source_chain);
+            }
+            (Source::Node(source), Sink::Node(sink)) => {
+                for (so_chan, si_chan) in source_channels
+                    .into()
+                    .into_iter()
+                    .zip(sink_channels.into().into_iter())
+                {
+                    self.connect_nodes(source, sink, so_chan, si_chan, false)?;
+                }
+            }
+            (Source::Node(source), Sink::Graph) => {
+                for (so_chan, si_chan) in source_channels
+                    .into()
+                    .into_iter()
+                    .zip(sink_channels.into().into_iter())
+                {
+                    self.connect_node_to_output(source, so_chan, si_chan, false)?;
+                }
+            }
+            (Source::Graph, Sink::Graph) => {
+                for (so_chan, si_chan) in source_channels
+                    .into()
+                    .into_iter()
+                    .zip(sink_channels.into().into_iter())
+                {
+                    self.connect_input_to_output(so_chan, si_chan, false)?;
+                }
+            }
+        }
+        Ok(())
+    }
+    pub fn connect_add<N: Size>(
+        &mut self,
+        source: impl Into<Source>,
+        source_channels: impl Into<Channels<N>>,
+        sink_channels: impl Into<Channels<N>>,
+        sink: impl Into<Sink>,
+    ) -> Result<(), GraphError> {
+        match (source.into(), sink.into()) {
+            (Source::Graph, Sink::Node(sink)) => {
+                for (so_chan, si_chan) in source_channels
+                    .into()
+                    .into_iter()
+                    .zip(sink_channels.into().into_iter())
+                {
+                    self.connect_input_to_node(sink, so_chan, si_chan, true)?;
+                }
+            }
+            (Source::Node(source), Sink::Node(sink)) => {
+                for (so_chan, si_chan) in source_channels
+                    .into()
+                    .into_iter()
+                    .zip(sink_channels.into().into_iter())
+                {
+                    self.connect_nodes(source, sink, so_chan, si_chan, true)?;
+                }
+            }
+            (Source::Node(source), Sink::Graph) => {
+                for (so_chan, si_chan) in source_channels
+                    .into()
+                    .into_iter()
+                    .zip(sink_channels.into().into_iter())
+                {
+                    self.connect_node_to_output(source, so_chan, si_chan, true)?;
+                }
+            }
+            (Source::Graph, Sink::Graph) => {
+                for (so_chan, si_chan) in source_channels
+                    .into()
+                    .into_iter()
+                    .zip(sink_channels.into().into_iter())
+                {
+                    self.connect_input_to_output(so_chan, si_chan, true)?;
+                }
             }
         }
         Ok(())
@@ -1590,10 +1610,12 @@ pub enum GraphError {
     WrongGraph,
     #[error("Tried to connect a node input that doesn't exist: `{0}`")]
     InputOutOfBounds(usize),
-    #[error("Tried to connect to a output that doesn't exist: `{0}`")]
+    #[error("Tried to connect to a node output that doesn't exist: `{0}`")]
     OutputOutOfBounds(usize),
     #[error("Tried to connect a graph input that doesn't exist (`{0}`) to some destination")]
     GraphInputOutOfBounds(usize),
+    #[error("Tried to connect a graph output that doesn't exist (`{0}`) to some destination")]
+    GraphOutputOutOfBounds(usize),
     #[error("The parameter `{0}` is not a valid parameter description for the node")]
     ParameterDescriptionNotFound(String),
     #[error("The parameter `{0}` is not a valid parameter index for the node")]

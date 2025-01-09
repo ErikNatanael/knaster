@@ -1,6 +1,65 @@
-use knaster_core::{Gen, PFloat, Param};
+use knaster_core::typenum::U1;
+use knaster_core::{numeric_array::NumericArray, Gen, PFloat, Param, Size};
 
-use crate::{graph::NodeKey, handle::Handle};
+use crate::{
+    graph::{NodeId, NodeKey},
+    handle::Handle,
+};
+
+pub enum Sink {
+    Graph,
+    Node(NodeId),
+}
+impl<T: Into<NodeId>> From<T> for Sink {
+    fn from(value: T) -> Self {
+        Self::Node(value.into())
+    }
+}
+pub enum Source {
+    Graph,
+    Node(NodeId),
+}
+impl<T: Into<NodeId>> From<T> for Source {
+    fn from(value: T) -> Self {
+        Self::Node(value.into())
+    }
+}
+pub struct Channels<N: Size> {
+    channels: NumericArray<usize, N>,
+}
+impl<N: Size> IntoIterator for Channels<N> {
+    type Item = usize;
+
+    type IntoIter = <NumericArray<usize, N> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.channels.into_iter()
+    }
+}
+impl<N: Size> From<NumericArray<usize, N>> for Channels<N> {
+    fn from(value: NumericArray<usize, N>) -> Self {
+        Self { channels: value }
+    }
+}
+impl<N: Size, const N2: usize> From<[usize; N2]> for Channels<N>
+where
+    crate::typenum::Const<N2>: crate::typenum::ToUInt,
+    crate::typenum::Const<N2>: knaster_core::numeric_array::generic_array::IntoArrayLength,
+    knaster_core::numeric_array::generic_array::GenericArray<usize, N>: From<[usize; N2]>,
+{
+    fn from(value: [usize; N2]) -> Self {
+        Self {
+            channels: value.into(),
+        }
+    }
+}
+impl From<usize> for Channels<U1> {
+    fn from(value: usize) -> Self {
+        Self {
+            channels: [value].into(),
+        }
+    }
+}
 
 /// Trait for something that can be connected in the Graph.
 ///

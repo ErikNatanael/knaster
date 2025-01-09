@@ -1,4 +1,3 @@
-use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use anyhow::Result;
@@ -10,15 +9,15 @@ use knaster_core::{
     osc::SinNumeric,
     typenum::{U0, U1, U2},
     wrappers_core::{GenWrapperCoreExt, WrSmoothParams},
-    Gen, ParameterSmoothing,
+    Gen,
 };
 use knaster_core::{Done, Seconds};
+use knaster_graph::connectable::Sink;
 use knaster_graph::{
     audio_backend::{
         cpal::{CpalBackend, CpalBackendOptions},
         AudioBackend,
     },
-    connectable::Connectable,
     graph::GraphSettings,
     handle::HandleTrait,
     runner::Runner,
@@ -76,13 +75,13 @@ fn main() -> Result<()> {
         // let noise = graph.push(BrownNoise::new().wr_mul(0.2));
 
         // connect them together
-        graph.connect(osc1.to(&lpf))?;
-        graph.connect(osc3.add_to(&lpf))?;
-        graph.connect(osc2.add_to(&lpf))?;
-        graph.connect(noise.add_to(&lpf))?;
-        graph.connect_nodes(&lpf, &mult, 0, 0, false)?;
-        graph.connect_nodes(&env, &mult, 0, 1, false)?;
-        graph.connect_node_to_output(&mult, 0, 0, false)?;
+        graph.connect_add(&osc1, 0, 0, &lpf)?;
+        graph.connect_add(&osc3, 0, 0, &lpf)?;
+        graph.connect_add(&osc2, 0, 0, &lpf)?;
+        graph.connect_add(&noise, 0, 0, &lpf)?;
+        graph.connect(&lpf, 0, 0, &mult)?;
+        graph.connect(&env, 0, 1, &mult)?;
+        graph.connect(&mult, [0, 0], [0, 1], Sink::Graph)?;
         graph.commit_changes()?;
 
         // let inspection = top_level_graph.inspection();
@@ -103,7 +102,7 @@ fn main() -> Result<()> {
         std::thread::sleep(Duration::from_secs_f32(1.0));
     }
 
-    let mut freq = 200.;
+    // let mut freq = 200.;
     // for _ in 0..5 {
     //     osc1.set(("freq", freq, ParameterSmoothing::Linear(0.5)))?;
     //     osc2.set(("freq", (freq * (5. / 4.)), ParameterSmoothing::Linear(0.5)))?;
