@@ -3,8 +3,8 @@ use std::time::Duration;
 use anyhow::Result;
 use knaster_core::envelopes::EnvAsr;
 use knaster_core::math::{MathGen, Mul};
-use knaster_core::noise::{BrownNoise, PinkNoise, RandomLin, WhiteNoise};
-use knaster_core::onepole::{OnePoleHpf, OnePoleLpf};
+use knaster_core::noise::{RandomLin, WhiteNoise};
+use knaster_core::onepole::OnePoleHpf;
 use knaster_core::{
     osc::SinNumeric,
     typenum::{U0, U1, U2},

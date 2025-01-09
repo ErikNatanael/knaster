@@ -7,7 +7,7 @@ use knaster_core::math::{MathGen, Mul};
 use knaster_core::noise::{BrownNoise, PinkNoise, RandomLin, WhiteNoise};
 use knaster_core::onepole::{OnePoleHpf, OnePoleLpf};
 use knaster_core::osc::SinWt;
-use knaster_core::pan::PanMonoToStereo;
+use knaster_core::pan::Pan2;
 use knaster_core::{
     osc::SinNumeric,
     typenum::{U0, U1, U2},
@@ -43,29 +43,6 @@ fn main() -> Result<()> {
     let g = &mut top_level_graph;
     let mut envs = vec![];
     let mut rng = thread_rng();
-    let root = 440.0;
-    let ratios = [1.0, 9. / 8., 6. / 5., 3. / 2., 2.];
-    for ratio in ratios {
-        for i in 0..4 {
-            let mut env = EnvAr::new();
-            env.param(g.ctx(), "attack_time", 0.01)?;
-            env.param(g.ctx(), "release_time", 4.9)?;
-            let env = g.push(env);
-            let sine = g.push({
-                let mut s = SinWt::new().wr_mul(0.05 / ((i + 1) as f32));
-                // let freq = rng.gen_range(25.0..10000.0);
-                let freq = ratio * root * i as f32;
-                s.param(g.ctx(), "freq", freq)?;
-                s
-            });
-            let mul = g.push(MathGen::<_, U1, Mul>::new());
-            g.connect_nodes(&env, &mul, 0, 0, false)?;
-            g.connect_nodes(&sine, &mul, 0, 1, false)?;
-            g.connect_node_to_output(&mul, 0, 0, true)?;
-            g.connect_node_to_output(&mul, 0, 1, true)?;
-            envs.push(env);
-        }
-    }
 
     for i in 0..300 {
         let mut env = EnvAr::new(0.01, 0.1);
@@ -73,7 +50,7 @@ fn main() -> Result<()> {
         let sine =
             g.push(SinWt::new(rng.gen_range(3000.0..10000.0)).wr_mul(rng.gen_range(0.01..0.015)));
         let mul = g.push(MathGen::<_, U1, Mul>::new());
-        let pan = g.push(PanMonoToStereo::new(rng.gen_range(-1.0..1.0)));
+        let pan = g.push(Pan2::new(rng.gen_range(-1.0..1.0)));
         g.connect_nodes(&env, &mul, 0, 0, false)?;
         g.connect_nodes(&sine, &mul, 0, 1, false)?;
         g.connect_nodes(&mul, &pan, 0, 0, false)?;
@@ -82,34 +59,9 @@ fn main() -> Result<()> {
         envs.push(env);
     }
     for i in 0..300 {
-        let mut env = EnvAr::new();
-        env.param(g.ctx(), "attack_time", 0.01)?;
-        env.param(g.ctx(), "release_time", 0.1)?;
+        let mut env = EnvAr::new(0.01, 0.1);
         let env = g.push(env);
-        let sine = g.push({
-            let mut s = SinWt::new().wr_mul(0.01);
-            let freq = rng.gen_range(6000.0..6500.0);
-            s.param(g.ctx(), "freq", freq)?;
-            s
-        });
-        let mul = g.push(MathGen::<_, U1, Mul>::new());
-        g.connect_nodes(&env, &mul, 0, 0, false)?;
-        g.connect_nodes(&sine, &mul, 0, 1, false)?;
-        g.connect_node_to_output(&mul, 0, 0, true)?;
-        g.connect_node_to_output(&mul, 0, 1, true)?;
-        envs.push(env);
-    }
-    for i in 0..3 {
-        let mut env = EnvAr::new();
-        env.param(g.ctx(), "attack_time", 0.21)?;
-        env.param(g.ctx(), "release_time", 10.1)?;
-        let env = g.push(env);
-        let sine = g.push({
-            let mut s = SinWt::new().wr_mul(0.01);
-            let freq = 55. * i as f32;
-            s.param(g.ctx(), "freq", freq)?;
-            s
-        });
+        let sine = g.push(SinWt::new(rng.gen_range(6000.0..6500.0)).wr_mul(0.01));
         let mul = g.push(MathGen::<_, U1, Mul>::new());
         g.connect_nodes(&env, &mul, 0, 0, false)?;
         g.connect_nodes(&sine, &mul, 0, 1, false)?;

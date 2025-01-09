@@ -1,6 +1,3 @@
-use std::fs;
-use std::io::Write;
-use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use anyhow::Result;
@@ -11,7 +8,7 @@ use knaster_core::{
     osc::SinNumeric,
     typenum::{U0, U2},
     wrappers_core::{GenWrapperCoreExt, WrSmoothParams},
-    Done, Gen, ParameterSmoothing, Trigger,
+    Done, Trigger,
 };
 use knaster_graph::handle::AnyHandle;
 use knaster_graph::{
@@ -19,7 +16,6 @@ use knaster_graph::{
         cpal::{CpalBackend, CpalBackendOptions},
         AudioBackend,
     },
-    connectable::Connectable,
     graph::GraphSettings,
     handle::HandleTrait,
     runner::Runner,
@@ -62,7 +58,7 @@ fn main() -> Result<()> {
             let attack_time = (attack_time_phase.sin() * 0.1).abs();
             attack_time_phase += 0.001;
             asr.set(("attack_time", attack_time)).unwrap();
-            let release_time = (release_time_phase.sin() * 2. + 2.1);
+            let release_time = release_time_phase.sin() * 2. + 2.1;
             release_time_phase += 0.00013;
             asr.set(("release_time", release_time)).unwrap();
             asr.set(("t_restart", Trigger)).unwrap();
