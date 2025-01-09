@@ -6,10 +6,12 @@
 use crate::num_derive::{FromPrimitive, ToPrimitive};
 use crate::num_traits::FromPrimitive;
 use crate::numeric_array::NumericArray;
-use crate::typenum::{U1, U4, U5};
-use crate::{AudioCtx, BlockAudioCtx, Gen, GenFlags, PFloat, PInteger, PIntegerConvertible, ParameterRange, ParameterValue};
+use crate::typenum::{U1, U5};
+use crate::{
+    AudioCtx, Gen, GenFlags, PFloat, PInteger, PIntegerConvertible, ParameterRange, ParameterValue,
+};
 use knaster_primitives::num_traits;
-use knaster_primitives::{Block, BlockRead, Float, Frame};
+use knaster_primitives::{Float, Frame};
 
 /// Different supported filter types
 #[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq)]
@@ -45,15 +47,16 @@ impl From<PInteger> for SvfFilterType {
     }
 }
 impl From<SvfFilterType> for PInteger {
-
     fn from(value: SvfFilterType) -> Self {
         PInteger(value as usize)
-
     }
 }
 impl PIntegerConvertible for SvfFilterType {
     fn pinteger_range() -> (PInteger, PInteger) {
-        (PInteger(SvfFilterType::Low as usize), PInteger(SvfFilterType::MAX as usize))
+        (
+            PInteger(SvfFilterType::Low as usize),
+            PInteger(SvfFilterType::MAX),
+        )
     }
 }
 /// A versatile EQ filter implementation
@@ -237,8 +240,8 @@ impl<F: Float> Gen for SvfFilter<F> {
     }
     fn process(
         &mut self,
-        ctx: AudioCtx,
-        flags: &mut GenFlags,
+        _ctx: AudioCtx,
+        _flags: &mut GenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         [self.process_sample(input[0])].into()

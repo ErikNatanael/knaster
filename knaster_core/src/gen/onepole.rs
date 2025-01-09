@@ -1,11 +1,10 @@
 //! One pole filters make good and cheap lowpass 6dB/octave rolloff filters.
 //! It is also good for removing zipping from parameter changes.
 
-
-use knaster_primitives::{num_traits, Float, Frame};
-use crate::{AudioCtx, Gen, GenFlags, ParameterRange, ParameterValue};
 use crate::numeric_array::NumericArray;
 use crate::typenum::U1;
+use crate::{AudioCtx, Gen, GenFlags, ParameterRange, ParameterValue};
+use knaster_primitives::{Float, Frame};
 
 // To use it as a DC blocker:
 //
@@ -20,10 +19,7 @@ pub struct OnePole<T: Float> {
     b1: T,
 }
 
-impl<
-    T: Float,
-> OnePole<T>
-{
+impl<T: Float> OnePole<T> {
     /// Create a new reset OnePole
     pub fn new() -> Self {
         Self {
@@ -88,6 +84,12 @@ impl<
     //     fstringhz.atan2(fcutoffhz) * T::from_f32(-1.).unwrap()
     // }
 }
+
+impl<T: Float> Default for OnePole<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 #[derive(Debug, Clone)]
 /// One pole lowpass filter Gen
 pub struct OnePoleLpf<F: Float> {
@@ -97,9 +99,13 @@ pub struct OnePoleLpf<F: Float> {
 impl<F: Float> OnePoleLpf<F> {
     #[allow(missing_docs)]
     pub fn new() -> Self {
-        Self {
-            op: OnePole::new(),
-        }
+        Self { op: OnePole::new() }
+    }
+}
+
+impl<F: Float> Default for OnePoleLpf<F> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 impl<F: Float> Gen for OnePoleLpf<F> {
@@ -107,7 +113,12 @@ impl<F: Float> Gen for OnePoleLpf<F> {
     type Inputs = U1;
     type Outputs = U1;
     type Parameters = U1;
-    fn process(&mut self, ctx: AudioCtx, flags: &mut GenFlags, input: Frame<Self::Sample, Self::Inputs>) -> Frame<Self::Sample, Self::Outputs> {
+    fn process(
+        &mut self,
+        _ctx: AudioCtx,
+        _flags: &mut GenFlags,
+        input: Frame<Self::Sample, Self::Inputs>,
+    ) -> Frame<Self::Sample, Self::Outputs> {
         [self.op.process_lp(input[0])].into()
     }
 
@@ -120,9 +131,13 @@ impl<F: Float> Gen for OnePoleLpf<F> {
     }
 
     fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+        #[allow(clippy::single_match)]
         match index {
-            0 => self.op.set_freq_lowpass(F::new(value.float().unwrap()), F::from(ctx.sample_rate).unwrap()),
-            _ => ()
+            0 => self.op.set_freq_lowpass(
+                F::new(value.float().unwrap()),
+                F::from(ctx.sample_rate).unwrap(),
+            ),
+            _ => (),
         }
     }
 }
@@ -136,9 +151,13 @@ pub struct OnePoleHpf<F: Float> {
 impl<F: Float> OnePoleHpf<F> {
     #[allow(missing_docs)]
     pub fn new() -> Self {
-        Self {
-            op: OnePole::new(),
-        }
+        Self { op: OnePole::new() }
+    }
+}
+
+impl<F: Float> Default for OnePoleHpf<F> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 impl<F: Float> Gen for OnePoleHpf<F> {
@@ -146,7 +165,12 @@ impl<F: Float> Gen for OnePoleHpf<F> {
     type Inputs = U1;
     type Outputs = U1;
     type Parameters = U1;
-    fn process(&mut self, ctx: AudioCtx, flags: &mut GenFlags, input: Frame<Self::Sample, Self::Inputs>) -> Frame<Self::Sample, Self::Outputs> {
+    fn process(
+        &mut self,
+        _ctx: AudioCtx,
+        _flags: &mut GenFlags,
+        input: Frame<Self::Sample, Self::Inputs>,
+    ) -> Frame<Self::Sample, Self::Outputs> {
         [self.op.process_hp(input[0])].into()
     }
 
@@ -159,9 +183,14 @@ impl<F: Float> Gen for OnePoleHpf<F> {
     }
 
     fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+        #[allow(clippy::single_match)]
         match index {
-            0 => self.op.set_freq_highpass(F::new(value.float().unwrap()), F::from(ctx.sample_rate).unwrap()),
-            _ => ()
+            0 => self.op.set_freq_highpass(
+                F::new(value.float().unwrap()),
+                F::from(ctx.sample_rate).unwrap(),
+            ),
+            _ => (),
         }
     }
 }
+

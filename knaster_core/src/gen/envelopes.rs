@@ -74,6 +74,12 @@ impl<F: Float> EnvAsr<F> {
         out
     }
 }
+
+impl<F: Float> Default for EnvAsr<F> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl<F: Float> Gen for EnvAsr<F> {
     type Sample = F;
     type Inputs = U0;
@@ -82,18 +88,18 @@ impl<F: Float> Gen for EnvAsr<F> {
 
     fn process(
         &mut self,
-        ctx: AudioCtx,
+        _ctx: AudioCtx,
         flags: &mut GenFlags,
-        input: Frame<Self::Sample, Self::Inputs>,
+        _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         let out = self.next_sample(flags, 0);
         [out].into()
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        ctx: BlockAudioCtx,
+        _ctx: BlockAudioCtx,
         flags: &mut GenFlags,
-        input: &InBlock,
+        _input: &InBlock,
         output: &mut OutBlock,
     ) where
         InBlock: BlockRead<Sample = Self::Sample>,

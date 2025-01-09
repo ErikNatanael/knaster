@@ -32,8 +32,8 @@ impl<F: Float> Gen for SampleDelay<F> {
     type Parameters = U1;
     fn process(
         &mut self,
-        ctx: AudioCtx,
-        flags: &mut GenFlags,
+        _ctx: AudioCtx,
+        _flags: &mut GenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         self.buffer[self.write_position] = input[0];
@@ -59,6 +59,7 @@ impl<F: Float> Gen for SampleDelay<F> {
     }
 
     fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+        #[allow(clippy::single_match)]
         match index {
             0 => {
                 self.delay_samples = (value.float().unwrap() * ctx.sample_rate as PFloat) as usize;
@@ -102,6 +103,12 @@ impl<F: Float> AllpassInterpolator<F> {
         output
     }
 }
+
+impl<F: Float> Default for AllpassInterpolator<F> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 #[derive(Clone, Debug)]
 pub struct AllpassDelay<F: Copy = f32> {
     buffer: Vec<F>,
@@ -128,7 +135,7 @@ impl<F: Float> AllpassDelay<F> {
         }
     }
     pub fn init(&mut self, sample_rate: u64) {
-        let max_delay_samples = self.max_delay_seconds.to_samples(sample_rate) ;
+        let max_delay_samples = self.max_delay_seconds.to_samples(sample_rate);
         self.buffer = vec![F::ZERO; max_delay_samples as usize];
     }
     /// Read the current frame from the delay and allpass interpolate. Read before `write_and_advance` for the correct sample.
@@ -200,7 +207,12 @@ impl<F: Float> Gen for AllpassDelay<F> {
     type Outputs = U1;
     type Parameters = U1;
 
-    fn process(&mut self, ctx: AudioCtx, flags: &mut GenFlags, input: Frame<Self::Sample, Self::Inputs>) -> Frame<Self::Sample, Self::Outputs> {
+    fn process(
+        &mut self,
+        _ctx: AudioCtx,
+        _flags: &mut GenFlags,
+        input: Frame<Self::Sample, Self::Inputs>,
+    ) -> Frame<Self::Sample, Self::Outputs> {
         let out = self.read();
         self.write_and_advance(input[0]);
         [out].into()
@@ -211,14 +223,15 @@ impl<F: Float> Gen for AllpassDelay<F> {
     }
 
     fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+        #[allow(clippy::single_match)]
         match index {
-           Self::DELAY_TIME => {
-               let delay_frames = (value.float().unwrap() * ctx.sample_rate as PFloat);
-               if (delay_frames as usize) < self.buffer.len() {
-                   self.set_delay_in_frames(F::new(delay_frames));
-               }
-           }
-            _ => ()
+            Self::DELAY_TIME => {
+                let delay_frames = value.float().unwrap() * ctx.sample_rate as PFloat;
+                if (delay_frames as usize) < self.buffer.len() {
+                    self.set_delay_in_frames(F::new(delay_frames));
+                }
+            }
+            _ => (),
         }
     }
 }
@@ -238,12 +251,12 @@ impl<F: Float> AllpassFeedbackDelay<F> {
     #[must_use]
     pub fn new(max_delay_time: Seconds) -> Self {
         let allpass_delay = AllpassDelay::new(max_delay_time);
-        let s = Self {
+
+        Self {
             feedback: F::ZERO,
             allpass_delay,
             previous_delay_time: F::from(max_delay_time.to_seconds_f64()).unwrap(),
-        };
-        s
+        }
     }
     /// Set the delay length counted in frames/samples
     pub fn set_delay_in_frames(&mut self, delay_length: F) {
@@ -294,7 +307,7 @@ impl<F: Float> Gen for AllpassFeedbackDelay<F> {
     fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
         match index {
             0 => {
-                self.set_delay_in_frames(F::new(value.float().unwrap() as f64 * ctx.sample_rate as f64));
+                self.set_delay_in_frames(F::new(value.float().unwrap() * ctx.sample_rate as f64));
                 self.previous_delay_time = F::new(value.float().unwrap());
             }
             1 => {

@@ -39,6 +39,12 @@ impl<F: Float> WhiteNoise<F> {
         }
     }
 }
+
+impl<F: Float> Default for WhiteNoise<F> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl<F: Float> Gen for WhiteNoise<F> {
     type Sample = F;
     type Inputs = U0;
@@ -47,9 +53,9 @@ impl<F: Float> Gen for WhiteNoise<F> {
 
     fn process(
         &mut self,
-        ctx: AudioCtx,
-        flags: &mut GenFlags,
-        input: Frame<Self::Sample, Self::Inputs>,
+        _ctx: AudioCtx,
+        _flags: &mut GenFlags,
+        _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         [F::new(self.rng.f32() * 2.0 - 1.0)].into()
     }
@@ -58,7 +64,7 @@ impl<F: Float> Gen for WhiteNoise<F> {
         [].into()
     }
 
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {}
+    fn param_apply(&mut self, _ctx: AudioCtx, _index: usize, _value: ParameterValue) {}
 }
 const PINK_NOISE_OCTAVES: u32 = 9;
 /// Pink noise
@@ -99,8 +105,8 @@ impl<F: Float> PinkNoise<F> {
         assert!(self.counter > 0);
         assert!(self.counter <= self.mask);
 
-        self.counter = self.counter & (self.mask - 1);
-        self.counter = self.counter + 1;
+        self.counter &= self.mask - 1;
+        self.counter += 1;
     }
 
     // TODO: Generate f64 random number when F is f64
@@ -109,17 +115,23 @@ impl<F: Float> PinkNoise<F> {
         let index = self.noise_index() as usize;
         assert!(index < PINK_NOISE_OCTAVES as usize);
 
-        self.pink = self.pink - self.white_noises[index];
+        self.pink -= self.white_noises[index];
         self.white_noises[index] = F::new(self.rng.f32() * 2.0 - 1.0);
-        self.pink = self.pink + self.white_noises[index];
+        self.pink += self.white_noises[index];
 
-        self.pink = self.pink - self.always_on_white_noise;
+        self.pink -= self.always_on_white_noise;
         self.always_on_white_noise = F::new(self.rng.f32() * 2.0 - 1.0);
-        self.pink = self.pink + self.always_on_white_noise;
+        self.pink += self.always_on_white_noise;
 
         self.increment_counter();
 
         self.pink / (F::from(PINK_NOISE_OCTAVES).unwrap() + F::ONE)
+    }
+}
+
+impl<F: Float> Default for PinkNoise<F> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 impl<F: Float> Gen for PinkNoise<F> {
@@ -130,9 +142,9 @@ impl<F: Float> Gen for PinkNoise<F> {
 
     fn process(
         &mut self,
-        ctx: AudioCtx,
-        flags: &mut GenFlags,
-        input: Frame<Self::Sample, Self::Inputs>,
+        _ctx: AudioCtx,
+        _flags: &mut GenFlags,
+        _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         [self.process_sample()].into()
     }
@@ -140,7 +152,7 @@ impl<F: Float> Gen for PinkNoise<F> {
     fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
         [].into()
     }
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {}
+    fn param_apply(&mut self, _ctx: AudioCtx, _index: usize, _value: ParameterValue) {}
 }
 
 /// Brown noise (also known as red noise)
@@ -164,6 +176,12 @@ impl<F: Float> BrownNoise<F> {
     }
 }
 
+impl<F: Float> Default for BrownNoise<F> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<F: Float> Gen for BrownNoise<F> {
     type Sample = F;
     type Inputs = U0;
@@ -171,9 +189,9 @@ impl<F: Float> Gen for BrownNoise<F> {
     type Parameters = U0;
     fn process(
         &mut self,
-        ctx: AudioCtx,
-        flags: &mut GenFlags,
-        input: Frame<Self::Sample, Self::Inputs>,
+        _ctx: AudioCtx,
+        _flags: &mut GenFlags,
+        _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         let white = F::new(self.rng.f32() * 2.0 - 1.0);
         // Adjust the coefficient to control the step size
@@ -187,7 +205,7 @@ impl<F: Float> Gen for BrownNoise<F> {
         [].into()
     }
 
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {}
+    fn param_apply(&mut self, _ctx: AudioCtx, _index: usize, _value: ParameterValue) {}
 }
 /// Random numbers with linear interpolation with new values at some frequency. Freq is sampled at control rate only.
 pub struct RandomLin<F: Copy = f32> {
@@ -224,6 +242,12 @@ impl<F: Float> RandomLin<F> {
     }
 }
 
+impl<F: Float> Default for RandomLin<F> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<F: Float> Gen for RandomLin<F> {
     type Sample = F;
     type Inputs = U0;
@@ -234,7 +258,12 @@ impl<F: Float> Gen for RandomLin<F> {
         self.freq_to_phase_inc = F::ONE / F::from(ctx.sample_rate).unwrap();
         self.new_value();
     }
-    fn process(&mut self, ctx: AudioCtx, _flags: &mut GenFlags, _input: Frame<Self::Sample, Self::Inputs>) -> Frame<Self::Sample, Self::Outputs> {
+    fn process(
+        &mut self,
+        _ctx: AudioCtx,
+        _flags: &mut GenFlags,
+        _input: Frame<Self::Sample, Self::Inputs>,
+    ) -> Frame<Self::Sample, Self::Outputs> {
         let out = self.current_value + self.phase * self.current_change_width;
         self.phase += self.phase_step;
 
@@ -251,7 +280,7 @@ impl<F: Float> Gen for RandomLin<F> {
         ["freq"].into()
     }
 
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, _ctx: AudioCtx, index: usize, value: ParameterValue) {
         match index {
             0 => {
                 self.phase_step = F::new(value.float().unwrap()) * self.freq_to_phase_inc;
