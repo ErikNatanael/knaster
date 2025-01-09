@@ -68,16 +68,10 @@ fn main() -> Result<()> {
     }
 
     for i in 0..300 {
-        let mut env = EnvAr::new();
-        env.param(g.ctx(), "attack_time", 0.01)?;
-        env.param(g.ctx(), "release_time", 0.1)?;
+        let mut env = EnvAr::new(0.01, 0.1);
         let env = g.push(env);
-        let sine = g.push({
-            let mut s = SinWt::new().wr_mul(rng.gen_range(0.01..0.015));
-            let freq = rng.gen_range(3000.0..10000.0);
-            s.param(g.ctx(), "freq", freq)?;
-            s
-        });
+        let sine =
+            g.push(SinWt::new(rng.gen_range(3000.0..10000.0)).wr_mul(rng.gen_range(0.01..0.015)));
         let mul = g.push(MathGen::<_, U1, Mul>::new());
         let pan = g.push(PanMonoToStereo::new(rng.gen_range(-1.0..1.0)));
         g.connect_nodes(&env, &mul, 0, 0, false)?;

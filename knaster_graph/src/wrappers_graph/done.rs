@@ -1,7 +1,7 @@
 use knaster_core::numeric_array::NumericArray;
 use knaster_core::typenum::{Add1, Unsigned, B1};
 use knaster_core::{
-    AudioCtx, Block, BlockAudioCtx, BlockRead, Done, Frame, Gen, GenFlags, PFloat, ParameterRange,
+    AudioCtx, Block, BlockAudioCtx, BlockRead, Done, Frame, Gen, GenFlags, ParameterRange,
     ParameterValue, Size,
 };
 use std::ops::Add;
@@ -10,9 +10,9 @@ use std::sync::Arc;
 
 /// Wrapper that can free a node once it has been marked as done. Unlike most wrappers_graph, this one
 /// can only be added by the [`Graph`] when pushing a node using the corresponding function.
-/// 
+///
 /// Adds a parameter, which is always the last parameter and always called "done_action", for
-/// changing what action is taken when the internal node is marked as done. See [`Done`] for more 
+/// changing what action is taken when the internal node is marked as done. See [`Done`] for more
 /// information.
 pub struct WrDone<T> {
     pub(crate) gen: T,
