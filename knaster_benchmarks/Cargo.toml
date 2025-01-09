@@ -1,0 +1,17 @@
+[package]
+name = "knaster_benchmarks"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+knaster_graph = { path = "../knaster_graph"}
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "wrappers_vs_nodes"
+harness = false
+#[[bench]]
+#name = "auto_vectorisation"
+#harness = false
