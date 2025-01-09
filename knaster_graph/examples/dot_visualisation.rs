@@ -1,12 +1,16 @@
 use std::fs;
+use std::io::Write;
 use std::process::{Command, Stdio};
 use std::time::Duration;
-use std::io::Write;
 
 use anyhow::Result;
 use knaster_core::{
-    osc::SinNumeric, typenum::{U0, U2}, wrappers_core::{GenWrapperCoreExt, WrSmoothParams}, ParameterSmoothing, Gen,
+    osc::SinNumeric,
+    typenum::{U0, U2},
+    wrappers_core::{GenWrapperCoreExt, WrSmoothParams},
+    Gen, ParameterSmoothing,
 };
+use knaster_graph::connectable::Sink;
 use knaster_graph::{
     audio_backend::{
         cpal::{CpalBackend, CpalBackendOptions},
@@ -40,17 +44,21 @@ fn main() -> Result<()> {
     let osc3 = graph.push(SinNumeric::new().wr_mul(0.2));
     osc3.set(("freq", 200. * 4.))?;
     // connect them together
-    graph.connect(osc1.to(graph.output()))?;
+    graph.connect(&osc1, 0, 0, Sink::Graph)?;
     graph.connect_node_to_output(&osc1, 0, 1, false)?;
-    graph.connect(osc3.add_to(graph.output()))?;
-    graph.connect(osc2.add_to(graph.output()))?;
+    graph.connect_add(&osc3, 0, 0, Sink::Graph)?;
+    graph.connect_add(&osc2, 0, 0, Sink::Graph)?;
     graph.commit_changes()?;
 
     let inspection = graph.inspection();
     let dot_string = inspection.to_dot_string();
     println!("{}", dot_string);
     fs::write("graph.dot", &dot_string)?;
-    let mut dot_command = Command::new("dot").arg("-Tsvg").stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()?;
+    let mut dot_command = Command::new("dot")
+        .arg("-Tsvg")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()?;
     let mut stdin = dot_command.stdin.take().expect("Failed to open stdin");
     std::thread::spawn(move || {
         stdin.write_all(dot_string.as_bytes()).unwrap();
@@ -58,7 +66,6 @@ fn main() -> Result<()> {
     let output = dot_command.wait_with_output().unwrap();
     fs::write("graph.svg", output.stdout).unwrap();
     open::that("graph.svg").unwrap();
-
 
     let mut freq = 200.;
     for _ in 0..5 {

@@ -1,31 +1,23 @@
-use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use anyhow::Result;
-use knaster_core::envelopes::{EnvAr, EnvAsr};
+use knaster_core::envelopes::EnvAr;
 use knaster_core::math::{MathGen, Mul};
-use knaster_core::noise::{BrownNoise, PinkNoise, RandomLin, WhiteNoise};
-use knaster_core::onepole::{OnePoleHpf, OnePoleLpf};
 use knaster_core::osc::SinWt;
 use knaster_core::pan::Pan2;
 use knaster_core::{
-    osc::SinNumeric,
     typenum::{U0, U1, U2},
-    wrappers_core::{GenWrapperCoreExt, WrSmoothParams},
-    Gen, ParameterSmoothing,
+    wrappers_core::GenWrapperCoreExt,
 };
-use knaster_core::{Done, PFloat, Seconds};
 use knaster_graph::{
     audio_backend::{
         cpal::{CpalBackend, CpalBackendOptions},
         AudioBackend,
     },
-    connectable::Connectable,
     graph::GraphSettings,
     handle::HandleTrait,
     runner::Runner,
 };
-use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};
 
 fn main() -> Result<()> {
@@ -45,7 +37,7 @@ fn main() -> Result<()> {
     let mut rng = thread_rng();
 
     for i in 0..300 {
-        let mut env = EnvAr::new(0.01, 0.1);
+        let env = EnvAr::new(0.01, 0.1);
         let env = g.push(env);
         let sine =
             g.push(SinWt::new(rng.gen_range(3000.0..10000.0)).wr_mul(rng.gen_range(0.01..0.015)));
@@ -59,7 +51,7 @@ fn main() -> Result<()> {
         envs.push(env);
     }
     for i in 0..300 {
-        let mut env = EnvAr::new(0.01, 0.1);
+        let env = EnvAr::new(0.01, 0.1);
         let env = g.push(env);
         let sine = g.push(SinWt::new(rng.gen_range(6000.0..6500.0)).wr_mul(0.01));
         let mul = g.push(MathGen::<_, U1, Mul>::new());
