@@ -1,0 +1,9 @@
+[package]
+name = "knaster_airwindows"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+fastrand = "2.3.0"
+knaster_core = { path = "../knaster_core/" }
+numeric_literals = "0.2.0"
