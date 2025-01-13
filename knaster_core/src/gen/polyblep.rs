@@ -118,6 +118,9 @@ impl<F: Float> Gen for PolyBlep<F> {
     type Parameters = U3;
     fn init(&mut self, ctx: &AudioCtx) {
         self.set_sample_rate(F::from(ctx.sample_rate()).unwrap());
+        if self.freq_in_seconds_per_sample == F::ZERO && self.freq_in_hz != F::ZERO {
+            self.set_frequency(self.freq_in_hz);
+        }
     }
 
     fn process(
@@ -130,7 +133,15 @@ impl<F: Float> Gen for PolyBlep<F> {
     }
 
     fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
-        todo!()
+        [
+            ParameterRange::nyquist(),
+            ParameterRange::one(),
+            ParameterRange::Integer(0.into(), 13.into()),
+        ]
+        .into()
+    }
+    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+        ["freq", "pulse_width", "waveform"].into()
     }
 
     fn param_apply(&mut self, _ctx: AudioCtx, index: usize, value: ParameterValue) {
@@ -150,11 +161,11 @@ impl<F: Float> PolyBlep<F> {
     pub const FREQ: usize = 0;
     pub const PULSE_WIDTH: usize = 1;
     pub const WAVEFORM: usize = 2;
-    pub fn new(waveform: Waveform) -> Self {
+    pub fn new(waveform: Waveform, freq: F) -> Self {
         Self {
             waveform,
             sample_rate: F::ZERO,
-            freq_in_hz: F::ZERO,
+            freq_in_hz: freq,
             freq_in_seconds_per_sample: F::ZERO,
             pulse_width: F::new(0.5),
             t: F::ZERO,
