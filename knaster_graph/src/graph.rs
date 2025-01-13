@@ -65,35 +65,21 @@ impl NodeId {
     }
 }
 
-/// Pass to `Graph::new` to set the options the Graph is created with in an ergonomic and clear way.
+/// Some options for
 #[derive(Clone, Debug)]
-pub struct GraphSettings {
+pub struct GraphOptions {
     /// The name of the Graph
     pub name: String,
-    /// The block size this Graph uses for processing.
-    pub block_size: usize,
-    /// The sample rate this Graph uses for processing.
-    pub sample_rate: u32,
     /// The number of messages that can be sent through any of the ring buffers.
     /// Ring buffers are used pass information back and forth between the audio
     /// thread (GraphGen) and the Graph.
     pub ring_buffer_size: usize,
 }
 
-impl GraphSettings {
-    /// Set the oversampling to a new value
-    pub fn block_size(mut self, block_size: usize) -> Self {
-        self.block_size = block_size;
-        self
-    }
-}
-
-impl Default for GraphSettings {
+impl Default for GraphOptions {
     fn default() -> Self {
-        GraphSettings {
+        GraphOptions {
             name: String::new(),
-            block_size: 64,
-            sample_rate: 48000,
             ring_buffer_size: 1000,
         }
     }
@@ -175,15 +161,15 @@ pub struct Graph<F: Float> {
 
 impl<F: Float> Graph<F> {
     /// Create a new empty [`Graph`] with a unique atomically generated [`GraphId`]
-    pub fn new<Inputs: Size, Outputs: Size>(
-        options: GraphSettings,
+    pub(crate) fn new<Inputs: Size, Outputs: Size>(
+        options: GraphOptions,
         node_id: NodeId,
         shared_frame_clock: SharedFrameClock,
+        block_size: usize,
+        sample_rate: u32,
     ) -> (Self, Node<F>) {
-        let GraphSettings {
+        let GraphOptions {
             name,
-            block_size,
-            sample_rate,
             ring_buffer_size,
         } = options;
         const DEFAULT_NUM_NODES: usize = 4;
@@ -308,13 +294,18 @@ impl<F: Float> Graph<F> {
         (graph, graph_gen)
     }
 
+    pub fn shared_frame_clock(&self) -> SharedFrameClock {
+        self.graph_gen_communicator.shared_frame_clock.clone()
+    }
+
     /// Push something implementing [`Gen`] to the graph.
     pub fn push<T: Gen<Sample = F> + 'static>(&mut self, gen: T) -> Handle<T> {
         let name = std::any::type_name::<T>();
         let name = shorten_name(name);
         let node = Node::new(name.to_owned(), gen);
         let node_key = self.push_node(node);
-        let handle = Handle::new(RawHandle::new(
+
+        Handle::new(RawHandle::new(
             NodeId {
                 key: node_key,
                 graph: self.id,
@@ -323,8 +314,7 @@ impl<F: Float> Graph<F> {
                 .scheduling_event_producer
                 .clone(),
             self.graph_gen_communicator.shared_frame_clock.clone(),
-        ));
-        handle
+        ))
     }
     /// Push something implementing [`Gen`] to the graph, adding the [`WrDone`] wrapper. This
     /// enables the node to free itself if it marks itself as done or for removal using [`GenFlags`].
@@ -811,12 +801,14 @@ impl<F: Float> Graph<F> {
         Ok(())
     }
 
-    pub fn subgraph<Inputs: Size, Outputs: Size>(&mut self, options: GraphSettings) -> Self {
+    pub fn subgraph<Inputs: Size, Outputs: Size>(&mut self, options: GraphOptions) -> Self {
         let temporary_invalid_node_id = NodeId::top_level_graph_node_id();
         let (mut subgraph, graph_gen) = Self::new::<Inputs, Outputs>(
             options,
             temporary_invalid_node_id,
             self.graph_gen_communicator.shared_frame_clock.clone(),
+            self.block_size,
+            self.sample_rate,
         );
         // TODO: Store node key in graph
         let node_key = self.push_node(graph_gen);
@@ -1639,6 +1631,16 @@ pub enum FreeError {
 
 impl<F: Float> From<&Graph<F>> for NodeId {
     fn from(value: &Graph<F>) -> Self {
+        value.self_node_id
+    }
+}
+// impl<F: Float> From<&Graph<F>> for Source {
+//     fn from(value: &Graph<F>) -> Self {
+//         Source::Node(value.self_node_id)
+//     }
+// }
+impl<F: Float> From<&mut Graph<F>> for NodeId {
+    fn from(value: &mut Graph<F>) -> Self {
         value.self_node_id
     }
 }

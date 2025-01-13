@@ -49,12 +49,13 @@ impl SharedFrameClock {
         Self(Arc::new(AtomicU64::new(0)))
     }
     /// Only the Runner should set the time using this function
-    pub(crate) fn store_new_time(&mut self, new_time: u64) {
-        self.0
-            .store(new_time, core::sync::atomic::Ordering::Relaxed);
+    pub(crate) fn store_new_time(&mut self, new_time: Seconds) {
+        let as_u64 = unsafe { crate::core::mem::transmute::<Seconds, u64>(new_time) };
+        self.0.store(as_u64, core::sync::atomic::Ordering::Relaxed);
     }
-    pub fn get(&self) -> u64 {
-        self.0.load(core::sync::atomic::Ordering::Relaxed)
+    pub fn get(&self) -> Seconds {
+        let as_u64 = self.0.load(core::sync::atomic::Ordering::Relaxed);
+        unsafe { crate::core::mem::transmute::<u64, Seconds>(as_u64) }
     }
 }
 

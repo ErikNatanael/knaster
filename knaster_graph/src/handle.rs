@@ -8,7 +8,7 @@ use crate::{
     SharedFrameClock,
 };
 use knaster_core::{
-    typenum::Unsigned, Gen, Param, ParameterError, ParameterSmoothing, ParameterValue,
+    typenum::Unsigned, Gen, Param, ParameterError, ParameterSmoothing, ParameterValue, Seconds,
 };
 
 #[cfg(not(feature = "std"))]
@@ -74,7 +74,7 @@ impl RawHandle {
     pub fn node_id(&self) -> NodeId {
         self.node
     }
-    pub fn current_frame_time(&self) -> u64 {
+    pub fn current_frame_time(&self) -> Seconds {
         self.shared_frame_clock.get()
     }
 }
@@ -130,7 +130,7 @@ pub trait HandleTrait: Sized {
     fn inputs(&self) -> usize;
     fn outputs(&self) -> usize;
     /// Returns time of the Runner connected to this
-    fn current_frame_time(&self) -> u64;
+    fn current_frame_time(&self) -> Seconds;
     /// True if it is still possible to send values. This does not necessarily mean that the node
     /// exists.
     ///
@@ -212,7 +212,7 @@ impl<T: Gen> HandleTrait for Handle<T> {
         self.raw_handle.is_alive()
     }
 
-    fn current_frame_time(&self) -> u64 {
+    fn current_frame_time(&self) -> Seconds {
         self.raw_handle.current_frame_time()
     }
 }
@@ -288,7 +288,7 @@ impl HandleTrait for AnyHandle {
         self.raw_handle.is_alive()
     }
 
-    fn current_frame_time(&self) -> u64 {
+    fn current_frame_time(&self) -> Seconds {
         self.raw_handle.current_frame_time()
     }
 }

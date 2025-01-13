@@ -1,5 +1,6 @@
 use crate::core::{
     f32, f64,
+    iter::Sum,
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign},
 };
 
@@ -19,6 +20,7 @@ pub trait Float:
     + Copy
     + Rem
     + RemAssign
+    + Sum
     + core::fmt::Debug
     + 'static
 {

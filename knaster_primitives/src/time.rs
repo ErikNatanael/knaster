@@ -18,7 +18,8 @@ pub const SUBBEAT_TESIMALS_PER_BEAT: u32 = 1_476_034_560;
 ///
 /// Can represent up to u32::MAX seconds, approx. 136 years, with very high accuracy.
 ///
-/// "tesimal" is a made up word to refer to a very short amount of time.
+/// "tesimal" is a made up word to refer to a very short amount of time, a play on "infinitesimal",
+/// but not quite as short.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde_derive", derive(serde::Serialize, serde::Deserialize))]
 pub struct Seconds {
