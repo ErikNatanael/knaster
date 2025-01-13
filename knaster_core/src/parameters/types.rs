@@ -1,3 +1,5 @@
+use knaster_primitives::Float;
+
 use crate::{PInteger, PIntegerConvertible, Rate};
 
 use super::{PFloat, Trigger};
@@ -42,6 +44,12 @@ impl ParameterValue {
     pub fn float(self) -> Option<f64> {
         match self {
             ParameterValue::Float(value) => Some(value),
+            _ => None,
+        }
+    }
+    pub fn f<F: Float>(self) -> Option<F> {
+        match self {
+            ParameterValue::Float(value) => Some(F::new(value)),
             _ => None,
         }
     }
