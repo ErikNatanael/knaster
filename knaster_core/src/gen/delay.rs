@@ -267,7 +267,7 @@ impl<F: Float> AllpassFeedbackDelay<F> {
         self.allpass_delay.clear();
     }
     // fn calculate_values(&mut self) {
-    //     self.feedback = (0.001 as Sample).powf(self.delay_time / self.decay_time.abs())
+    //     self.feedback = (0.001 as F).powf(self.delay_time / self.decay_time.abs())
     //         * self.decay_time.signum();
     //     let delay_samples = self.delay_time * self.sample_rate;
     //     self.allpass_delay.set_num_frames(delay_samples as f64);
@@ -314,6 +314,153 @@ impl<F: Float> Gen for AllpassFeedbackDelay<F> {
                 self.feedback = F::new(value.float().unwrap());
             }
             _ => (),
+        }
+    }
+}
+/// A sample delay with a static number of samples of delay
+///
+/// # Examples
+/// ```
+/// # use knyst::prelude::*;
+/// # use knaster_core::gen::delay::StaticSampleDelay;
+/// let mut delay = StaticSampleDelay::<f64>::new(4);
+/// assert_eq!(delay.read(), 0.0);
+/// delay.write_and_advance(1.0);
+/// assert_eq!(delay.read(), 0.0);
+/// delay.write_and_advance(2.0);
+/// assert_eq!(delay.read(), 0.0);
+/// delay.write_and_advance(3.0);
+/// assert_eq!(delay.read(), 0.0);
+/// delay.write_and_advance(4.0);
+/// assert_eq!(delay.read(), 1.0);
+/// delay.write_and_advance(0.0);
+/// assert_eq!(delay.read(), 2.0);
+/// delay.write_and_advance(0.0);
+/// assert_eq!(delay.read(), 3.0);
+/// delay.write_and_advance(0.0);
+/// assert_eq!(delay.read(), 4.0);
+/// delay.write_and_advance(0.0);
+/// assert_eq!(delay.read(), 0.0);
+/// delay.write_and_advance(0.0);
+/// delay.write_block_and_advance(&[1.0, 2.0]);
+/// let mut block = [0.0; 2];
+/// delay.read_block(&mut block);
+/// delay.write_block_and_advance(&[3.0, 4.0]);
+/// delay.read_block(&mut block);
+/// assert_eq!(block, [1.0, 2.0]);
+/// delay.write_block_and_advance(&[5.0, 6.0]);
+/// delay.read_block(&mut block);
+/// assert_eq!(block, [3.0, 4.0]);
+/// delay.write_block_and_advance(&[0.0, 0.0]);
+/// delay.read_block(&mut block);
+/// assert_eq!(block, [5.0, 6.0]);
+/// ```
+pub struct StaticSampleDelay<F> {
+    buffer: Vec<F>,
+    /// The current read/write position in the buffer. Public because in some situations it is more efficient to have access to it directly.
+    pub position: usize,
+    delay_length: usize,
+}
+impl<F: Float> StaticSampleDelay<F> {
+    #[must_use]
+    /// Create a new Self. delay_length_in_samples must be more than 0
+    ///
+    /// # Panics
+    /// If delay_length_in_samples is 0
+    pub fn new(delay_length_in_samples: usize) -> Self {
+        assert!(delay_length_in_samples != 0);
+        Self {
+            buffer: vec![F::ZERO; delay_length_in_samples],
+            position: 0,
+            delay_length: delay_length_in_samples,
+        }
+    }
+
+    /// Set a new delay length for the delay. Real time safe. If the given length is longer than the max delay length it will be set to the max delay length.
+    #[inline]
+    pub fn set_delay_length(&mut self, delay_length_in_samples: usize) {
+        self.delay_length = delay_length_in_samples.min(self.buffer.len());
+    }
+    /// Set a new delay length for the delay as a fraction of the entire delay length. Real time safe.
+    pub fn set_delay_length_fraction(&mut self, fraction: F) {
+        self.delay_length = (F::from(self.buffer.len()).expect("delay length should fit in Float")
+            * fraction)
+            .to_usize()
+            .unwrap();
+    }
+
+    /// Read a whole block at a time. Only use this if the delay time is longer than 1 block.
+    #[inline]
+    pub fn read_block(&mut self, output: &mut [F]) {
+        let block_size = output.len();
+        assert!(self.buffer.len() >= block_size);
+        let read_end = self.position + block_size;
+        if read_end <= self.buffer.len() {
+            output.copy_from_slice(&self.buffer[self.position..read_end]);
+        } else {
+            // block wraps around
+            let read_end = read_end % self.delay_length;
+            output[0..(block_size - read_end)].copy_from_slice(&self.buffer[self.position..]);
+            output[(block_size - read_end)..].copy_from_slice(&self.buffer[0..read_end]);
+        }
+    }
+    /// Write a whole block at a time. Only use this if the delay time is longer than 1 block. Advances the frame pointer.
+    #[inline]
+    pub fn write_block_and_advance(&mut self, input: &[F]) {
+        let block_size = input.len();
+        assert!(self.buffer.len() >= block_size);
+        let write_end = self.position + block_size;
+        if write_end <= self.buffer.len() {
+            self.buffer[self.position..write_end].copy_from_slice(&input);
+        } else {
+            // block wraps around
+            let write_end = write_end % self.delay_length;
+            self.buffer[self.position..].copy_from_slice(&input[0..block_size - write_end]);
+            self.buffer[0..write_end].copy_from_slice(&input[block_size - write_end..]);
+        }
+        self.position = (self.position + block_size) % self.buffer.len();
+    }
+    /// Read a sample from the buffer. Does not advance the frame pointer. Read first, then write.
+    #[inline]
+    pub fn read(&mut self) -> F {
+        self.buffer[self.position]
+    }
+    /// Read a sample from the buffer at a given position. Does not advance the frame pointer. Read first, then write.
+    pub fn read_at(&mut self, index: usize) -> F {
+        self.buffer[index]
+    }
+    /// Read a sample from the buffer at a given position with linear interpolation. Does not advance the frame pointer. Read first, then write.
+    pub fn read_at_lin(&mut self, index: F) -> F {
+        let mut low = index.floor().to_usize().unwrap();
+        let mut high = index.ceil().to_usize().unwrap();
+        while low >= self.buffer.len() {
+            low -= self.buffer.len();
+            high -= self.buffer.len();
+        }
+        if high >= self.buffer.len() {
+            high -= self.buffer.len();
+        }
+        let low_sample = self.buffer[low];
+        let high_sample = self.buffer[high];
+        low_sample + (high_sample - low_sample) * index.fract()
+    }
+    /// Write a sample to the buffer. Advances the frame pointer.
+    #[inline]
+    pub fn write_and_advance(&mut self, input: F) {
+        self.buffer[self.position] = input;
+        self.position = (self.position + 1) % self.delay_length;
+    }
+    /// Process one block of the delay. Will choose block based processing at runtime if the delay time is larger than the block size.
+    #[inline]
+    pub fn process(&mut self, input: &[F], output: &mut [F], block_size: usize) {
+        if self.buffer.len() > block_size {
+            self.read_block(output);
+            self.write_block_and_advance(input);
+        } else {
+            for (i, o) in input.iter().zip(output.iter_mut()) {
+                *o = self.read();
+                self.write_and_advance(*i);
+            }
         }
     }
 }
