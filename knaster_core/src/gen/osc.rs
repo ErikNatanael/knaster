@@ -329,16 +329,11 @@ pub struct SinNumeric<F> {
     phase_offset: F,
     phase_increment: F,
 }
-impl<F: Float> Default for SinNumeric<F> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 impl<F: Float> SinNumeric<F> {
-    pub fn new() -> Self {
+    pub fn new(freq: F) -> Self {
         Self {
-            phase: F::ZERO,
+            phase: freq,
             phase_offset: F::ZERO,
             phase_increment: F::ZERO,
         }
@@ -356,7 +351,14 @@ impl<F: Float> Gen for SinNumeric<F> {
     type Inputs = U0;
     type Outputs = U1;
 
-    fn init(&mut self, _ctx: &AudioCtx) {}
+    fn init(&mut self, ctx: &AudioCtx) {
+        // self.phase holds the freq set in the constructor, but only use it if the freq hasn't
+        // been set any other way
+        if self.phase_increment == F::ZERO {
+            self.freq(self.phase, F::from(ctx.sample_rate).unwrap());
+        }
+        self.phase = F::ZERO;
+    }
 
     fn process(
         &mut self,
