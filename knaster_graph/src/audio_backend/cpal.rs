@@ -66,6 +66,9 @@ impl CpalBackend {
     pub fn num_outputs(&self) -> usize {
         self.config.channels() as usize
     }
+    pub fn leak(self) {
+        Box::leak(Box::new(self));
+    }
 }
 
 impl AudioBackend for CpalBackend {
@@ -95,12 +98,15 @@ impl AudioBackend for CpalBackend {
             cpal::SampleFormat::F64 => run::<f64, F>(&self.device, &config.into(), runner),
             _ => todo!(),
         }?;
+        stream.play()?;
         self.stream = Some(stream);
         Ok(())
     }
 
     fn stop(&mut self) -> Result<(), AudioBackendError> {
-        todo!()
+        // Drop the stream to stop it
+        self.stream.take();
+        Ok(())
     }
 
     fn sample_rate(&self) -> u32 {
