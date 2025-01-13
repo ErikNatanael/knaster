@@ -13,12 +13,13 @@ use knaster_core::{
 };
 use knaster_core::{Done, Seconds};
 use knaster_graph::connectable::Sink;
+use knaster_graph::runner::RunnerOptions;
 use knaster_graph::{
     audio_backend::{
         cpal::{CpalBackend, CpalBackendOptions},
         AudioBackend,
     },
-    graph::GraphSettings,
+    graph::GraphOptions,
     handle::HandleTrait,
     runner::Runner,
 };
@@ -28,8 +29,7 @@ fn main() -> Result<()> {
     let mut backend = CpalBackend::new(CpalBackendOptions::default())?;
 
     // Create a graph
-    let (mut top_level_graph, runner) = Runner::<f32>::new::<U0, U2>(GraphSettings {
-        name: "TopLevelGraph".to_owned(),
+    let (mut top_level_graph, runner) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
         block_size: backend.block_size().unwrap_or(64),
         sample_rate: backend.sample_rate(),
         ring_buffer_size: 200,
@@ -37,7 +37,7 @@ fn main() -> Result<()> {
     backend.start_processing(runner)?;
     // push some nodes
     loop {
-        let mut graph = top_level_graph.subgraph::<U0, U1>(GraphSettings::default());
+        let mut graph = top_level_graph.subgraph::<U0, U1>(GraphOptions::default());
         top_level_graph.connect_node_to_output(&graph, 0, 0, true)?;
         top_level_graph.connect_node_to_output(&graph, 0, 1, true)?;
 
@@ -45,14 +45,14 @@ fn main() -> Result<()> {
         let mut rng = thread_rng();
         let freq = rng.gen_range(200.0..800.);
         dbg!(freq);
-        let mut osc1 = WrSmoothParams::new(SinNumeric::new());
+        let mut osc1 = WrSmoothParams::new(SinNumeric::new(freq));
         osc1.param(graph.ctx(), "freq", freq)?;
         let osc1 = graph.push(osc1.wr_mul(0.2));
         osc1.set(("freq", freq))?;
-        let mut osc2 = SinNumeric::new();
+        let mut osc2 = SinNumeric::new(freq * 1.5);
         osc2.param(graph.ctx(), "freq", freq * 1.5)?;
         let osc2 = graph.push(osc2.wr_mul(0.2));
-        let osc3 = graph.push(SinNumeric::new().wr_mul(0.2));
+        let osc3 = graph.push(SinNumeric::new(freq * 4.).wr_mul(0.2));
         osc3.set(("freq", freq * 4.))?;
         let env = graph.push_with_done_action(EnvAsr::new(), Done::FreeParent);
         env.set(("attack_time", 0.2))?;
@@ -62,7 +62,7 @@ fn main() -> Result<()> {
             .trig()
             .time(Seconds::from_seconds_f64(0.5));
         let mult = graph.push(MathGen::<_, U1, Mul>::new());
-        let modulator = graph.push(SinNumeric::new().wr_powi(2).wr_mul(5000.).wr_add(freq));
+        let modulator = graph.push(SinNumeric::new(0.5).wr_powi(2).wr_mul(5000.).wr_add(freq));
         modulator.set(("freq", 0.5))?;
         let random_lin_modulator =
             graph.push(RandomLin::new().wr_powi(2).wr_mul(5000.).wr_add(100.));

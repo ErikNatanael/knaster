@@ -1,6 +1,7 @@
+use crate::runner::RunnerOptions;
 use crate::tests::utils::TestNumGen;
 use crate::{
-    graph::GraphSettings, handle::HandleTrait, runner::Runner, tests::utils::TestInPlusParamGen,
+    graph::GraphOptions, handle::HandleTrait, runner::Runner, tests::utils::TestInPlusParamGen,
 };
 use knaster_core::envelopes::EnvAsr;
 use knaster_core::math::{Add, MathGen, Mul};
@@ -10,7 +11,7 @@ use knaster_core::{typenum::U3, Block, Done, Trigger};
 #[test]
 fn graph_inputs_to_outputs() {
     let block_size = 16;
-    let (mut graph, mut runner) = Runner::new::<U3, U3>(GraphSettings {
+    let (mut graph, mut runner) = Runner::new::<U3, U3>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -38,7 +39,7 @@ fn graph_inputs_to_outputs() {
 #[test]
 fn graph_inputs_to_nodes_to_outputs() {
     let block_size = 16;
-    let (mut graph, mut runner) = Runner::new::<U3, U3>(GraphSettings {
+    let (mut graph, mut runner) = Runner::new::<U3, U3>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -73,7 +74,7 @@ fn graph_inputs_to_nodes_to_outputs() {
 #[test]
 fn multichannel_nodes() {
     let block_size = 16;
-    let (mut graph, mut runner) = Runner::new::<U3, U2>(GraphSettings {
+    let (mut graph, mut runner) = Runner::new::<U3, U2>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -126,7 +127,7 @@ fn multichannel_nodes() {
 #[test]
 fn free_node_when_done() {
     let block_size = 16;
-    let (mut graph, mut runner) = Runner::<f32>::new::<U0, U2>(GraphSettings {
+    let (mut graph, mut runner) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
