@@ -1,3 +1,4 @@
+use alloc::string::ToString;
 use knaster_core::Seconds;
 use knaster_core::{typenum::NonZero, AudioCtx, BlockAudioCtx, Float, GenFlags, Size};
 

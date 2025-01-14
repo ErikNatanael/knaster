@@ -33,6 +33,7 @@
 
 use crate::core::sync::Arc;
 use crate::graph::OwnedRawBuffer;
+use alloc::vec::Vec;
 use knaster_core::Float;
 
 struct AllocatedBlock {
@@ -109,7 +110,7 @@ impl<F: Float> BufferAllocator<F> {
         let len = num_channels * block_size;
         // 1. Try to use an existing allocated block in order of return. If only
         // part of a block is needed, split it.
-        if self.return_order.len() > 0 {
+        if !self.return_order.is_empty() {
             for i in (self.return_order.len() - 1)..=0 {
                 let index = self.return_order[i];
                 if self.allocated_blocks[index].outstanding_borrows == 0

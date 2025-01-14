@@ -8,8 +8,8 @@ pub mod pan;
 pub mod polyblep;
 pub mod svf;
 
-use core::ops::Deref;
-
+use crate::core::eprintln;
+use crate::core::ops::Deref;
 use crate::numeric_array::NumericArray;
 use crate::{Param, ParameterError, ParameterRange, ParameterType, ParameterValue};
 use knaster_primitives::{typenum::*, Block, BlockRead, Float, Frame, Size};

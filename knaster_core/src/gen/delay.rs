@@ -1,3 +1,5 @@
+use crate::core::{vec, vec::Vec};
+
 use crate::numeric_array::NumericArray;
 use crate::typenum::{U1, U2};
 use crate::{AudioCtx, Gen, GenFlags, PFloat, ParameterRange, ParameterValue};

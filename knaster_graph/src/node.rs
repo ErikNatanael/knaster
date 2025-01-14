@@ -1,10 +1,12 @@
 use crate::core::sync::atomic::AtomicBool;
 use crate::core::sync::Arc;
+use crate::core::{eprintln, vec, vec::Vec};
+use alloc::{boxed::Box, string::String, string::ToString};
 
 use knaster_core::{AudioCtx, Float};
 
-use crate::{buffer_allocator::BufferAllocator, dyngen::DynGen, task::Task};
 use crate::graph::GraphId;
+use crate::{buffer_allocator::BufferAllocator, dyngen::DynGen, task::Task};
 
 /// `Node` wraps a [`DynGen`] in a graph. It is used to hold a pointer to the
 /// Gen allocation and some metadata about it.
@@ -44,7 +46,11 @@ pub(crate) struct Node<F> {
 }
 impl<F: Float> Node<F> {
     pub fn new<T: DynGen<F> + 'static>(name: String, gen: T) -> Self {
-        let parameter_descriptions = gen.param_descriptions().into_iter().map(|s| s.to_string()).collect();
+        let parameter_descriptions = gen
+            .param_descriptions()
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect();
         let inputs = gen.inputs();
         let outputs = gen.outputs();
         let boxed_gen = Box::new(gen);
@@ -113,8 +119,8 @@ pub(crate) enum NodeOutput<F> {
 }
 
 /// # Safety
-/// 
+///
 /// Nodes are only accessed from Graph which maintains the pointers within. Nodes own their DynGen
 /// and an atomic flag is used to make sure nothing else points to the same allocation before it is
 /// dropped. See Graph::node_keys_to_free_when_safe and references to it for implementation info.
-unsafe impl<F> Send for Node<F>  {}
+unsafe impl<F> Send for Node<F> {}

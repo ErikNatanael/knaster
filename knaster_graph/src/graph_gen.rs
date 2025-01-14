@@ -1,6 +1,7 @@
 use crate::{
     core::{
         cell::UnsafeCell,
+        eprintln,
         marker::PhantomData,
         slice,
         sync::atomic::{AtomicBool, Ordering},
@@ -76,7 +77,7 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
     fn process_block<InBlock, OutBlock>(
         &mut self,
         ctx: knaster_core::BlockAudioCtx,
-        flags: &mut GenFlags,
+        _flags: &mut GenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where

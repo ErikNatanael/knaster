@@ -1,3 +1,4 @@
+use alloc::boxed::Box;
 use knaster_core::typenum::U1;
 use knaster_core::{numeric_array::NumericArray, Gen, PFloat, Param, Size};
 

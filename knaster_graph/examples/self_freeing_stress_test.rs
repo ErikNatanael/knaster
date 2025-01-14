@@ -11,12 +11,13 @@ use knaster_core::{
     Done, Trigger,
 };
 use knaster_graph::handle::AnyHandle;
+use knaster_graph::runner::RunnerOptions;
 use knaster_graph::{
     audio_backend::{
         cpal::{CpalBackend, CpalBackendOptions},
         AudioBackend,
     },
-    graph::GraphSettings,
+    graph::GraphOptions,
     handle::HandleTrait,
     runner::Runner,
 };
@@ -25,15 +26,14 @@ fn main() -> Result<()> {
     let mut backend = CpalBackend::new(CpalBackendOptions::default())?;
 
     // Create a graph
-    let (mut top_graph, runner) = Runner::<f32>::new::<U0, U2>(GraphSettings {
-        name: "TopLevelGraph".to_owned(),
+    let (mut top_graph, runner) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
         block_size: backend.block_size().unwrap_or(64),
         sample_rate: backend.sample_rate(),
         ring_buffer_size: 200,
     });
     backend.start_processing(runner)?;
     // let mut nodes = vec![];
-    let mut second_graph = top_graph.subgraph::<U0, U1>(GraphSettings::default());
+    let mut second_graph = top_graph.subgraph::<U0, U1>(GraphOptions::default());
     top_graph.connect_node_to_output(&second_graph, 0, 0, true)?;
     top_graph.connect_node_to_output(&second_graph, 0, 1, true)?;
     top_graph.commit_changes()?;
@@ -48,17 +48,20 @@ fn main() -> Result<()> {
                 asr.set((EnvAsr::<f32>::T_RELEASE, Trigger))?;
             }
             // push some nodes
-            let mut graph = second_graph.subgraph::<U0, U1>(GraphSettings::default());
+            let mut graph = second_graph.subgraph::<U0, U1>(GraphOptions::default());
             second_graph.connect_node_to_output(&graph, 0, 0, true)?;
             second_graph.commit_changes()?;
-            let osc1 = WrSmoothParams::new(SinNumeric::new());
+            let osc1 = WrSmoothParams::new(SinNumeric::new(freq * (i + 1) as f32));
             let osc1 = graph.push(osc1.wr_mul(0.05));
             osc1.set(("freq", freq * (i + 1) as f32))?;
-            let asr = graph.push_with_done_action(EnvAsr::new(), Done::FreeParent);
             let attack_time = (attack_time_phase.sin() * 0.1).abs();
+            let release_time = release_time_phase.sin() * 2. + 2.1;
+            let asr = graph.push_with_done_action(
+                EnvAsr::new(attack_time as f32, release_time as f32),
+                Done::FreeParent,
+            );
             attack_time_phase += 0.001;
             asr.set(("attack_time", attack_time)).unwrap();
-            let release_time = release_time_phase.sin() * 2. + 2.1;
             release_time_phase += 0.00013;
             asr.set(("release_time", release_time)).unwrap();
             asr.set(("t_restart", Trigger)).unwrap();
@@ -99,5 +102,4 @@ fn main() -> Result<()> {
     loop {
         std::thread::sleep(Duration::from_secs_f32(1.));
     }
-    Ok(())
 }

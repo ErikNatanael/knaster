@@ -103,6 +103,7 @@ impl PIntegerConvertible for Waveform {
     }
 }
 
+#[derive(Debug)]
 pub struct PolyBlep<F: Copy = f32> {
     waveform: Waveform,
     sample_rate: F,
@@ -117,7 +118,7 @@ impl<F: Float> Gen for PolyBlep<F> {
     type Outputs = U1;
     type Parameters = U3;
     fn init(&mut self, ctx: &AudioCtx) {
-        self.set_sample_rate(F::from(ctx.sample_rate()).unwrap());
+        self.sample_rate = F::from(ctx.sample_rate()).unwrap();
         if self.freq_in_seconds_per_sample == F::ZERO && self.freq_in_hz != F::ZERO {
             self.set_frequency(self.freq_in_hz);
         }

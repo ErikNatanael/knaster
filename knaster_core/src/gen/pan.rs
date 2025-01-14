@@ -49,6 +49,11 @@ impl<F: Float> Gen for Pan2<F> {
         [crate::ParameterRange::Float(-1., 1.)].into()
     }
 
+    fn param_descriptions(
+    ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+        ["pan"].into()
+    }
+
     fn param_apply(&mut self, _ctx: super::AudioCtx, index: usize, value: crate::ParameterValue) {
         match index {
             0 => self.pan = value.float().unwrap() as f32 * 0.5 + 0.5,

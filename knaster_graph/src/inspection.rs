@@ -3,7 +3,9 @@
 //! Metadata from the structs in this module can be used to visualise and/or
 //! manipulate a graph based on the whole graph structure.
 
+use crate::core::eprintln;
 use crate::graph::{GraphId, NodeKey};
+use alloc::{format, string::String, string::ToString, vec, vec::Vec};
 
 /// The metadata of a Graph
 // TODO: Feedback edges
@@ -119,7 +121,7 @@ impl GraphInspection {
                     source,
                     from_index,
                     to_index,
-                    is_feedback,
+                    is_feedback: _,
                 } = edge;
 
                 let source_name = match source {
@@ -140,12 +142,12 @@ impl GraphInspection {
                 ));
             }
         }
-        for (i, edge) in self.graph_output_edges.iter().enumerate() {
+        for edge in self.graph_output_edges.iter() {
             let EdgeInspection {
                 source,
                 from_index,
                 to_index,
-                is_feedback,
+                is_feedback: _,
             } = edge;
             let source_name = match source {
                 EdgeSource::Node(node_key) => {

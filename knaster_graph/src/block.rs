@@ -93,7 +93,6 @@ impl<'a, F> AggregateBlock<'a, F> {
     /// the size of `block_size` with no other mutable reference to them created
     /// for the lifetime of this `AggregateBlock`. The allocations pointed to
     /// also may not overlap.
-
     pub unsafe fn new(buffers: &'a [*mut F], block_size: usize) -> Self {
         Self {
             buffers,
@@ -101,7 +100,7 @@ impl<'a, F> AggregateBlock<'a, F> {
         }
     }
 }
-impl<'a, F: Float> Block for AggregateBlock<'a, F> {
+impl<F: Float> Block for AggregateBlock<'_, F> {
     type Sample = F;
 
     fn channel_as_slice(&self, channel: usize) -> &[Self::Sample] {
@@ -161,7 +160,7 @@ impl<'a, F> AggregateBlockRead<'a, F> {
         }
     }
 }
-impl<'a, F: Float> BlockRead for AggregateBlockRead<'a, F> {
+impl<F: Float> BlockRead for AggregateBlockRead<'_, F> {
     type Sample = F;
 
     fn channel_as_slice(&self, channel: usize) -> &[Self::Sample] {

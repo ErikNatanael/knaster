@@ -1,19 +1,17 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use knaster_benchmarks::TestNumGen;
-use knaster_graph::graph::GraphSettings;
 use knaster_graph::math::{MathGen, Mul};
-use knaster_graph::runner::Runner;
+use knaster_graph::runner::{Runner, RunnerOptions};
 use knaster_graph::typenum::*;
 use knaster_graph::wrappers_core::GenWrapperCoreExt;
 use knaster_graph::Block;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let block_size = 32;
-    let (mut graph, mut runner) = Runner::<f32>::new::<U0, U1>(GraphSettings {
+    let (mut graph, mut runner) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
-        ..Default::default()
     });
     let g = graph.push(TestNumGen::new(2.0).wr_mul(0.5));
     graph.connect_node_to_output(&g, 0, 0, false).unwrap();
@@ -28,11 +26,10 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             );
         })
     });
-    let (mut graph, mut runner) = Runner::<f32>::new::<U0, U1>(GraphSettings {
+    let (mut graph, mut runner) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
-        ..Default::default()
     });
     let g = graph.push(TestNumGen::new(2.0));
     let v = graph.push(TestNumGen::new(0.5));
@@ -52,11 +49,10 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         })
     });
     // 100 nodes
-    let (mut graph, mut runner) = Runner::<f32>::new::<U0, U1>(GraphSettings {
+    let (mut graph, mut runner) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
-        ..Default::default()
     });
     for _ in 0..100 {
         let g = graph.push(TestNumGen::new(2.0).wr_mul(0.5));
@@ -73,11 +69,10 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             );
         })
     });
-    let (mut graph, mut runner) = Runner::<f32>::new::<U0, U1>(GraphSettings {
+    let (mut graph, mut runner) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
-        ..Default::default()
     });
     for _ in 0..100 {
         let g = graph.push(TestNumGen::new(2.0));

@@ -1,6 +1,8 @@
 #[cfg(feature = "cpal")]
 pub mod cpal;
 
+use alloc::string::String;
+
 use knaster_core::Float;
 
 use crate::runner::Runner;

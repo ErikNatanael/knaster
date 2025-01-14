@@ -1,4 +1,4 @@
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 // ^ enables no_std if the `std` features isn't enabled
 
 //! # Knaster Core
@@ -13,6 +13,8 @@
 //! - `alloc`: Enables alloc in `knaster_primitives` and heap based data structures
 #[cfg(feature = "alloc")]
 extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
 
 // Switches between std and core based on features. This reduces boilerplate when importing.
 mod core {
@@ -83,4 +85,3 @@ impl PIntegerConvertible for Done {
         (PInteger(0), PInteger(2))
     }
 }
-

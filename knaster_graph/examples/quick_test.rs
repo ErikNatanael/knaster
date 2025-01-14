@@ -54,13 +54,13 @@ fn main() -> Result<()> {
         let osc2 = graph.push(osc2.wr_mul(0.2));
         let osc3 = graph.push(SinNumeric::new(freq * 4.).wr_mul(0.2));
         osc3.set(("freq", freq * 4.))?;
-        let env = graph.push_with_done_action(EnvAsr::new(), Done::FreeParent);
+        let env = graph.push_with_done_action(EnvAsr::new(0.2, 0.2), Done::FreeParent);
         env.set(("attack_time", 0.2))?;
         env.set(("release_time", 0.2))?;
         env.set(("t_restart", knaster_graph::Trigger))?;
         env.change("t_release")?
             .trig()
-            .time(Seconds::from_seconds_f64(0.5));
+            .after(Seconds::from_seconds_f64(0.5));
         let mult = graph.push(MathGen::<_, U1, Mul>::new());
         let modulator = graph.push(SinNumeric::new(0.5).wr_powi(2).wr_mul(5000.).wr_add(freq));
         modulator.set(("freq", 0.5))?;

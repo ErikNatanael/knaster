@@ -1,8 +1,7 @@
 use crate::runner::RunnerOptions;
 use crate::tests::utils::TestNumGen;
-use crate::{
-    graph::GraphOptions, handle::HandleTrait, runner::Runner, tests::utils::TestInPlusParamGen,
-};
+use crate::{handle::HandleTrait, runner::Runner, tests::utils::TestInPlusParamGen};
+use alloc::vec;
 use knaster_core::envelopes::EnvAsr;
 use knaster_core::math::{Add, MathGen, Mul};
 use knaster_core::typenum::{U0, U1, U2};
@@ -15,7 +14,6 @@ fn graph_inputs_to_outputs() {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
-        ..Default::default()
     });
 
     // Connect input 1 to 0, 2, to 1
@@ -43,7 +41,6 @@ fn graph_inputs_to_nodes_to_outputs() {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
-        ..Default::default()
     });
 
     // Connect input 1 to 0, 2, to 1
@@ -78,7 +75,6 @@ fn multichannel_nodes() {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
-        ..Default::default()
     });
 
     let v0_0 = graph.push(TestNumGen::new(0.125));
@@ -131,9 +127,8 @@ fn free_node_when_done() {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
-        ..Default::default()
     });
-    let asr = graph.push_with_done_action(EnvAsr::new(), Done::FreeSelf);
+    let asr = graph.push_with_done_action(EnvAsr::new(0.0, 0.0), Done::FreeSelf);
     asr.set(("attack_time", 0.0)).unwrap();
     asr.set(("release_time", 0.0)).unwrap();
     asr.set(("t_restart", Trigger)).unwrap();
@@ -147,7 +142,7 @@ fn free_node_when_done() {
     }
     // Run the code to free old nodes
     graph.commit_changes().unwrap();
-    assert_eq!(graph.inspection().nodes[0].pending_removal, true);
+    assert!(graph.inspection().nodes[0].pending_removal);
     // Apply the new TaskData on the audio thread so that the node can be removed
     unsafe {
         runner.run(&[]);

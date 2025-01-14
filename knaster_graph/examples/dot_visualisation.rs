@@ -11,12 +11,12 @@ use knaster_core::{
     Gen, ParameterSmoothing,
 };
 use knaster_graph::connectable::Sink;
+use knaster_graph::runner::RunnerOptions;
 use knaster_graph::{
     audio_backend::{
         cpal::{CpalBackend, CpalBackendOptions},
         AudioBackend,
     },
-    graph::GraphSettings,
     handle::HandleTrait,
     runner::Runner,
 };
@@ -25,22 +25,21 @@ fn main() -> Result<()> {
     let mut backend = CpalBackend::new(CpalBackendOptions::default())?;
 
     // Create a graph
-    let (mut graph, runner) = Runner::<f32>::new::<U0, U2>(GraphSettings {
-        name: "TopLevelGraph".to_owned(),
+    let (mut graph, runner) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
         block_size: backend.block_size().unwrap_or(64),
         sample_rate: backend.sample_rate(),
         ring_buffer_size: 200,
     });
     backend.start_processing(runner)?;
     // push some nodes
-    let mut osc1 = WrSmoothParams::new(SinNumeric::new());
+    let mut osc1 = WrSmoothParams::new(SinNumeric::new(200.));
     osc1.param(graph.ctx(), "freq", 200.)?;
     let osc1 = graph.push(osc1.wr_mul(0.2));
     osc1.set(("freq", 250.))?;
-    let mut osc2 = SinNumeric::new();
+    let mut osc2 = SinNumeric::new(250.);
     osc2.param(graph.ctx(), "freq", 300.)?;
     let osc2 = graph.push(osc2.wr_mul(0.2));
-    let osc3 = graph.push(SinNumeric::new().wr_mul(0.2));
+    let osc3 = graph.push(SinNumeric::new(200. * 4.).wr_mul(0.2));
     osc3.set(("freq", 200. * 4.))?;
     // connect them together
     graph.connect(&osc1, 0, 0, Sink::Graph)?;

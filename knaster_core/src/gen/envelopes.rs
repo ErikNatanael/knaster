@@ -28,14 +28,14 @@ impl<F: Float> EnvAsr<F> {
     pub const RELEASE_TIME: usize = 1;
     pub const T_RELEASE: usize = 2;
     pub const T_RESTART: usize = 3;
-    pub fn new() -> Self {
+    pub fn new(attack_time: F, release_time: F) -> Self {
         Self {
             state: AsrState::Stopped,
             t: F::ZERO,
-            attack_seconds: F::ZERO,
+            attack_seconds: attack_time,
             attack_rate: F::ONE,
             release_rate: F::ONE,
-            release_seconds: F::ZERO,
+            release_seconds: release_time,
             release_scale: F::ONE,
         }
     }
@@ -75,16 +75,31 @@ impl<F: Float> EnvAsr<F> {
     }
 }
 
-impl<F: Float> Default for EnvAsr<F> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 impl<F: Float> Gen for EnvAsr<F> {
     type Sample = F;
     type Inputs = U0;
     type Outputs = U1;
     type Parameters = U4;
+
+    fn init(&mut self, ctx: &AudioCtx) {
+        // Init rate based on the seconds if the rate hasn't already been set through a param
+        if self.attack_rate == F::ONE {
+            if self.attack_seconds == F::ZERO {
+                self.attack_rate = F::ONE;
+            } else {
+                self.attack_rate =
+                    F::ONE / (self.attack_seconds * F::from(ctx.sample_rate).unwrap());
+            }
+        }
+        if self.release_rate == F::ONE {
+            if self.release_seconds == F::ZERO {
+                self.release_rate = F::ONE;
+            } else {
+                self.release_rate =
+                    F::ONE / (self.release_seconds * F::from(ctx.sample_rate).unwrap());
+            }
+        }
+    }
 
     fn process(
         &mut self,
@@ -124,7 +139,6 @@ impl<F: Float> Gen for EnvAsr<F> {
     }
 
     fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
-        dbg!(index, value);
         match index {
             Self::ATTACK_TIME => {
                 let atk = F::new(value.float().unwrap());

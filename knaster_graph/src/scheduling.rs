@@ -26,6 +26,7 @@ use crate::{
 
 use knaster_core::{ParameterError, ParameterSmoothing, ParameterValue, Seconds};
 
+#[derive(Debug, Clone)]
 pub struct SchedulingEvent {
     pub(crate) node_key: NodeKey,
     pub(crate) parameter: usize,
@@ -99,6 +100,14 @@ impl SchedulingTime {
             seconds,
             absolute: false,
         }
+    }
+    pub fn to_absolute(mut self) -> Self {
+        self.absolute = true;
+        self
+    }
+    pub fn to_relative(mut self) -> Self {
+        self.absolute = false;
+        self
     }
 }
 impl From<Seconds> for SchedulingTime {

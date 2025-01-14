@@ -1,15 +1,15 @@
 use crate::block::AggregateBlockRead;
-use crate::core::sync::atomic::Ordering;
-
 use crate::core::sync::atomic::AtomicBool;
+use crate::core::sync::atomic::Ordering;
 use crate::core::sync::Arc;
+use alloc::{boxed::Box, vec::Vec};
 
 use knaster_core::GenFlags;
 use knaster_core::{BlockAudioCtx, Float};
 
 use crate::block::RawBlock;
-use crate::graph::{NodeKey, OwnedRawBuffer};
 use crate::dyngen::DynGen;
+use crate::graph::{NodeKey, OwnedRawBuffer};
 
 pub struct Task<F> {
     pub(crate) gen: *mut dyn DynGen<F>,
@@ -24,12 +24,12 @@ impl<F: Float> Task<F> {
         let mut output =
             unsafe { RawBlock::new(self.out_buffer, self.output_channels, ctx.block_size()) };
         unsafe {
-            (*self.gen).process_block(ctx, flags, &&input, &mut output);
+            (*self.gen).process_block(ctx, flags, &input, &mut output);
         }
     }
 }
 /// # Safety
-/// 
+///
 /// All the pointers are guaranteed to be kept alive for as long as necessary. GraphGen contains an
 /// Arc to the nodes which own the DynGens, and an Arc to the buffer allocation underlying the *mut F.
 unsafe impl<F: Float> Send for Task<F> {}
@@ -102,13 +102,13 @@ impl<F: Float> TaskData<F> {
         self.applied.store(true, Ordering::SeqCst);
         for apc in &self.ar_parameter_changes {
             unsafe {
-                (&mut *self.gens[apc.node].1).set_ar_param_buffer(apc.parameter_index, apc.buffer)
+                (*self.gens[apc.node].1).set_ar_param_buffer(apc.parameter_index, apc.buffer)
             };
         }
     }
 }
 /// # Safety:
-/// 
+///
 /// Pointers within ArParameterChange are guaranteed to be valid for as long as necessary because
 /// TaskData also contains an Arc to the underlying allocation `current_buffer_allocation` which
 /// is then stored in the GraphGen.

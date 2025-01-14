@@ -1,6 +1,7 @@
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 #![allow(clippy::single_match)]
 #![allow(clippy::new_without_default)]
+
 //! # Knaster Graph
 //!
 //! This crate contains a dynamically modifiable graph implementation using the
@@ -19,6 +20,9 @@
 //!
 //! - The generic parameter `F` is the float type, f32 or f64
 extern crate alloc;
+
+#[cfg(feature = "std")]
+extern crate std;
 
 // Switches between std and core based on features. This reduces boilerplate when importing.
 mod core {

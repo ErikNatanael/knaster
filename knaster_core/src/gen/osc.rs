@@ -1,5 +1,4 @@
-// use crate::core::marker::PhantomData;
-
+use crate::core::eprintln;
 use crate::core::marker::PhantomData;
 
 use knaster_primitives::{
@@ -15,6 +14,7 @@ use crate::{PFloat, Param, ParameterError, ParameterRange, ParameterValue};
 use super::{AudioCtx, Gen, GenFlags};
 #[cfg(any(feature = "alloc", feature = "std"))]
 mod wavetable_vec {
+    use crate::core::eprintln;
     use core::marker::PhantomData;
     use std::sync::LazyLock;
 

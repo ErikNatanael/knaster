@@ -9,12 +9,12 @@ use knaster_core::{
     typenum::{U0, U1, U2},
     wrappers_core::GenWrapperCoreExt,
 };
+use knaster_graph::runner::RunnerOptions;
 use knaster_graph::{
     audio_backend::{
         cpal::{CpalBackend, CpalBackendOptions},
         AudioBackend,
     },
-    graph::GraphSettings,
     handle::HandleTrait,
     runner::Runner,
 };
@@ -24,8 +24,7 @@ fn main() -> Result<()> {
     let mut backend = CpalBackend::new(CpalBackendOptions::default())?;
 
     // Create a graph
-    let (mut top_level_graph, runner) = Runner::<f32>::new::<U0, U2>(GraphSettings {
-        name: "TopLevelGraph".to_owned(),
+    let (mut top_level_graph, runner) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
         block_size: backend.block_size().unwrap_or(64),
         sample_rate: backend.sample_rate(),
         ring_buffer_size: 200,
@@ -36,7 +35,7 @@ fn main() -> Result<()> {
     let mut envs = vec![];
     let mut rng = thread_rng();
 
-    for i in 0..300 {
+    for _i in 0..300 {
         let env = EnvAr::new(0.01, 0.1);
         let env = g.push(env);
         let sine =
@@ -50,7 +49,7 @@ fn main() -> Result<()> {
         g.connect_node_to_output(&pan, 1, 1, true)?;
         envs.push(env);
     }
-    for i in 0..300 {
+    for _i in 0..300 {
         let env = EnvAr::new(0.01, 0.1);
         let env = g.push(env);
         let sine = g.push(SinWt::new(rng.gen_range(6000.0..6500.0)).wr_mul(0.01));

@@ -70,11 +70,8 @@ mod wavetable_vec {
     #[cfg(all(feature = "alloc", not(feature = "std")))]
     use alloc::vec::Vec;
 
+    use crate::core::{format, string::String, vec, vec::Vec};
     use knaster_primitives::Float;
-    #[cfg(feature = "std")]
-    use std::vec;
-    #[cfg(feature = "std")]
-    use std::vec::Vec;
 
     /// Non-anti-aliased wavetable.
     ///

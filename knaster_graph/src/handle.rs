@@ -4,9 +4,11 @@
 //! - Typesafe Handle types
 
 use crate::{
-    core::marker::PhantomData, graph::NodeId, SchedulingEvent, SchedulingTime, SchedulingToken,
-    SharedFrameClock,
+    core::{eprintln, marker::PhantomData},
+    graph::{GraphError, NodeId},
+    SchedulingEvent, SchedulingTime, SchedulingToken, SharedFrameClock,
 };
+use alloc::{string::ToString, vec::Vec};
 use knaster_core::{
     typenum::Unsigned, Gen, Param, ParameterError, ParameterSmoothing, ParameterValue, Seconds,
 };
@@ -55,7 +57,7 @@ impl RawHandle {
             false
         }
     }
-    pub fn send(&self, event: SchedulingEvent) -> Result<(), ParameterError> {
+    pub fn send(&self, event: SchedulingEvent) -> Result<(), GraphError> {
         // Lock should never be poisoned, but if it is we don't care.
         let mut sender = match self.sender.lock() {
             Ok(s) => s,
@@ -64,11 +66,11 @@ impl RawHandle {
         if sender.is_abandoned() {
             // A fence might be required, see: https://docs.rs/rtrb/latest/rtrb/struct.Producer.html#method.is_abandoned
             // std::sync::atomic::fence(std::sync::atomic::Ordering::Acquire);
-            return Err(ParameterError::GraphWasFreed);
+            return Err(ParameterError::GraphWasFreed.into());
         }
         sender
             .push(event)
-            .map_err(|e| ParameterError::PushError(e.to_string()))?;
+            .map_err(|e| GraphError::PushChangeError(e.to_string()))?;
         Ok(())
     }
     pub fn node_id(&self) -> NodeId {
@@ -123,9 +125,9 @@ impl<T> From<&Handle<T>> for NodeId {
     }
 }
 pub trait HandleTrait: Sized {
-    fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), ParameterError>;
+    fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), GraphError>;
     fn change(&self, param: impl Into<Param>) -> Result<ParameterChange2<Self>, ParameterError>;
-    fn schedule_event(&self, event: SchedulingEvent) -> Result<(), ParameterError>;
+    fn schedule_event(&self, event: SchedulingEvent) -> Result<(), GraphError>;
     fn node_id(&self) -> NodeId;
     fn inputs(&self) -> usize;
     fn outputs(&self) -> usize;
@@ -139,7 +141,7 @@ pub trait HandleTrait: Sized {
     fn can_send(&self) -> bool;
 }
 impl<T: Gen> HandleTrait for Handle<T> {
-    fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), ParameterError> {
+    fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), GraphError> {
         let c = change.into();
         let param_index = match c.param {
             knaster_core::Param::Index(param_i) => param_i,
@@ -148,7 +150,7 @@ impl<T: Gen> HandleTrait for Handle<T> {
                     param_i
                 } else {
                     // Fail
-                    return Err(ParameterError::DescriptionNotFound(desc));
+                    return Err(ParameterError::DescriptionNotFound(desc).into());
                 }
             }
         };
@@ -175,7 +177,7 @@ impl<T: Gen> HandleTrait for Handle<T> {
         T::Outputs::USIZE
     }
 
-    fn schedule_event(&self, event: SchedulingEvent) -> Result<(), ParameterError> {
+    fn schedule_event(&self, event: SchedulingEvent) -> Result<(), GraphError> {
         self.raw_handle.send(event)
     }
 
@@ -217,7 +219,7 @@ impl<T: Gen> HandleTrait for Handle<T> {
     }
 }
 impl HandleTrait for AnyHandle {
-    fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), ParameterError> {
+    fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), GraphError> {
         let c = change.into();
         let param_index = match c.param {
             knaster_core::Param::Index(param_i) => param_i,
@@ -226,7 +228,7 @@ impl HandleTrait for AnyHandle {
                     param_i
                 } else {
                     // Fail
-                    return Err(ParameterError::DescriptionNotFound(desc));
+                    return Err(ParameterError::DescriptionNotFound(desc).into());
                 }
             }
         };
@@ -252,7 +254,7 @@ impl HandleTrait for AnyHandle {
         self.outputs
     }
 
-    fn schedule_event(&self, event: SchedulingEvent) -> Result<(), ParameterError> {
+    fn schedule_event(&self, event: SchedulingEvent) -> Result<(), GraphError> {
         self.raw_handle.send(event)
     }
 
@@ -326,11 +328,16 @@ impl<H: HandleTrait> ParameterChange2<'_, H> {
         self.token = Some(v.into());
         self
     }
-    pub fn time(mut self, v: impl Into<SchedulingTime>) -> Self {
+    pub fn after(mut self, v: impl Into<SchedulingTime>) -> Self {
         self.time = Some(v.into());
         self
     }
-    pub fn send(mut self) -> Result<(), ParameterError> {
+    pub fn at(mut self, v: impl Into<SchedulingTime>) -> Self {
+        let t = v.into().to_absolute();
+        self.time = Some(t);
+        self
+    }
+    pub fn send(mut self) -> Result<(), GraphError> {
         self.was_sent = true;
 
         self.handle.schedule_event(SchedulingEvent {

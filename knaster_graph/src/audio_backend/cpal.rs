@@ -1,5 +1,7 @@
 use crate::audio_backend::{AudioBackend, AudioBackendError};
+use crate::core::{eprintln, println};
 use crate::runner::Runner;
+use alloc::{boxed::Box, string::String};
 #[cfg(all(debug_assertions, feature = "assert_no_alloc"))]
 use assert_no_alloc::*;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};

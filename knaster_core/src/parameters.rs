@@ -57,7 +57,7 @@ impl PIntegerConvertible for usize {
 #[derive(Debug, Clone, Error)]
 pub enum ParameterError {
     #[error("Description parameters are not supported in this contect. Please use the parameter index instead. Description: `{0}`")]
-    DescriptionNotSupported(String),
+    DescriptionNotSupported(&'static str),
     #[error("The parameter description `{0}` does not match any parameter on this `Gen`")]
     DescriptionNotFound(&'static str),
     #[error("You are trying to set a parameter to a type it does not support.")]
@@ -66,8 +66,6 @@ pub enum ParameterError {
     ParameterIndexOutOfBounds,
     #[error("The graph within which the node you are trying to set parameters for does not exist anymore.")]
     GraphWasFreed,
-    #[error("There was an error sending the change: `{0}`")]
-    PushError(String),
 }
 #[derive(Debug, Clone, Copy)]
 pub enum Param {

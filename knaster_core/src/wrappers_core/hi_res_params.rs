@@ -1,5 +1,6 @@
 use knaster_primitives::{numeric_array::NumericArray, Frame};
 
+use crate::core::eprintln;
 use crate::{AudioCtx, Gen, GenFlags, ParameterValue};
 
 /// Enables sample accurate parameter changes within a block. Changes must be

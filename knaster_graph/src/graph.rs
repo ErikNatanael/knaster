@@ -1,3 +1,8 @@
+use crate::core::{
+    cell::UnsafeCell,
+    dbg, format,
+    sync::atomic::{AtomicBool, Ordering},
+};
 use crate::{
     buffer_allocator::BufferAllocator,
     connectable::{ChainElement, ChainSinkKind, Channels, Sink, Source},
@@ -9,10 +14,7 @@ use crate::{
     task::{ArParameterChange, BlockOrGraphInput, OutputTask, Task, TaskData},
     SchedulingChannelProducer, SharedFrameClock,
 };
-use core::{
-    cell::UnsafeCell,
-    sync::atomic::{AtomicBool, Ordering},
-};
+use alloc::{borrow::ToOwned, boxed::Box, string::String, string::ToString, vec, vec::Vec};
 use std::collections::VecDeque;
 use std::{
     collections::HashSet,
@@ -24,7 +26,7 @@ use crate::wrappers_graph::done::WrDone;
 use knaster_core::{
     math::{Add, MathGen},
     typenum::*,
-    AudioCtx, Done, Float, Gen, Param, Size,
+    AudioCtx, Done, Float, Gen, Param, ParameterError, Size,
 };
 use rtrb::RingBuffer;
 use slotmap::{new_key_type, SecondaryMap, SlotMap};
@@ -121,7 +123,6 @@ pub struct Graph<F: Float> {
     nodes: Arc<UnsafeCell<SlotMap<NodeKey, Node<F>>>>,
     node_keys_to_free_when_safe: Vec<(NodeKey, Arc<AtomicBool>)>,
     buffers_to_free_when_safe: Vec<Arc<OwnedRawBuffer<F>>>,
-    new_inputs_buffers_ptr: bool,
     /// Set of keys pending removal to easily check if a node is pending
     /// removal. TODO: Maybe it's actually faster and easier to just look
     /// through node_keys_to_free_when_safe than to bother with a HashSet since
@@ -218,7 +219,6 @@ impl<F: Float> Graph<F> {
             graph_gen_communicator,
             recalculation_required: false,
             buffers_to_free_when_safe: vec![],
-            new_inputs_buffers_ptr: false,
             buffer_allocator,
             self_node_id: node_id,
         };
@@ -1612,6 +1612,10 @@ pub enum GraphError {
     ParameterDescriptionNotFound(String),
     #[error("The parameter `{0}` is not a valid parameter index for the node")]
     ParameterIndexOutOfBounds(usize),
+    #[error(transparent)]
+    ParameterError(#[from] ParameterError),
+    #[error("There was an error sending the change: `{0}`")]
+    PushChangeError(String),
 }
 #[derive(thiserror::Error, Debug)]
 pub enum PushError {}

@@ -1,5 +1,4 @@
-#![cfg_attr(not(feature = "std"), no_std)]
-// ^ enables no_std if the `std` features isn't enabled
+#![no_std]
 
 //! # Knaster Primitives
 //!
@@ -13,6 +12,9 @@
 //!
 //! - `alloc`: Enables a heap based implementation of [`Block`]: [`VecBlock`]
 //! - `std`: Enables std, disabling no_std. Takes precedence over `alloc`
+
+#[cfg(feature = "std")]
+extern crate std;
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
@@ -28,8 +30,8 @@ mod core {
 // Reexport to not make the structure part of the public API and to reduce noise in paths.
 mod block;
 mod time;
-pub use time::*;
 pub use block::*;
+pub use time::*;
 mod float;
 pub use float::*;
 // Reexport typenum and numeric_array because we need to keep it consistent within everything that touches knaster
@@ -37,8 +39,8 @@ pub use num_traits::Float as FloatMethods;
 pub use numeric_array;
 pub use numeric_array::typenum;
 
-pub use num_traits as num_traits;
-pub use num_derive as num_derive;
+pub use num_derive;
+pub use num_traits;
 
 pub trait Size: ArrayLength + Clone + Sync + Send {}
 impl<T: ArrayLength + Clone + Sync + Send> Size for T {}

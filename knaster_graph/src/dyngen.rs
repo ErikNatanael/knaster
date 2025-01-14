@@ -1,8 +1,7 @@
-use knaster_core::{
-    AudioCtx, BlockAudioCtx, Float, Gen, GenFlags, ParameterValue
-};
-use knaster_core::typenum::*;
 use crate::block::{AggregateBlockRead, RawBlock};
+use alloc::vec::Vec;
+use knaster_core::typenum::*;
+use knaster_core::{AudioCtx, BlockAudioCtx, Float, Gen, GenFlags, ParameterValue};
 
 /// Type erasing trait to allow us to store [`Gen`]s as trait objects. It
 /// requires all nodes that are added to the [`Graph`] to implement both [`Gen`]
@@ -29,11 +28,7 @@ pub trait DynGen<F> {
     fn param_apply(&mut self, ctx: AudioCtx, parameter: usize, value: ParameterValue);
     fn param_descriptions(&self) -> Vec<&'static str>;
 }
-impl<
-        F: Float,
-        T: Gen<Sample = F >,
-    > DynGen<F> for T
-{
+impl<F: Float, T: Gen<Sample = F>> DynGen<F> for T {
     fn init(&mut self, ctx: &AudioCtx) {
         self.init(ctx)
     }
