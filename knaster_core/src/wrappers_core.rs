@@ -8,8 +8,8 @@
 mod audio_rate;
 mod closure;
 mod hi_res_params;
-pub use hi_res_params::*;
 pub use closure::*;
+pub use hi_res_params::*;
 mod math;
 pub use math::*;
 
@@ -37,6 +37,10 @@ pub trait GenWrapperCoreExt<T: Gen> {
     fn smooth_params(self) -> WrSmoothParams<T>;
     /// Enable setting a parameter to an audio rate signal
     fn ar_params(self) -> WrArParams<T>;
+    /// Precise timing
+    fn precise_timing<const MAX_CHANGES_PER_BLOCK: usize>(
+        self,
+    ) -> WrHiResParams<MAX_CHANGES_PER_BLOCK, T>;
 }
 
 impl<T: Gen> GenWrapperCoreExt<T> for T {
@@ -85,5 +89,11 @@ impl<T: Gen> GenWrapperCoreExt<T> for T {
 
     fn wr_powi(self, v: i32) -> WrPowi<T> {
         WrPowi::new(self, v)
+    }
+
+    fn precise_timing<const MAX_CHANGES_PER_BLOCK: usize>(
+        self,
+    ) -> WrHiResParams<MAX_CHANGES_PER_BLOCK, T> {
+        WrHiResParams::new(self)
     }
 }
