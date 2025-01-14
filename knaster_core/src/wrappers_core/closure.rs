@@ -1,28 +1,27 @@
-use knaster_primitives::{Block, BlockRead};
 use crate::{BlockAudioCtx, Gen, GenFlags};
+use knaster_primitives::{Block, BlockRead};
 
 /// Applies the closure to every sample of every channel in the [`Gen`] output
 ///
 /// This is almost certainly not as performant as using wrappers_graph dedicated to a specific
 /// math operation, but good for prototyping and for when performance is not so important.
-pub struct WrClosure<T: Gen, C: FnMut(T::Sample) -> T::Sample + 'static>
-{
+pub struct WrClosure<T: Gen, C: FnMut(T::Sample) -> T::Sample + 'static> {
     gen: T,
     closure: C,
 }
-impl<T: Gen, C: FnMut(T::Sample) -> T::Sample + 'static>
-    WrClosure<T, C>
-{
+impl<T: Gen, C: FnMut(T::Sample) -> T::Sample + 'static> WrClosure<T, C> {
     pub fn new(gen: T, closure: C) -> Self {
         Self { gen, closure }
     }
 }
-impl<T: Gen, C: FnMut(T::Sample) -> T::Sample + 'static> Gen
-    for WrClosure<T, C>
-{
+impl<T: Gen, C: FnMut(T::Sample) -> T::Sample + 'static> Gen for WrClosure<T, C> {
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
+
+    fn init(&mut self, ctx: &crate::AudioCtx) {
+        self.gen.init(ctx);
+    }
 
     fn process(
         &mut self,
@@ -36,10 +35,15 @@ impl<T: Gen, C: FnMut(T::Sample) -> T::Sample + 'static> Gen
         }
         out
     }
-    fn process_block<InBlock, OutBlock>(&mut self, ctx: BlockAudioCtx, flags: &mut GenFlags, input: &InBlock, output: &mut OutBlock)
-    where
-        InBlock: BlockRead<Sample=Self::Sample>,
-        OutBlock: Block<Sample=Self::Sample>,
+    fn process_block<InBlock, OutBlock>(
+        &mut self,
+        ctx: BlockAudioCtx,
+        flags: &mut GenFlags,
+        input: &InBlock,
+        output: &mut OutBlock,
+    ) where
+        InBlock: BlockRead<Sample = Self::Sample>,
+        OutBlock: Block<Sample = Self::Sample>,
     {
         self.gen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
