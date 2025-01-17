@@ -6,14 +6,17 @@ edition = "2021"
 [features]
 default = ["std", "cpal"]
 std = ["knaster_core/std", "slotmap/std", "thiserror/std"]
+# Enables potential optimisations that require nightly rust
+unstable = ["knaster_core/unstable"]
 jack = ["dep:jack"]
 assert_no_alloc = ["dep:assert_no_alloc"]
 
 [dependencies]
+knaster_core = { path = "../knaster_core" }
+
 assert_no_alloc = { version = "1.1.2", optional = true }
 cpal = { version = "0.15.3", default-features = false, optional = true }
 jack = { version = "0.13.0", optional = true }
-knaster_core = { path = "../knaster_core" }
 paste = "1.0.15"
 rtrb = { version = "0.3.1", default-features = false }
 slotmap = { version = "1.0", default-features = false }
