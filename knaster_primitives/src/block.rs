@@ -215,7 +215,7 @@ pub trait BlockRead {
     /// Returns a new immutable block which starts at an offset and with virtual block size
     fn partial(&self, start_offset: usize, length: usize) -> PartialBlock<Self::Sample, Self> {
         PartialBlock {
-            block: &self,
+            block: self,
             start_offset,
             length,
         }
@@ -225,19 +225,19 @@ impl<T: Block> BlockRead for &T {
     type Sample = T::Sample;
 
     fn channel_as_slice(&self, channel: usize) -> &[Self::Sample] {
-        T::channel_as_slice(&self, channel)
+        T::channel_as_slice(self, channel)
     }
 
     fn read(&self, channel: usize, frame: usize) -> Self::Sample {
-        T::read(&self, channel, frame)
+        T::read(self, channel, frame)
     }
 
     fn channels(&self) -> usize {
-        T::channels(&self)
+        T::channels(self)
     }
 
     fn block_size(&self) -> usize {
-        T::block_size(&self)
+        T::block_size(self)
     }
 }
 
@@ -270,7 +270,7 @@ pub struct PartialBlockMut<'a, T: Block + ?Sized> {
     start_offset: usize,
     length: usize,
 }
-impl<'a, T: Block> Block for PartialBlockMut<'a, T> {
+impl<T: Block> Block for PartialBlockMut<'_, T> {
     type Sample = T::Sample;
 
     fn channel_as_slice(&self, channel: usize) -> &[Self::Sample] {

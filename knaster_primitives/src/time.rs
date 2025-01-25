@@ -51,19 +51,19 @@ impl Seconds {
         self.seconds as u64 * SUBSECOND_TESIMALS_PER_SECOND as u64 + self.subsecond_tesimals as u64
     }
     #[allow(missing_docs)]
-    pub fn from_seconds_f64(seconds_f64: f64) -> Self {
+    pub fn from_secs_f64(seconds_f64: f64) -> Self {
         let seconds = seconds_f64.floor() as u32;
         let subsample_tesimals =
             (seconds_f64.fract() * SUBSECOND_TESIMALS_PER_SECOND as f64) as u32;
         Self::new(seconds, subsample_tesimals)
     }
     /// Convert from seconds in f64 and return any precision loss incurred in the conversion
-    pub fn from_seconds_f64_return_precision_loss(seconds_f64: f64) -> (Self, f64) {
-        let ts = Self::from_seconds_f64(seconds_f64);
-        (ts, seconds_f64 - ts.to_seconds_f64())
+    pub fn from_secs_f64_return_precision_loss(seconds_f64: f64) -> (Self, f64) {
+        let ts = Self::from_secs_f64(seconds_f64);
+        (ts, seconds_f64 - ts.to_secs_f64())
     }
     /// Convert to seconds in an f64. May be lossy depending on the value.
-    pub fn to_seconds_f64(&self) -> f64 {
+    pub fn to_secs_f64(&self) -> f64 {
         self.seconds as f64
             + (self.subsecond_tesimals as f64 / SUBSECOND_TESIMALS_PER_SECOND as f64)
     }
@@ -104,7 +104,7 @@ impl Seconds {
             })
         }
     }
-    /// Returns self - other if self is bigger than or equal to other, otherwise None
+    /// Returns self - other if self is bigger than or equal to other, otherwise Self::ZERO
     #[must_use]
     pub fn saturating_sub(self, rhs: Self) -> Self {
         if self <= rhs {
@@ -182,8 +182,8 @@ impl ops::Mul<f64> for Seconds {
     type Output = Self;
 
     fn mul(self, rhs: f64) -> Self::Output {
-        let seconds = self.to_seconds_f64() * rhs;
-        Seconds::from_seconds_f64(seconds)
+        let seconds = self.to_secs_f64() * rhs;
+        Seconds::from_secs_f64(seconds)
     }
 }
 impl ops::Mul<Seconds> for f64 {
@@ -207,8 +207,8 @@ impl ops::Mul<f32> for Seconds {
     type Output = Self;
 
     fn mul(self, rhs: f32) -> Self::Output {
-        let seconds = self.to_seconds_f64() * rhs as f64;
-        Seconds::from_seconds_f64(seconds)
+        let seconds = self.to_secs_f64() * rhs as f64;
+        Seconds::from_secs_f64(seconds)
     }
 }
 impl ops::MulAssign<f32> for Seconds {
@@ -304,6 +304,11 @@ impl Beats {
             })
         }
     }
+    /// Returns self - other if self is bigger than or equal to other, otherwise Self::ZERO
+    #[must_use]
+    pub fn saturating_sub(self, rhs: Self) -> Self {
+        self.checked_sub(rhs).unwrap_or(Self::ZERO)
+    }
 }
 impl crate::core::iter::Sum for Beats {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
@@ -381,7 +386,7 @@ mod tests {
     #[test]
     fn duration_to_subsample_time() {
         for s in [73.73, 10.832, 10000.25, 84923.399] {
-            let seconds = Seconds::from_seconds_f64(s);
+            let seconds = Seconds::from_secs_f64(s);
             let duration = Duration::from_secs_f64(s);
             assert_eq!(seconds, duration.into())
         }
