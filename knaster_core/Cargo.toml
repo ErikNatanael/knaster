@@ -12,13 +12,20 @@ std = ["knaster_primitives/std"]
 target-features = ["dep:target-features"]
 # Enables unstable Rust features that may speed up execution
 unstable = ["target-features"]
+# Requires std to be enabled
+symphonia = ["dep:symphonia"]
+# Requires std to be enabled
+hound = ["dep:hound"]
 
 [dependencies]
 knaster_primitives = { path = "../knaster_primitives" }
+
 target-features = { version = "0.1.6", optional = true }
 thiserror = { version = "2.0.3", default-features = false }
-fastrand = { version =  "2.3.0", default-features = false }
+fastrand = { version = "2.3.0", default-features = false }
 fastapprox = "0.3.1"
+symphonia = { version = "0.5.4", optional = true }
+hound = { version = "3.5.1", optional = true }
 
 [dev-dependencies]
 anyhow = "1.0.94"
