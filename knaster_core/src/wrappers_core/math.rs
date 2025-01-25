@@ -6,27 +6,27 @@ use knaster_primitives::{
     Float, FloatMethods, Size,
 };
 
-use crate::{AudioCtx, Gen, GenFlags};
+use crate::{AudioCtx, UGen, UGenFlags};
 
 // TODO: SIMD implementations for blocks
 // TODO: SIMD implementations for multi channel frame by frame outputs
 // TODO: min, max, powi, sqrt, exp, exp2, abs, range/mul_add, cbrt, tanh
 
 /// `gen` * `value`
-pub struct WrMul<T: Gen> {
+pub struct WrMul<T: UGen> {
     gen: T,
     value: T::Sample,
 }
-impl<T: Gen> WrMul<T> {
+impl<T: UGen> WrMul<T> {
     pub fn new(gen: T, value: T::Sample) -> Self {
         Self { gen, value }
     }
 }
-impl<T: Gen> Gen for WrMul<T>
+impl<T: UGen> UGen for WrMul<T>
 where
     // Make sure we can add a parameter
-    <T as Gen>::Parameters: Add<B1>,
-    <<T as Gen>::Parameters as Add<B1>>::Output: Size,
+    <T as UGen>::Parameters: Add<B1>,
+    <<T as UGen>::Parameters as Add<B1>>::Output: Size,
     T::Sample: Float,
 {
     type Sample = T::Sample;
@@ -40,7 +40,7 @@ where
     fn process(
         &mut self,
         ctx: crate::AudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
         let mut out = self.gen.process(ctx, flags, input);
@@ -52,7 +52,7 @@ where
     fn process_block<InBlock, OutBlock>(
         &mut self,
         ctx: crate::BlockAudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where
@@ -107,16 +107,16 @@ where
 }
 
 /// `gen` + `value`
-pub struct WrAdd<T: Gen> {
+pub struct WrAdd<T: UGen> {
     gen: T,
     value: T::Sample,
 }
-impl<T: Gen> WrAdd<T> {
+impl<T: UGen> WrAdd<T> {
     pub fn new(gen: T, value: T::Sample) -> Self {
         Self { gen, value }
     }
 }
-impl<T: Gen> Gen for WrAdd<T> {
+impl<T: UGen> UGen for WrAdd<T> {
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -127,7 +127,7 @@ impl<T: Gen> Gen for WrAdd<T> {
     fn process(
         &mut self,
         ctx: crate::AudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
         let mut out = self.gen.process(ctx, flags, input);
@@ -139,7 +139,7 @@ impl<T: Gen> Gen for WrAdd<T> {
     fn process_block<InBlock, OutBlock>(
         &mut self,
         ctx: crate::BlockAudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where
@@ -178,16 +178,16 @@ impl<T: Gen> Gen for WrAdd<T> {
 }
 
 /// `gen` - `value`
-pub struct WrSub<T: Gen> {
+pub struct WrSub<T: UGen> {
     gen: T,
     value: T::Sample,
 }
-impl<T: Gen> WrSub<T> {
+impl<T: UGen> WrSub<T> {
     pub fn new(gen: T, value: T::Sample) -> Self {
         Self { gen, value }
     }
 }
-impl<T: Gen> Gen for WrSub<T> {
+impl<T: UGen> UGen for WrSub<T> {
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -198,7 +198,7 @@ impl<T: Gen> Gen for WrSub<T> {
     fn process(
         &mut self,
         ctx: crate::AudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
         let mut out = self.gen.process(ctx, flags, input);
@@ -210,7 +210,7 @@ impl<T: Gen> Gen for WrSub<T> {
     fn process_block<InBlock, OutBlock>(
         &mut self,
         ctx: crate::BlockAudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where
@@ -247,17 +247,18 @@ impl<T: Gen> Gen for WrSub<T> {
         self.gen.set_delay_within_block_for_param(index, delay);
     }
 }
-/// `value` - `gen`
-pub struct WrVSubGen<T: Gen> {
+/// The inverse of WrSub, i.e. the inner UGen is the right hand operand:
+/// `value` - `ugen`
+pub struct WrVSub<T: UGen> {
     gen: T,
     value: T::Sample,
 }
-impl<T: Gen> WrVSubGen<T> {
+impl<T: UGen> WrVSub<T> {
     pub fn new(gen: T, value: T::Sample) -> Self {
         Self { gen, value }
     }
 }
-impl<T: Gen> Gen for WrVSubGen<T> {
+impl<T: UGen> UGen for WrVSub<T> {
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -268,7 +269,7 @@ impl<T: Gen> Gen for WrVSubGen<T> {
     fn process(
         &mut self,
         ctx: crate::AudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
         let mut out = self.gen.process(ctx, flags, input);
@@ -281,7 +282,7 @@ impl<T: Gen> Gen for WrVSubGen<T> {
     fn process_block<InBlock, OutBlock>(
         &mut self,
         ctx: crate::BlockAudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where
@@ -320,16 +321,16 @@ impl<T: Gen> Gen for WrVSubGen<T> {
 }
 
 /// `gen` / `value`
-pub struct WrDiv<T: Gen> {
+pub struct WrDiv<T: UGen> {
     gen: T,
     value: T::Sample,
 }
-impl<T: Gen> WrDiv<T> {
+impl<T: UGen> WrDiv<T> {
     pub fn new(gen: T, value: T::Sample) -> Self {
         Self { gen, value }
     }
 }
-impl<T: Gen> Gen for WrDiv<T> {
+impl<T: UGen> UGen for WrDiv<T> {
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -340,7 +341,7 @@ impl<T: Gen> Gen for WrDiv<T> {
     fn process(
         &mut self,
         ctx: crate::AudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
         let mut out = self.gen.process(ctx, flags, input);
@@ -352,7 +353,7 @@ impl<T: Gen> Gen for WrDiv<T> {
     fn process_block<InBlock, OutBlock>(
         &mut self,
         ctx: crate::BlockAudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where
@@ -391,16 +392,16 @@ impl<T: Gen> Gen for WrDiv<T> {
 }
 
 /// `value` / `gen`
-pub struct WrVDivGen<T: Gen> {
+pub struct WrVDiv<T: UGen> {
     gen: T,
     value: T::Sample,
 }
-impl<T: Gen> WrVDivGen<T> {
+impl<T: UGen> WrVDiv<T> {
     pub fn new(gen: T, value: T::Sample) -> Self {
         Self { gen, value }
     }
 }
-impl<T: Gen> Gen for WrVDivGen<T> {
+impl<T: UGen> UGen for WrVDiv<T> {
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -411,7 +412,7 @@ impl<T: Gen> Gen for WrVDivGen<T> {
     fn process(
         &mut self,
         ctx: crate::AudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
         let mut out = self.gen.process(ctx, flags, input);
@@ -424,7 +425,7 @@ impl<T: Gen> Gen for WrVDivGen<T> {
     fn process_block<InBlock, OutBlock>(
         &mut self,
         ctx: crate::BlockAudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where
@@ -463,16 +464,16 @@ impl<T: Gen> Gen for WrVDivGen<T> {
 }
 
 /// `gen.powf(value)`
-pub struct WrPowf<T: Gen> {
+pub struct WrPowf<T: UGen> {
     gen: T,
     value: T::Sample,
 }
-impl<T: Gen> WrPowf<T> {
+impl<T: UGen> WrPowf<T> {
     pub fn new(gen: T, value: T::Sample) -> Self {
         Self { gen, value }
     }
 }
-impl<T: Gen> Gen for WrPowf<T> {
+impl<T: UGen> UGen for WrPowf<T> {
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -483,7 +484,7 @@ impl<T: Gen> Gen for WrPowf<T> {
     fn process(
         &mut self,
         ctx: crate::AudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
         let mut out = self.gen.process(ctx, flags, input);
@@ -496,7 +497,7 @@ impl<T: Gen> Gen for WrPowf<T> {
     fn process_block<InBlock, OutBlock>(
         &mut self,
         ctx: crate::BlockAudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where
@@ -535,16 +536,16 @@ impl<T: Gen> Gen for WrPowf<T> {
 }
 
 /// `gen.powi(value)`
-pub struct WrPowi<T: Gen> {
+pub struct WrPowi<T: UGen> {
     gen: T,
     value: i32,
 }
-impl<T: Gen> WrPowi<T> {
+impl<T: UGen> WrPowi<T> {
     pub fn new(gen: T, value: i32) -> Self {
         Self { gen, value }
     }
 }
-impl<T: Gen> Gen for WrPowi<T> {
+impl<T: UGen> UGen for WrPowi<T> {
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -555,7 +556,7 @@ impl<T: Gen> Gen for WrPowi<T> {
     fn process(
         &mut self,
         ctx: crate::AudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
         let mut out = self.gen.process(ctx, flags, input);
@@ -567,7 +568,7 @@ impl<T: Gen> Gen for WrPowi<T> {
     fn process_block<InBlock, OutBlock>(
         &mut self,
         ctx: crate::BlockAudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where

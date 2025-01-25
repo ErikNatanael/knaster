@@ -6,14 +6,14 @@ use crate::{
         slice,
         sync::atomic::{AtomicBool, Ordering},
     },
-    dyngen::DynGen,
+    dyngen::DynUGen,
     SchedulingEvent,
 };
 use std::collections::VecDeque;
 use std::sync::Arc;
 
 use knaster_core::{
-    numeric_array::NumericArray, typenum::U0, BlockAudioCtx, Float, Gen, GenFlags, Size,
+    numeric_array::NumericArray, typenum::U0, BlockAudioCtx, Float, Size, UGen, UGenFlags,
 };
 use slotmap::SlotMap;
 
@@ -24,7 +24,7 @@ use crate::{
     SchedulingChannelConsumer,
 };
 
-/// This gets placed as a dyn Gen in a Node in a Graph. It's how the Graph gets
+/// This gets placed as a dyn UGen in a Node in a Graph. It's how the Graph gets
 /// run. The Graph communicates with the GraphGen in a thread safe way.
 ///
 /// # Safety
@@ -65,7 +65,7 @@ pub(super) struct GraphGen<F: Float, Inputs: Size, Outputs: Size> {
     pub(super) blocks_to_keep_scheduled_changes: u32,
 }
 
-impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs> {
+impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs> {
     type Sample = F;
     type Inputs = Inputs;
     type Outputs = Outputs;
@@ -77,7 +77,7 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
     fn process_block<InBlock, OutBlock>(
         &mut self,
         ctx: knaster_core::BlockAudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where
@@ -185,7 +185,7 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
             }
         }
 
-        let mut new_flags = GenFlags::default();
+        let mut new_flags = UGenFlags::default();
         // Run the tasks
         for task in tasks.iter_mut() {
             task.run(ctx, &mut new_flags);
@@ -233,7 +233,7 @@ impl<F: Float, Inputs: Size, Outputs: Size> Gen for GraphGen<F, Inputs, Outputs>
     fn process(
         &mut self,
         _ctx: knaster_core::AudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         _input: knaster_core::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         unreachable!()
@@ -264,7 +264,7 @@ fn apply_parameter_change<'a, 'b, F: Float>(
     sample_rate: u64,
     ctx: BlockAudioCtx,
     // replace implicit 'static with 'b
-    gens: &'a mut [(NodeKey, *mut (dyn DynGen<F> + 'b))],
+    gens: &'a mut [(NodeKey, *mut (dyn DynUGen<F> + 'b))],
 ) -> Option<SchedulingEvent> {
     let mut ready_to_apply = event.token.as_ref().map_or(true, |t| t.ready());
     let mut delay_in_block = 0;

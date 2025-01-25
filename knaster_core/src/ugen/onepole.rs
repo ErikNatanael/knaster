@@ -3,7 +3,7 @@
 
 use crate::numeric_array::NumericArray;
 use crate::typenum::U1;
-use crate::{AudioCtx, Gen, GenFlags, ParameterRange, ParameterValue};
+use crate::{AudioCtx, ParameterRange, ParameterValue, UGen, UGenFlags};
 use knaster_primitives::{Float, Frame};
 
 // To use it as a DC blocker:
@@ -91,7 +91,7 @@ impl<T: Float> Default for OnePole<T> {
     }
 }
 #[derive(Debug, Clone)]
-/// One pole lowpass filter Gen
+/// One pole lowpass filter UGen
 pub struct OnePoleLpf<F: Float> {
     /// The interval one pole filter implementation
     pub op: OnePole<F>,
@@ -108,7 +108,7 @@ impl<F: Float> Default for OnePoleLpf<F> {
         Self::new()
     }
 }
-impl<F: Float> Gen for OnePoleLpf<F> {
+impl<F: Float> UGen for OnePoleLpf<F> {
     type Sample = F;
     type Inputs = U1;
     type Outputs = U1;
@@ -116,7 +116,7 @@ impl<F: Float> Gen for OnePoleLpf<F> {
     fn process(
         &mut self,
         _ctx: AudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         [self.op.process_lp(input[0])].into()
@@ -143,7 +143,7 @@ impl<F: Float> Gen for OnePoleLpf<F> {
 }
 
 #[derive(Debug, Clone)]
-/// One pole highpass filter Gen
+/// One pole highpass filter UGen
 pub struct OnePoleHpf<F: Float> {
     /// The interval one pole filter implementation
     pub op: OnePole<F>,
@@ -160,7 +160,7 @@ impl<F: Float> Default for OnePoleHpf<F> {
         Self::new()
     }
 }
-impl<F: Float> Gen for OnePoleHpf<F> {
+impl<F: Float> UGen for OnePoleHpf<F> {
     type Sample = F;
     type Inputs = U1;
     type Outputs = U1;
@@ -168,7 +168,7 @@ impl<F: Float> Gen for OnePoleHpf<F> {
     fn process(
         &mut self,
         _ctx: AudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         [self.op.process_hp(input[0])].into()
@@ -193,4 +193,3 @@ impl<F: Float> Gen for OnePoleHpf<F> {
         }
     }
 }
-

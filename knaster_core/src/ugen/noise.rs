@@ -1,19 +1,19 @@
 //! # Noise
 //!
-//! Contains Gens producing noise and random numbers with different distributions and interpolations.
+//! Contains UGens producing noise and random numbers with different distributions and interpolations.
 
 use crate::core::sync::atomic::AtomicU64;
 use crate::numeric_array::NumericArray;
 use crate::typenum::{U0, U1};
-use crate::{AudioCtx, Gen, GenFlags, ParameterRange, ParameterValue};
+use crate::{AudioCtx, ParameterRange, ParameterValue, UGen, UGenFlags};
 use knaster_primitives::{Float, Frame};
 use std::marker::PhantomData;
 
 /// Used to seed random number generating Gens to create a deterministic result as long as all Gens are created in the same order from start.
 static NEXT_SEED: AtomicU64 = AtomicU64::new(0);
 
-/// Request the next randomness seed. Use this if you are implementing your own [`Gen`] producing
-/// randomness. If all [`Gen`]s use deterministic algorithms and are seeded using this function,
+/// Request the next randomness seed. Use this if you are implementing your own [`UGen`] producing
+/// randomness. If all [`UGen`]s use deterministic algorithms and are seeded using this function,
 /// a graph constructed in the same order will have deterministic randomness.
 /// ```
 /// # use crate::knaster_core::noise::next_randomness_seed;
@@ -45,7 +45,7 @@ impl<F: Float> Default for WhiteNoise<F> {
         Self::new()
     }
 }
-impl<F: Float> Gen for WhiteNoise<F> {
+impl<F: Float> UGen for WhiteNoise<F> {
     type Sample = F;
     type Inputs = U0;
     type Outputs = U1;
@@ -54,7 +54,7 @@ impl<F: Float> Gen for WhiteNoise<F> {
     fn process(
         &mut self,
         _ctx: AudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         [F::new(self.rng.f32() * 2.0 - 1.0)].into()
@@ -134,7 +134,7 @@ impl<F: Float> Default for PinkNoise<F> {
         Self::new()
     }
 }
-impl<F: Float> Gen for PinkNoise<F> {
+impl<F: Float> UGen for PinkNoise<F> {
     type Sample = F;
     type Inputs = U0;
     type Outputs = U1;
@@ -143,7 +143,7 @@ impl<F: Float> Gen for PinkNoise<F> {
     fn process(
         &mut self,
         _ctx: AudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         [self.process_sample()].into()
@@ -182,7 +182,7 @@ impl<F: Float> Default for BrownNoise<F> {
     }
 }
 
-impl<F: Float> Gen for BrownNoise<F> {
+impl<F: Float> UGen for BrownNoise<F> {
     type Sample = F;
     type Inputs = U0;
     type Outputs = U1;
@@ -190,7 +190,7 @@ impl<F: Float> Gen for BrownNoise<F> {
     fn process(
         &mut self,
         _ctx: AudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         let white = F::new(self.rng.f32() * 2.0 - 1.0);
@@ -207,7 +207,7 @@ impl<F: Float> Gen for BrownNoise<F> {
 
     fn param_apply(&mut self, _ctx: AudioCtx, _index: usize, _value: ParameterValue) {}
 }
-/// Random numbers with linear interpolation with new values at some frequency. Freq is sampled at control rate only.
+/// Random numbers 0..1 with linear interpolation with new values at some frequency. Freq is sampled at control rate only.
 pub struct RandomLin<F: Copy = f32> {
     rng: fastrand::Rng,
     current_value: F,
@@ -220,7 +220,7 @@ pub struct RandomLin<F: Copy = f32> {
 
 impl<F: Float> RandomLin<F> {
     /// Create a new RandomLin, seeding it from the global atomic seed.
-    pub fn new() -> Self {
+    pub fn new(freq: F) -> Self {
         let mut rng = fastrand::Rng::with_seed(next_randomness_seed() * 94 + 53);
         Self {
             current_value: F::new(rng.f32()),
@@ -228,7 +228,7 @@ impl<F: Float> RandomLin<F> {
             rng,
             freq_to_phase_inc: F::ZERO,
             current_change_width: F::ZERO,
-            phase_step: F::ONE,
+            phase_step: freq,
         }
     }
 
@@ -242,13 +242,7 @@ impl<F: Float> RandomLin<F> {
     }
 }
 
-impl<F: Float> Default for RandomLin<F> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<F: Float> Gen for RandomLin<F> {
+impl<F: Float> UGen for RandomLin<F> {
     type Sample = F;
     type Inputs = U0;
     type Outputs = U1;
@@ -256,12 +250,14 @@ impl<F: Float> Gen for RandomLin<F> {
 
     fn init(&mut self, ctx: &AudioCtx) {
         self.freq_to_phase_inc = F::ONE / F::from(ctx.sample_rate).unwrap();
+        // freq is stored in phase_step until init
+        self.phase_step *= self.freq_to_phase_inc;
         self.new_value();
     }
     fn process(
         &mut self,
         _ctx: AudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         let out = self.current_value + self.phase * self.current_change_width;
@@ -283,7 +279,12 @@ impl<F: Float> Gen for RandomLin<F> {
     fn param_apply(&mut self, _ctx: AudioCtx, index: usize, value: ParameterValue) {
         match index {
             0 => {
-                self.phase_step = F::new(value.float().unwrap()) * self.freq_to_phase_inc;
+                if self.freq_to_phase_inc == F::ZERO {
+                    // freq is stored in phase_step until init
+                    self.phase_step = value.f().unwrap();
+                } else {
+                    self.phase_step = value.f::<F>().unwrap() * self.freq_to_phase_inc;
+                }
             }
             _ => {}
         }

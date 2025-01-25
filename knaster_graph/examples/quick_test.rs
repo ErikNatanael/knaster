@@ -2,14 +2,14 @@ use std::time::Duration;
 
 use anyhow::Result;
 use knaster_core::envelopes::EnvAsr;
-use knaster_core::math::{MathGen, Mul};
+use knaster_core::math::{MathUGen, Mul};
 use knaster_core::noise::{RandomLin, WhiteNoise};
 use knaster_core::onepole::OnePoleHpf;
 use knaster_core::{
     osc::SinNumeric,
     typenum::{U0, U1, U2},
-    wrappers_core::{GenWrapperCoreExt, WrSmoothParams},
-    Gen,
+    wrappers_core::{UGenWrapperCoreExt, WrSmoothParams},
+    UGen,
 };
 use knaster_core::{Done, Seconds};
 use knaster_graph::connectable::Sink;
@@ -60,28 +60,28 @@ fn main() -> Result<()> {
         env.set(("t_restart", knaster_graph::Trigger))?;
         env.change("t_release")?
             .trig()
-            .after(Seconds::from_seconds_f64(0.5));
-        let mult = graph.push(MathGen::<_, U1, Mul>::new());
+            .after(Seconds::from_secs_f64(0.5));
+        let mult = graph.push(MathUGen::<_, U1, Mul>::new());
         let modulator = graph.push(SinNumeric::new(0.5).wr_powi(2).wr_mul(5000.).wr_add(freq));
         modulator.set(("freq", 0.5))?;
         let random_lin_modulator =
-            graph.push(RandomLin::new().wr_powi(2).wr_mul(5000.).wr_add(100.));
+            graph.push(RandomLin::new(4.0).wr_powi(2).wr_mul(5000.).wr_add(100.));
         random_lin_modulator.set(("freq", 4.0))?;
         let lpf = graph.push(OnePoleHpf::new().ar_params());
         // graph.connect_node_to_parameter(&modulator, &lpf, 0, "cutoff_freq", false)?;
-        graph.connect_node_to_parameter(&random_lin_modulator, &lpf, 0, "cutoff_freq", false)?;
+        graph.connect_to_parameter(&random_lin_modulator, 0, "cutoff_freq", &lpf)?;
         let noise = graph.push(WhiteNoise::new().wr_mul(0.2));
         // let noise = graph.push(PinkNoise::new().wr_mul(0.2));
         // let noise = graph.push(BrownNoise::new().wr_mul(0.2));
 
         // connect them together
-        graph.connect_add(&osc1, 0, 0, &lpf)?;
-        graph.connect_add(&osc3, 0, 0, &lpf)?;
-        graph.connect_add(&osc2, 0, 0, &lpf)?;
-        graph.connect_add(&noise, 0, 0, &lpf)?;
-        graph.connect(&lpf, 0, 0, &mult)?;
-        graph.connect(&env, 0, 1, &mult)?;
-        graph.connect(&mult, [0, 0], [0, 1], Sink::Graph)?;
+        graph.connect(&osc1, 0, 0, &lpf)?;
+        graph.connect(&osc3, 0, 0, &lpf)?;
+        graph.connect(&osc2, 0, 0, &lpf)?;
+        graph.connect(&noise, 0, 0, &lpf)?;
+        graph.connect_replace(&lpf, 0, 0, &mult)?;
+        graph.connect_replace(&env, 0, 1, &mult)?;
+        graph.connect_replace(&mult, [0, 0], [0, 1], Sink::Graph)?;
         graph.commit_changes()?;
 
         // let inspection = top_level_graph.inspection();

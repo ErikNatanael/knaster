@@ -1,4 +1,7 @@
-use crate::{core::{marker::PhantomData, ops::Add}, GenFlags};
+use crate::{
+    core::{marker::PhantomData, ops::Add},
+    UGenFlags,
+};
 
 use knaster_primitives::{
     numeric_array::NumericArray,
@@ -8,21 +11,21 @@ use knaster_primitives::{
 
 use crate::{
     parameters::{PFloat, ParameterValue},
-    AudioCtx, BlockAudioCtx, Gen,
+    AudioCtx, BlockAudioCtx, UGen,
 };
 
 /// Wrapper that enables setting a parameter to an audio rate signal. This must
-/// wrap a [`Gen`] for audio rate parameter changes to take effect.
-pub struct WrArParams<T: Gen> {
+/// wrap a [`UGen`] for audio rate parameter changes to take effect.
+pub struct WrArParams<T: UGen> {
     gen: T,
     buffers: NumericArray<Option<*const T::Sample>, T::Parameters>,
     // Keeps track of where we are in a block if processing sample-by-sample
     block_index: usize,
 }
 
-unsafe impl<T: Gen> Send for WrArParams<T> {}
+unsafe impl<T: UGen> Send for WrArParams<T> {}
 
-impl<T: Gen > WrArParams<T> {
+impl<T: UGen> WrArParams<T> {
     pub fn new(gen: T) -> Self {
         Self {
             gen,
@@ -32,7 +35,7 @@ impl<T: Gen > WrArParams<T> {
     }
 }
 
-impl<T: Gen  > Gen for WrArParams<T> {
+impl<T: UGen> UGen for WrArParams<T> {
     type Sample = T::Sample;
 
     type Inputs = T::Inputs;
@@ -46,7 +49,7 @@ impl<T: Gen  > Gen for WrArParams<T> {
     fn process(
         &mut self,
         ctx: AudioCtx,
-        flags: &mut GenFlags, 
+        flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         for (param, buffer) in self.buffers.iter().enumerate() {
@@ -85,21 +88,21 @@ impl<T: Gen  > Gen for WrArParams<T> {
 
 /// Adds an audio input channel and uses that channel to set a parameter every
 /// sample. This disables block based processing and any optimisations related
-/// to that for the inner [`Gen`]
+/// to that for the inner [`UGen`]
 ///
-/// For use in `knaster_graph`, prefer 
+/// For use in `knaster_graph`, prefer
 pub struct WrArParamToInput<T, ParamIndex> {
     gen: T,
     _index: PhantomData<ParamIndex>,
 }
 
-impl<T: Gen  , ParamIndex: Unsigned> Gen for WrArParamToInput<T, ParamIndex>
+impl<T: UGen, ParamIndex: Unsigned> UGen for WrArParamToInput<T, ParamIndex>
 where
     // ParamIndex must be less than the number of parameters. This is as much as
     // we can check statically, remaining checks will be done at runtime.
     ParamIndex: Cmp<T::Inputs, Output = Less>,
-    <T as Gen>::Inputs: Add<B1>,
-    <<T as Gen>::Inputs as Add<B1>>::Output: Size,
+    <T as UGen>::Inputs: Add<B1>,
+    <<T as UGen>::Inputs as Add<B1>>::Output: Size,
 {
     type Sample = T::Sample;
 
@@ -115,7 +118,7 @@ where
     fn process(
         &mut self,
         ctx: AudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         // The index T::Inputs is one more than the previous number of audio
@@ -123,7 +126,7 @@ where
         self.gen.param_apply(
             ctx,
             ParamIndex::USIZE,
-            ParameterValue::Float(input[<T as Gen>::Inputs::USIZE].to_f64() as PFloat),
+            ParameterValue::Float(input[<T as UGen>::Inputs::USIZE].to_f64() as PFloat),
         );
         let mut new_input = NumericArray::default();
         for i in 0..T::Inputs::USIZE {
@@ -135,7 +138,7 @@ where
     fn process_block<InBlock, OutBlock>(
         &mut self,
         ctx: BlockAudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where

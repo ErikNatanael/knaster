@@ -6,10 +6,10 @@ use alloc::{boxed::Box, string::String, string::ToString};
 use knaster_core::{AudioCtx, Float};
 
 use crate::graph::GraphId;
-use crate::{buffer_allocator::BufferAllocator, dyngen::DynGen, task::Task};
+use crate::{buffer_allocator::BufferAllocator, dyngen::DynUGen, task::Task};
 
-/// `Node` wraps a [`DynGen`] in a graph. It is used to hold a pointer to the
-/// Gen allocation and some metadata about it.
+/// `Node` wraps a [`DynUGen`] in a graph. It is used to hold a pointer to the
+/// UGen allocation and some metadata about it.
 ///
 /// Safety:
 /// - `Node` should not be used outside the graph context.
@@ -24,7 +24,7 @@ pub(crate) struct Node<F> {
     pub(crate) is_graph: Option<GraphId>,
 
     /// STATIC DATA (won't change after the node has been created)
-    pub(crate) gen: *mut dyn DynGen<F>,
+    pub(crate) gen: *mut dyn DynUGen<F>,
     pub(crate) inputs: usize,
     pub(crate) outputs: usize,
     /// true if the node was not pushed manually to the Graph. Such nodes may
@@ -45,7 +45,7 @@ pub(crate) struct Node<F> {
     pub(crate) remove_me: Option<Arc<AtomicBool>>,
 }
 impl<F: Float> Node<F> {
-    pub fn new<T: DynGen<F> + 'static>(name: String, gen: T) -> Self {
+    pub fn new<T: DynUGen<F> + 'static>(name: String, gen: T) -> Self {
         let parameter_descriptions = gen
             .param_descriptions()
             .into_iter()

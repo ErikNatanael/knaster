@@ -1,3 +1,4 @@
+pub mod buffer;
 pub mod delay;
 pub mod envelopes;
 pub mod math;
@@ -7,6 +8,7 @@ pub mod osc;
 pub mod pan;
 pub mod polyblep;
 pub mod svf;
+pub mod util;
 
 use crate::core::eprintln;
 use crate::core::ops::Deref;
@@ -147,7 +149,7 @@ impl<'a> From<&'a mut BlockAudioCtx> for &'a AudioCtx {
 /// the flag `remove_container`. It is up to the graph implementations how the node will be
 /// freed. In knaster_graph, `remove_self` requires a wrapper while `remove_parent` is built in.
 #[derive(Copy, Clone, Debug)]
-pub struct GenFlags {
+pub struct UGenFlags {
     /// Will be set to true by a wrapper if self freeing it supported on the
     /// current node, otherwise it will be false. This is purely diagnostic to
     /// display an error if you try to free a node that cannot be freed.
@@ -166,7 +168,7 @@ pub struct GenFlags {
     /// frame, the graph output will be 0 until it is removed.
     remove_parent_from_frame_in_block: u32,
 }
-impl GenFlags {
+impl UGenFlags {
     pub fn new() -> Self {
         Self {
             remove_self_supported: false,
@@ -240,12 +242,19 @@ impl GenFlags {
         self.done_frame_in_block = u32::MAX;
     }
 }
-impl Default for GenFlags {
+impl Default for UGenFlags {
     fn default() -> Self {
         Self::new()
     }
 }
-pub trait Gen {
+/// Defines a unit that can generate and/or process sound.
+///
+/// The UGen provides associated types for the number of inputs, outputs and parameters that the
+/// UGen provides. These are given in `typenum` numbers, because of the limitations of const
+/// generics in Rust at the time of writing. These numbers look like `U0`, `U1`, `U2` etc.
+///
+/// The name UGen stands for "unit generator" and originally comes from the MUSIC-N family of audio programming environments.
+pub trait UGen {
     /// The type of float (f32 or f64) that this Gen is implemented for. It is
     /// recommended to implement your types be generic over [`Float`].
     type Sample: Float;
@@ -263,7 +272,7 @@ pub trait Gen {
     fn process(
         &mut self,
         ctx: AudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs>;
 
@@ -278,7 +287,7 @@ pub trait Gen {
     fn process_block<InBlock, OutBlock>(
         &mut self,
         ctx: BlockAudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where
@@ -342,7 +351,7 @@ pub trait Gen {
     /// change should take effect.
     ///
     /// This will not have any effect unless a [`WrHiResParams`] wrapper is
-    /// used, or the [`Gen`] supports it internally (none of the Knaster proper
+    /// used, or the [`UGen`] supports it internally (none of the Knaster proper
     /// Gens do).
     ///
     /// Wrappers must propagagte this call.
@@ -352,7 +361,7 @@ pub trait Gen {
         eprintln!("Warning: Parameter delay set, but did not reach a WrHiResParams and will have no effect.");
     }
     /// Apply a parameter change. Typechecks and bounds checks the arguments and
-    /// provides sensible errors. Calls [`Gen::param_apply`] under the hood.
+    /// provides sensible errors. Calls [`UGen::param_apply`] under the hood.
     fn param(
         &mut self,
         ctx: AudioCtx,

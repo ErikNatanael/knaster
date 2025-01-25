@@ -5,13 +5,13 @@ use knaster_core::{
     empty_block,
     numeric_array::NumericArray,
     typenum::{Unsigned, U0, U1, U3},
-    AudioCtx, Block, BlockAudioCtx, Float, Frame, Gen, GenFlags, Param, ParameterError,
-    ParameterRange, ParameterType, ParameterValue, VecBlock,
+    AudioCtx, Block, BlockAudioCtx, Float, Frame, Param, ParameterError, ParameterRange,
+    ParameterType, ParameterValue, UGen, UGenFlags, VecBlock,
 };
 fn main() -> Result<()> {
     // Let's pretend we're running an audio backend at 48kHz with a block size of 64.
     let ctx = BlockAudioCtx::new(AudioCtx::new(48000, 64));
-    let mut flags = GenFlags::new();
+    let mut flags = UGenFlags::new();
     let mut osc = Osc::new();
     // Since we own the Osc directly, and it isn't wrapped in anything, we can
     // set the frequency directly:
@@ -62,7 +62,7 @@ impl<F: Float> Osc<F> {
     }
 }
 
-impl<F: Float> Gen for Osc<F> {
+impl<F: Float> UGen for Osc<F> {
     type Sample = F;
     type Inputs = U0;
     type Outputs = U1;
@@ -72,7 +72,7 @@ impl<F: Float> Gen for Osc<F> {
     fn process(
         &mut self,
         _ctx: AudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         let out = (self.phase * F::from(std::f32::consts::TAU).unwrap()).sin();

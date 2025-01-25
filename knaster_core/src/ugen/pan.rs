@@ -3,7 +3,7 @@ use core::marker::PhantomData;
 use knaster_primitives::typenum::{U1, U2};
 use knaster_primitives::Float;
 
-use super::Gen;
+use super::UGen;
 
 /// Pan a mono signal to stereo using the cos/sine pan law. Pan value should be
 /// between -1 and 1, 0 being in the center.
@@ -21,7 +21,7 @@ impl<F: Float> Pan2<F> {
         }
     }
 }
-impl<F: Float> Gen for Pan2<F> {
+impl<F: Float> UGen for Pan2<F> {
     type Sample = F;
 
     type Inputs = U1;
@@ -33,7 +33,7 @@ impl<F: Float> Gen for Pan2<F> {
     fn process(
         &mut self,
         _ctx: super::AudioCtx,
-        _flags: &mut super::GenFlags,
+        _flags: &mut super::UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
         let signal = input[0];

@@ -58,7 +58,7 @@ impl PIntegerConvertible for usize {
 pub enum ParameterError {
     #[error("Description parameters are not supported in this contect. Please use the parameter index instead. Description: `{0}`")]
     DescriptionNotSupported(&'static str),
-    #[error("The parameter description `{0}` does not match any parameter on this `Gen`")]
+    #[error("The parameter description `{0}` does not match any parameter on this `UGen`")]
     DescriptionNotFound(&'static str),
     #[error("You are trying to set a parameter to a type it does not support.")]
     WrongParameterType,

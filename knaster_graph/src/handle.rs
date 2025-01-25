@@ -10,7 +10,7 @@ use crate::{
 };
 use alloc::{string::ToString, vec::Vec};
 use knaster_core::{
-    typenum::Unsigned, Gen, Param, ParameterError, ParameterSmoothing, ParameterValue, Seconds,
+    typenum::Unsigned, Param, ParameterError, ParameterSmoothing, ParameterValue, Seconds, UGen,
 };
 
 #[cfg(not(feature = "std"))]
@@ -97,7 +97,7 @@ impl<T> Clone for Handle<T> {
     }
 }
 
-impl<T: Gen> Handle<T> {
+impl<T: UGen> Handle<T> {
     pub(crate) fn new(untyped_handle: RawHandle) -> Self {
         Self {
             _phantom: PhantomData,
@@ -140,7 +140,7 @@ pub trait HandleTrait: Sized {
     /// fill the graph buffer before that.
     fn can_send(&self) -> bool;
 }
-impl<T: Gen> HandleTrait for Handle<T> {
+impl<T: UGen> HandleTrait for Handle<T> {
     fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), GraphError> {
         let c = change.into();
         let param_index = match c.param {

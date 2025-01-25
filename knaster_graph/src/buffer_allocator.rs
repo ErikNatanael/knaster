@@ -15,7 +15,7 @@
 // // We pretend the node has been processed
 // // The in_block_can be returned
 // a.return_block(in_block);
-// // The old out_block becomes the input block to the next 2 Gens
+// // The old out_block becomes the input block to the next 2 UGens
 // let out_block2 = a.get_block(64);
 // let out_block3 = a.get_block(64);
 // a.return_block(out_block);

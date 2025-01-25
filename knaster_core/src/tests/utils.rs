@@ -1,17 +1,18 @@
 use crate::{
-    typenum::{U0, U1}, Float, Gen, GenFlags, PFloat, ParameterRange,
+    typenum::{U0, U1},
+    Float, PFloat, ParameterRange, UGen, UGenFlags,
 };
 
 /// Outputs a static number every frame
-pub(crate) struct TestNumGen<F> {
+pub(crate) struct TestNumUGen<F> {
     number: F,
 }
-impl<F: Float> TestNumGen<F> {
+impl<F: Float> TestNumUGen<F> {
     pub fn new(n: F) -> Self {
         Self { number: n }
     }
 }
-impl<F: Float> Gen for TestNumGen<F> {
+impl<F: Float> UGen for TestNumUGen<F> {
     type Sample = F;
 
     type Inputs = U0;
@@ -21,7 +22,7 @@ impl<F: Float> Gen for TestNumGen<F> {
     fn process(
         &mut self,
         _ctx: crate::AudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         _input: crate::Frame<Self::Sample, Self::Inputs>,
     ) -> crate::Frame<Self::Sample, Self::Outputs> {
         [self.number].into()
@@ -37,12 +38,7 @@ impl<F: Float> Gen for TestNumGen<F> {
         [].into()
     }
 
-    fn param_apply(
-        &mut self,
-        _ctx: crate::AudioCtx,
-        _index: usize,
-        _value: crate::ParameterValue,
-    ) {
+    fn param_apply(&mut self, _ctx: crate::AudioCtx, _index: usize, _value: crate::ParameterValue) {
     }
 }
 
@@ -58,7 +54,7 @@ impl<F: Float> TestInPlusParamGen<F> {
         self.number = n;
     }
 }
-impl<F: Float> Gen for TestInPlusParamGen<F> {
+impl<F: Float> UGen for TestInPlusParamGen<F> {
     type Sample = F;
 
     type Inputs = U1;
@@ -68,7 +64,7 @@ impl<F: Float> Gen for TestInPlusParamGen<F> {
     fn process(
         &mut self,
         _ctx: crate::AudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         input: crate::Frame<Self::Sample, Self::Inputs>,
     ) -> crate::Frame<Self::Sample, Self::Outputs> {
         [self.number + input[0]].into()

@@ -65,12 +65,9 @@ mod wavetable_vec {
     use crate::core::f64::consts::PI;
     use crate::dsp::xorrng::XOrShift32Rng;
 
-    #[cfg(all(feature = "alloc", not(feature = "std")))]
-    use alloc::vec;
-    #[cfg(all(feature = "alloc", not(feature = "std")))]
-    use alloc::vec::Vec;
+    use crate::core::{string::String, vec, vec::Vec};
 
-    use crate::core::{format, string::String, vec, vec::Vec};
+    use crate::core::format;
     use knaster_primitives::Float;
 
     /// Non-anti-aliased wavetable.

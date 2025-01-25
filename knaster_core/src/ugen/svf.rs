@@ -8,7 +8,8 @@ use crate::num_traits::FromPrimitive;
 use crate::numeric_array::NumericArray;
 use crate::typenum::{U1, U5};
 use crate::{
-    AudioCtx, Gen, GenFlags, PFloat, PInteger, PIntegerConvertible, ParameterRange, ParameterValue,
+    AudioCtx, PFloat, PInteger, PIntegerConvertible, ParameterRange, ParameterValue, UGen,
+    UGenFlags,
 };
 use knaster_primitives::num_traits;
 use knaster_primitives::{Float, Frame};
@@ -224,7 +225,7 @@ impl<F: Float> SvfFilter<F> {
         *m0 * v0 + *m1 * v1 + *m2 * v2
     }
 }
-impl<F: Float> Gen for SvfFilter<F> {
+impl<F: Float> UGen for SvfFilter<F> {
     type Sample = F;
     type Inputs = U1;
     type Outputs = U1;
@@ -241,7 +242,7 @@ impl<F: Float> Gen for SvfFilter<F> {
     fn process(
         &mut self,
         _ctx: AudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         [self.process_sample(input[0])].into()
@@ -271,10 +272,41 @@ impl<F: Float> Gen for SvfFilter<F> {
         match index {
             Self::CUTOFF_FREQ => {
                 self.cutoff_freq = F::new(value.float().unwrap());
+                self.set_coeffs(
+                    self.cutoff_freq,
+                    self.q,
+                    self.gain_db,
+                    F::from(ctx.sample_rate).unwrap(),
+                );
             }
-            Self::Q => self.q = F::new(value.float().unwrap()),
-            Self::GAIN => self.gain_db = F::new(value.float().unwrap()),
-            Self::FILTER => self.ty = SvfFilterType::from(value.integer().unwrap()),
+            Self::Q => {
+                self.q = F::new(value.float().unwrap());
+                self.set_coeffs(
+                    self.cutoff_freq,
+                    self.q,
+                    self.gain_db,
+                    F::from(ctx.sample_rate).unwrap(),
+                );
+            }
+            Self::GAIN => {
+                self.gain_db = F::new(value.float().unwrap());
+
+                self.set_coeffs(
+                    self.cutoff_freq,
+                    self.q,
+                    self.gain_db,
+                    F::from(ctx.sample_rate).unwrap(),
+                );
+            }
+            Self::FILTER => {
+                self.ty = SvfFilterType::from(value.integer().unwrap());
+                self.set_coeffs(
+                    self.cutoff_freq,
+                    self.q,
+                    self.gain_db,
+                    F::from(ctx.sample_rate).unwrap(),
+                );
+            }
             Self::T_CALCULATE_COEFFICIENTS => self.set_coeffs(
                 self.cutoff_freq,
                 self.q,

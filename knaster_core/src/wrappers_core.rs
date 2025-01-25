@@ -17,33 +17,36 @@ pub use audio_rate::*;
 mod smooth_params;
 pub use smooth_params::*;
 
-use crate::Gen;
+use crate::UGen;
 
-/// Adds methods as shortcuts for adding a range of wrappers_graph to any `Gen + Parameterable`
+/// Adds methods as shortcuts for adding a range of wrappers_graph to any [`UGen`]
 ///
 /// The methods all take `self`, returning the new wrapper. Math operation
 /// wrappers_graph start with `wr_` to disambiguate them from `std::ops::*`
-pub trait GenWrapperCoreExt<T: Gen> {
+pub trait UGenWrapperCoreExt<T: UGen> {
     fn wr<C: FnMut(T::Sample) -> T::Sample + 'static>(self, c: C) -> WrClosure<T, C>;
     fn wr_mul(self, v: T::Sample) -> WrMul<T>;
     fn wr_add(self, v: T::Sample) -> WrAdd<T>;
     fn wr_sub(self, v: T::Sample) -> WrSub<T>;
-    fn wr_v_sub_gen(self, v: T::Sample) -> WrVSubGen<T>;
+    fn wr_v_sub_gen(self, v: T::Sample) -> WrVSub<T>;
     fn wr_div(self, v: T::Sample) -> WrDiv<T>;
-    fn wr_v_div_gen(self, v: T::Sample) -> WrVDivGen<T>;
+    fn wr_v_div_gen(self, v: T::Sample) -> WrVDiv<T>;
     fn wr_powf(self, v: T::Sample) -> WrPowf<T>;
     fn wr_powi(self, v: i32) -> WrPowi<T>;
     /// Enable smoothing/easing functions for float parameters
     fn smooth_params(self) -> WrSmoothParams<T>;
     /// Enable setting a parameter to an audio rate signal
     fn ar_params(self) -> WrArParams<T>;
-    /// Precise timing
+    /// Precise timing. Requires a generic parameter for how many changes can be handled per block.
+    ///
+    /// Unless you are sending very frequent changes or are using a huge block size, a low number
+    /// will suffice.
     fn precise_timing<const MAX_CHANGES_PER_BLOCK: usize>(
         self,
     ) -> WrHiResParams<MAX_CHANGES_PER_BLOCK, T>;
 }
 
-impl<T: Gen> GenWrapperCoreExt<T> for T {
+impl<T: UGen> UGenWrapperCoreExt<T> for T {
     fn wr_mul(self, v: T::Sample) -> WrMul<T> {
         WrMul::new(self, v)
     }
@@ -52,31 +55,31 @@ impl<T: Gen> GenWrapperCoreExt<T> for T {
         WrSmoothParams::new(self)
     }
 
-    fn wr_add(self, v: <T as Gen>::Sample) -> WrAdd<T> {
+    fn wr_add(self, v: <T as UGen>::Sample) -> WrAdd<T> {
         WrAdd::new(self, v)
     }
 
-    fn wr_sub(self, v: <T as Gen>::Sample) -> WrSub<T> {
+    fn wr_sub(self, v: <T as UGen>::Sample) -> WrSub<T> {
         WrSub::new(self, v)
     }
 
-    fn wr_div(self, v: <T as Gen>::Sample) -> WrDiv<T> {
+    fn wr_div(self, v: <T as UGen>::Sample) -> WrDiv<T> {
         WrDiv::new(self, v)
     }
 
-    fn wr_powf(self, v: <T as Gen>::Sample) -> WrPowf<T> {
+    fn wr_powf(self, v: <T as UGen>::Sample) -> WrPowf<T> {
         WrPowf::new(self, v)
     }
 
-    fn wr_v_sub_gen(self, v: <T as Gen>::Sample) -> WrVSubGen<T> {
-        WrVSubGen::new(self, v)
+    fn wr_v_sub_gen(self, v: <T as UGen>::Sample) -> WrVSub<T> {
+        WrVSub::new(self, v)
     }
 
-    fn wr_v_div_gen(self, v: <T as Gen>::Sample) -> WrVDivGen<T> {
-        WrVDivGen::new(self, v)
+    fn wr_v_div_gen(self, v: <T as UGen>::Sample) -> WrVDiv<T> {
+        WrVDiv::new(self, v)
     }
 
-    fn wr<C: FnMut(<T as Gen>::Sample) -> <T as Gen>::Sample + 'static>(
+    fn wr<C: FnMut(<T as UGen>::Sample) -> <T as UGen>::Sample + 'static>(
         self,
         c: C,
     ) -> WrClosure<T, C> {

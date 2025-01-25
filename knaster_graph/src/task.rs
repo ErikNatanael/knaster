@@ -4,22 +4,22 @@ use crate::core::sync::atomic::Ordering;
 use crate::core::sync::Arc;
 use alloc::{boxed::Box, vec::Vec};
 
-use knaster_core::GenFlags;
+use knaster_core::UGenFlags;
 use knaster_core::{BlockAudioCtx, Float};
 
 use crate::block::RawBlock;
-use crate::dyngen::DynGen;
+use crate::dyngen::DynUGen;
 use crate::graph::{NodeKey, OwnedRawBuffer};
 
 pub struct Task<F> {
-    pub(crate) gen: *mut dyn DynGen<F>,
+    pub(crate) gen: *mut dyn DynUGen<F>,
     // Sequential buffers of a certain channel count
     pub(crate) in_buffers: Vec<*const F>,
     pub(crate) out_buffer: *mut F,
     pub(crate) output_channels: usize,
 }
 impl<F: Float> Task<F> {
-    pub fn run(&mut self, ctx: BlockAudioCtx, flags: &mut GenFlags) {
+    pub fn run(&mut self, ctx: BlockAudioCtx, flags: &mut UGenFlags) {
         let input = unsafe { AggregateBlockRead::new(&self.in_buffers, ctx.block_size()) };
         let mut output =
             unsafe { RawBlock::new(self.out_buffer, self.output_channels, ctx.block_size()) };
@@ -85,7 +85,7 @@ pub(crate) struct TaskData<F: Float> {
     /// and to the NodeKey that points to them in the Graph. This is used to
     /// apply parameter changes directly by function calls before any tasks are
     /// applied.
-    pub(crate) gens: Vec<(NodeKey, *mut dyn DynGen<F>)>,
+    pub(crate) gens: Vec<(NodeKey, *mut dyn DynUGen<F>)>,
     /// (node_index_in_order, Vec<(graph_input_channel, node_input_channel))
     pub(crate) graph_input_channels_to_nodes: Vec<(usize, Vec<(usize, usize)>)>,
 }

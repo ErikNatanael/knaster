@@ -7,8 +7,8 @@ use anyhow::Result;
 use knaster_core::{
     osc::SinNumeric,
     typenum::{U0, U2},
-    wrappers_core::{GenWrapperCoreExt, WrSmoothParams},
-    Gen, ParameterSmoothing,
+    wrappers_core::{UGenWrapperCoreExt, WrSmoothParams},
+    ParameterSmoothing, UGen,
 };
 use knaster_graph::connectable::Sink;
 use knaster_graph::runner::RunnerOptions;
@@ -42,10 +42,10 @@ fn main() -> Result<()> {
     let osc3 = graph.push(SinNumeric::new(200. * 4.).wr_mul(0.2));
     osc3.set(("freq", 200. * 4.))?;
     // connect them together
-    graph.connect(&osc1, 0, 0, Sink::Graph)?;
+    graph.connect_replace(&osc1, 0, 0, Sink::Graph)?;
     graph.connect_node_to_output(&osc1, 0, 1, false)?;
-    graph.connect_add(&osc3, 0, 0, Sink::Graph)?;
-    graph.connect_add(&osc2, 0, 0, Sink::Graph)?;
+    graph.connect(&osc3, 0, 0, Sink::Graph)?;
+    graph.connect(&osc2, 0, 0, Sink::Graph)?;
     graph.commit_changes()?;
 
     let inspection = graph.inspection();

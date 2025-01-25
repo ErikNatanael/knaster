@@ -11,7 +11,7 @@ use knaster_core::{
     delay::StaticSampleDelay,
     noise::next_randomness_seed,
     typenum::{U2, U5},
-    AudioCtx, Float, Gen, ParameterRange, Seconds,
+    AudioCtx, Float, ParameterRange, Seconds, UGen,
 };
 
 pub struct Galactic<F> {
@@ -43,7 +43,7 @@ const GALACTIC_DELAY_TIMES: [usize; 12] = [
     6480, 3660, 1720, 680, 9700, 6000, 2320, 940, 15220, 8460, 4540, 3200,
 ];
 
-impl<F: Float> Gen for Galactic<F> {
+impl<F: Float> UGen for Galactic<F> {
     type Sample = F;
 
     type Inputs = U2;
@@ -79,7 +79,7 @@ impl<F: Float> Gen for Galactic<F> {
     fn process(
         &mut self,
         _ctx: knaster_core::AudioCtx,
-        _flags: &mut knaster_core::GenFlags,
+        _flags: &mut knaster_core::UGenFlags,
         input: knaster_core::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         let left_in = [input[0]];
@@ -92,7 +92,7 @@ impl<F: Float> Gen for Galactic<F> {
     fn process_block<InBlock, OutBlock>(
         &mut self,
         _ctx: knaster_core::BlockAudioCtx,
-        _flags: &mut knaster_core::GenFlags,
+        _flags: &mut knaster_core::UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where

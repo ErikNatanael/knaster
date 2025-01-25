@@ -1,8 +1,8 @@
 use knaster_core::numeric_array::NumericArray;
 use knaster_core::typenum::{Add1, Unsigned, B1};
 use knaster_core::{
-    AudioCtx, Block, BlockAudioCtx, BlockRead, Done, Frame, Gen, GenFlags, ParameterRange,
-    ParameterValue, Size,
+    AudioCtx, Block, BlockAudioCtx, BlockRead, Done, Frame, ParameterRange, ParameterValue, Size,
+    UGen, UGenFlags,
 };
 use std::ops::Add;
 use std::sync::atomic::AtomicBool;
@@ -19,8 +19,8 @@ pub struct WrDone<T> {
     pub(crate) free_self_flag: Arc<AtomicBool>,
     pub(crate) done_action: Done,
 }
-impl<T: Gen> WrDone<T> {
-    fn process_flags(&mut self, flags: &mut GenFlags) {
+impl<T: UGen> WrDone<T> {
+    fn process_flags(&mut self, flags: &mut UGenFlags) {
         if let Some(frame) = flags.done() {
             match self.done_action {
                 Done::None => {}
@@ -35,11 +35,11 @@ impl<T: Gen> WrDone<T> {
     }
 }
 
-impl<T: Gen> Gen for WrDone<T>
+impl<T: UGen> UGen for WrDone<T>
 where
     // Make sure we can add a parameter
-    <T as Gen>::Parameters: Add<B1>,
-    <<T as Gen>::Parameters as Add<B1>>::Output: Size,
+    <T as UGen>::Parameters: Add<B1>,
+    <<T as UGen>::Parameters as Add<B1>>::Output: Size,
 {
     type Sample = T::Sample;
 
@@ -54,7 +54,7 @@ where
     fn process(
         &mut self,
         ctx: AudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         flags.mark_remove_self_supported();
@@ -66,7 +66,7 @@ where
     fn process_block<InBlock, OutBlock>(
         &mut self,
         ctx: BlockAudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where

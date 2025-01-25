@@ -2,12 +2,12 @@ use std::time::Duration;
 
 use anyhow::Result;
 use knaster_core::envelopes::EnvAr;
-use knaster_core::math::{MathGen, Mul};
+use knaster_core::math::{MathUGen, Mul};
 use knaster_core::osc::SinWt;
 use knaster_core::pan::Pan2;
 use knaster_core::{
     typenum::{U0, U1, U2},
-    wrappers_core::GenWrapperCoreExt,
+    wrappers_core::UGenWrapperCoreExt,
 };
 use knaster_graph::runner::RunnerOptions;
 use knaster_graph::{
@@ -40,7 +40,7 @@ fn main() -> Result<()> {
         let env = g.push(env);
         let sine =
             g.push(SinWt::new(rng.gen_range(3000.0..10000.0)).wr_mul(rng.gen_range(0.01..0.015)));
-        let mul = g.push(MathGen::<_, U1, Mul>::new());
+        let mul = g.push(MathUGen::<_, U1, Mul>::new());
         let pan = g.push(Pan2::new(rng.gen_range(-1.0..1.0)));
         g.connect_nodes(&env, &mul, 0, 0, false)?;
         g.connect_nodes(&sine, &mul, 0, 1, false)?;
@@ -53,7 +53,7 @@ fn main() -> Result<()> {
         let env = EnvAr::new(0.01, 0.1);
         let env = g.push(env);
         let sine = g.push(SinWt::new(rng.gen_range(6000.0..6500.0)).wr_mul(0.01));
-        let mul = g.push(MathGen::<_, U1, Mul>::new());
+        let mul = g.push(MathUGen::<_, U1, Mul>::new());
         g.connect_nodes(&env, &mul, 0, 0, false)?;
         g.connect_nodes(&sine, &mul, 0, 1, false)?;
         g.connect_node_to_output(&mul, 0, 0, true)?;

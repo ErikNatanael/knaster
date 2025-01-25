@@ -1,6 +1,6 @@
 use alloc::string::ToString;
 use knaster_core::Seconds;
-use knaster_core::{typenum::NonZero, AudioCtx, BlockAudioCtx, Float, GenFlags, Size};
+use knaster_core::{typenum::NonZero, AudioCtx, BlockAudioCtx, Float, Size, UGenFlags};
 
 use crate::graph::NodeId;
 use crate::SharedFrameClock;
@@ -96,7 +96,7 @@ impl<F: Float> Runner<F> {
         assert!(input_pointers.len() == self.inputs());
         let mut ctx = BlockAudioCtx::new(AudioCtx::new(self.sample_rate, self.block_size));
         ctx.set_frame_clock(self.frame_clock);
-        let mut flags = GenFlags::new();
+        let mut flags = UGenFlags::new();
         let gen = self.graph_node.gen;
         let input = unsafe { AggregateBlockRead::new(input_pointers, self.block_size) };
         unsafe { &mut (*gen) }.process_block(ctx, &mut flags, &input, &mut self.output_block);

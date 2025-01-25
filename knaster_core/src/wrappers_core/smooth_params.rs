@@ -1,21 +1,21 @@
 use knaster_primitives::{numeric_array::NumericArray, typenum::*, Block, BlockRead, Frame};
 
-use crate::{parameters::*, AudioCtx, BlockAudioCtx, Gen, GenFlags, Rate};
+use crate::{parameters::*, AudioCtx, BlockAudioCtx, Rate, UGen, UGenFlags};
 
-/// Wrapper that enables input parameter smoothing for a [`Gen`]. Smoothing only
+/// Wrapper that enables input parameter smoothing for a [`UGen`]. Smoothing only
 /// works with `Float` type parameters.
 ///
 /// First send a [`ParameterValue::Smoothing`] for a specific parameter to set
 /// the type of smoothing to be applied. Then set the parameter to a new value.
 /// The value will be interpolated from the old to the new value.
-pub struct WrSmoothParams<T: Gen> {
+pub struct WrSmoothParams<T: UGen> {
     gen: T,
     parameters: NumericArray<Rate, T::Parameters>,
     smoothing: NumericArray<ParameterSmoothing, T::Parameters>,
     smoothing_state: NumericArray<ParameterSmoothingState, T::Parameters>,
 }
 
-impl<T: Gen> WrSmoothParams<T> {
+impl<T: UGen> WrSmoothParams<T> {
     pub fn new(gen: T) -> Self {
         Self {
             gen,
@@ -98,7 +98,7 @@ impl<T: Gen> WrSmoothParams<T> {
         }
     }
 }
-impl<T: Gen> Gen for WrSmoothParams<T> {
+impl<T: UGen> UGen for WrSmoothParams<T> {
     type Sample = T::Sample;
 
     type Inputs = T::Inputs;
@@ -112,7 +112,7 @@ impl<T: Gen> Gen for WrSmoothParams<T> {
     fn process(
         &mut self,
         ctx: AudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         // We only have potentially block rate parameters, run the whole block
@@ -127,7 +127,7 @@ impl<T: Gen> Gen for WrSmoothParams<T> {
     fn process_block<InBlock, OutBlock>(
         &mut self,
         ctx: BlockAudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where

@@ -1,6 +1,6 @@
 # knaster_core
 
-This crate includes the fundamental building blocks of Knaster, such as `Gen`, `Block`, `ParameterValue` etc. It re-exports the `knaster_primitives` crate.
+This crate includes the fundamental building blocks of Knaster, such as `UGen`, `Block`, `ParameterValue` etc. It re-exports the `knaster_primitives` crate.
 
 knaster_core is `no_std` by default. Some features require `alloc`, such as `VecBlock` and `Wavetable`. The `unstable` feature unlocks potential optimisations the require the `nightly` compiler at the time of writing.
 

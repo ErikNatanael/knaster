@@ -1,9 +1,9 @@
 use crate::runner::RunnerOptions;
-use crate::tests::utils::TestNumGen;
-use crate::{handle::HandleTrait, runner::Runner, tests::utils::TestInPlusParamGen};
+use crate::tests::utils::TestNumUGen;
+use crate::{handle::HandleTrait, runner::Runner, tests::utils::TestInPlusParamUGen};
 use alloc::vec;
 use knaster_core::envelopes::EnvAsr;
-use knaster_core::math::{Add, MathGen, Mul};
+use knaster_core::math::{Add, MathUGen, Mul};
 use knaster_core::typenum::{U0, U1, U2};
 use knaster_core::{typenum::U3, Block, Done, Trigger};
 
@@ -46,8 +46,8 @@ fn graph_inputs_to_nodes_to_outputs() {
     // Connect input 1 to 0, 2, to 1
     graph.connect_input_to_output(0, 1, false).unwrap();
     graph.connect_input_to_output(0, 2, false).unwrap();
-    let g0 = graph.push(TestInPlusParamGen::new());
-    let g1 = graph.push(TestInPlusParamGen::new());
+    let g0 = graph.push(TestInPlusParamUGen::new());
+    let g1 = graph.push(TestInPlusParamUGen::new());
     g0.set(("number", 0.75)).unwrap();
     g1.set(("number", 0.5)).unwrap();
     graph.connect_node_to_output(&g0, 0, 2, true).unwrap();
@@ -77,12 +77,12 @@ fn multichannel_nodes() {
         ring_buffer_size: 50,
     });
 
-    let v0_0 = graph.push(TestNumGen::new(0.125));
-    let v0_1 = graph.push(TestNumGen::new(1.));
-    let v1_0 = graph.push(TestNumGen::new(0.5));
-    let v1_1 = graph.push(TestNumGen::new(4.125));
+    let v0_0 = graph.push(TestNumUGen::new(0.125));
+    let v0_1 = graph.push(TestNumUGen::new(1.));
+    let v1_0 = graph.push(TestNumUGen::new(0.5));
+    let v1_1 = graph.push(TestNumUGen::new(4.125));
     // two channel output
-    let m = graph.push(MathGen::<f64, U2, Add>::new());
+    let m = graph.push(MathUGen::<f64, U2, Add>::new());
     // Connect input 1 to 0, 2, to 1
     graph.connect_nodes(&v0_0, &m, 0, 0, false).unwrap();
     graph.connect_nodes(&v0_1, &m, 0, 1, false).unwrap();
@@ -104,8 +104,8 @@ fn multichannel_nodes() {
     assert_eq!(output.read(1, 0), 5.125);
 
     // Change the graph so that the output of m is multiplied by 0.5 and 0.125 respectively, but using two different nodes
-    let m2 = graph.push(MathGen::<f64, U1, Mul>::new());
-    let m3 = graph.push(MathGen::<f64, U1, Mul>::new());
+    let m2 = graph.push(MathUGen::<f64, U1, Mul>::new());
+    let m3 = graph.push(MathUGen::<f64, U1, Mul>::new());
     graph.connect_nodes(&m, &m2, 0, 0, false).unwrap();
     graph.connect_nodes(&m, &m3, 1, 0, false).unwrap();
     graph.connect_nodes(&v1_0, &m2, 0, 1, false).unwrap();

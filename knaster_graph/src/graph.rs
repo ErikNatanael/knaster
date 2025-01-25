@@ -24,9 +24,9 @@ use std::{
 use crate::inspection::{EdgeInspection, EdgeSource, GraphInspection, NodeInspection};
 use crate::wrappers_graph::done::WrDone;
 use knaster_core::{
-    math::{Add, MathGen},
+    math::{Add, MathUGen},
     typenum::*,
-    AudioCtx, Done, Float, Gen, Param, ParameterError, Size,
+    AudioCtx, Done, Float, Param, ParameterError, Size, UGen,
 };
 use rtrb::RingBuffer;
 use slotmap::{new_key_type, SecondaryMap, SlotMap};
@@ -197,6 +197,7 @@ impl<F: Float> Graph<F> {
             next_change_flag: Arc::new(AtomicBool::new(false)),
             shared_frame_clock,
         };
+        let remove_me = Arc::new(AtomicBool::new(false));
         let mut graph = Self {
             id,
             name,
@@ -224,7 +225,6 @@ impl<F: Float> Graph<F> {
         };
         // graph_gen
         let task_data = graph.generate_task_data(Arc::new(AtomicBool::new(false)), Vec::new());
-        let remove_me = Arc::new(AtomicBool::new(false));
 
         //         use paste::paste;
         //         macro_rules! graph_gen_channels {
@@ -298,8 +298,8 @@ impl<F: Float> Graph<F> {
         self.graph_gen_communicator.shared_frame_clock.clone()
     }
 
-    /// Push something implementing [`Gen`] to the graph.
-    pub fn push<T: Gen<Sample = F> + 'static>(&mut self, gen: T) -> Handle<T> {
+    /// Push something implementing [`UGen`] to the graph.
+    pub fn push<T: UGen<Sample = F> + 'static>(&mut self, gen: T) -> Handle<T> {
         let name = std::any::type_name::<T>();
         let name = shorten_name(name);
         let node = Node::new(name.to_owned(), gen);
@@ -316,17 +316,17 @@ impl<F: Float> Graph<F> {
             self.graph_gen_communicator.shared_frame_clock.clone(),
         ))
     }
-    /// Push something implementing [`Gen`] to the graph, adding the [`WrDone`] wrapper. This
+    /// Push something implementing [`UGen`] to the graph, adding the [`WrDone`] wrapper. This
     /// enables the node to free itself if it marks itself as done or for removal using [`GenFlags`].
-    pub fn push_with_done_action<T: Gen<Sample = F> + 'static>(
+    pub fn push_with_done_action<T: UGen<Sample = F> + 'static>(
         &mut self,
         gen: T,
         default_done_action: Done,
     ) -> Handle<WrDone<T>>
     where
         // Make sure we can add a parameter
-        <T as Gen>::Parameters: crate::core::ops::Add<B1>,
-        <<T as Gen>::Parameters as crate::core::ops::Add<B1>>::Output: Size,
+        <T as UGen>::Parameters: crate::core::ops::Add<B1>,
+        <<T as UGen>::Parameters as crate::core::ops::Add<B1>>::Output: Size,
     {
         let free_self_flag = Arc::new(AtomicBool::new(false));
         let gen = WrDone {
@@ -458,12 +458,42 @@ impl<F: Float> Graph<F> {
         );
         Ok(())
     }
-    pub fn connect_node_to_parameter(
+    /// Connecting a node output to a parameter input at audio rate, adding the source to any
+    /// existing node input(s) to the parameter.
+    ///
+    /// Graph inputs are not currently supported as parameter inputs. As a workaround, connect the
+    /// graph input to a node (e.g. an addition node with zero as the other input) and connect that
+    /// node to the parameter.
+    pub fn connect_to_parameter(
         &mut self,
         source: impl Into<NodeId>,
-        sink: impl Into<NodeId>,
         source_channel: usize,
         parameter: impl Into<Param>,
+        sink: impl Into<NodeId>,
+    ) -> Result<(), GraphError> {
+        self.connect_node_to_parameter(source, source_channel, parameter, sink, true)
+    }
+    /// Connecting a node output to a parameter input at audio rate, replacing any
+    /// existing node input(s) to the parameter.
+    ///
+    /// Graph inputs are not currently supported as parameter inputs. As a workaround, connect the
+    /// graph input to a node (e.g. an addition node with zero as the other input) and connect that
+    /// node to the parameter.
+    pub fn connect_replace_to_parameter(
+        &mut self,
+        source: impl Into<NodeId>,
+        source_channel: usize,
+        parameter: impl Into<Param>,
+        sink: impl Into<NodeId>,
+    ) -> Result<(), GraphError> {
+        self.connect_node_to_parameter(source, source_channel, parameter, sink, false)
+    }
+    fn connect_node_to_parameter(
+        &mut self,
+        source: impl Into<NodeId>,
+        source_channel: usize,
+        parameter: impl Into<Param>,
+        sink: impl Into<NodeId>,
         additive: bool,
     ) -> Result<(), GraphError> {
         let source = source.into();
@@ -685,7 +715,7 @@ impl<F: Float> Graph<F> {
     }
 
     fn new_additive_node(&mut self) -> NodeKey {
-        let add_gen = MathGen::<F, U1, Add>::new();
+        let add_gen = MathUGen::<F, U1, Add>::new();
         // TODO: We don't need a full handle here
         let add_handle = self.push(add_gen);
         let add_node = add_handle.raw_handle.node.key;
@@ -693,20 +723,18 @@ impl<F: Float> Graph<F> {
         add_node
     }
 
-    /// Connect a source to a sink with the designated channels.
-    ///
-    /// Replaces any existing connections to the sink at those channels. If you want to add to any
-    /// existing inputs to the sink, use [`Graph::connect_add`]
+    /// Connect a source to a sink with the designated channels replacing any existing connections to the sink at those channels. If you want to add to any
+    /// existing inputs to the sink, use [`Graph::connect`]
     ///
     /// # Example
     /// ```rust,ignore
     /// // Connect `sine` to `lpf`, channel 0 to 0
-    /// graph.connect(&sine, 0, 0, &lpf)?;
+    /// graph.connect_replace(&sine, 0, 0, &lpf)?;
     /// // Connect `multi_oscillator` to the graph outputs, channels 1 to 0, 2, 1
     /// // and 0 to 3.
-    /// graph.connect(&multi_oscillator, [1, 2, 0], [0, 1, 2], Sink::Graph)?;
+    /// graph.connect_replace(&multi_oscillator, [1, 2, 0], [0, 1, 2], Sink::Graph)?;
     /// ```
-    pub fn connect<N: Size>(
+    pub fn connect_replace<N: Size>(
         &mut self,
         source: impl Into<Source>,
         source_channels: impl Into<Channels<N>>,
@@ -753,7 +781,9 @@ impl<F: Float> Graph<F> {
         }
         Ok(())
     }
-    pub fn connect_add<N: Size>(
+    /// Connect a source to a sink with the designated channels, addin it to any existing connections to the sink at those channels. If you want to replace
+    /// existing inputs to the sink, use [`Graph::connect_replace`]
+    pub fn connect<N: Size>(
         &mut self,
         source: impl Into<Source>,
         source_channels: impl Into<Channels<N>>,

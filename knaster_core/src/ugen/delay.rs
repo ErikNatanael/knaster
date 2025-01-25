@@ -2,7 +2,7 @@ use crate::core::{vec, vec::Vec};
 
 use crate::numeric_array::NumericArray;
 use crate::typenum::{U1, U2};
-use crate::{AudioCtx, Gen, GenFlags, PFloat, ParameterRange, ParameterValue};
+use crate::{AudioCtx, PFloat, ParameterRange, ParameterValue, UGen, UGenFlags};
 use knaster_primitives::{Float, Frame, Seconds};
 
 /// Delay by an integer number of samples, no interpolation. This is good for e.g. triggers.
@@ -27,7 +27,7 @@ impl<F: Float> SampleDelay<F> {
         }
     }
 }
-impl<F: Float> Gen for SampleDelay<F> {
+impl<F: Float> UGen for SampleDelay<F> {
     type Sample = F;
     type Inputs = U1;
     type Outputs = U1;
@@ -35,7 +35,7 @@ impl<F: Float> Gen for SampleDelay<F> {
     fn process(
         &mut self,
         _ctx: AudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         self.buffer[self.write_position] = input[0];
@@ -45,11 +45,8 @@ impl<F: Float> Gen for SampleDelay<F> {
         [out].into()
     }
     fn init(&mut self, ctx: &AudioCtx) {
-        self.buffer = vec![
-            F::ZERO;
-            (self.max_delay_length.to_seconds_f64() * ctx.sample_rate as f64)
-                as usize
-        ];
+        self.buffer =
+            vec![F::ZERO; (self.max_delay_length.to_secs_f64() * ctx.sample_rate as f64) as usize];
         self.write_position = 0;
     }
 
@@ -203,7 +200,7 @@ impl<F: Float> AllpassDelay<F> {
         self.write_frame = (self.write_frame + 1) % self.buffer.len();
     }
 }
-impl<F: Float> Gen for AllpassDelay<F> {
+impl<F: Float> UGen for AllpassDelay<F> {
     type Sample = F;
     type Inputs = U1;
     type Outputs = U1;
@@ -212,7 +209,7 @@ impl<F: Float> Gen for AllpassDelay<F> {
     fn process(
         &mut self,
         _ctx: AudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         let out = self.read();
@@ -257,7 +254,7 @@ impl<F: Float> AllpassFeedbackDelay<F> {
         Self {
             feedback: F::ZERO,
             allpass_delay,
-            previous_delay_time: F::from(max_delay_time.to_seconds_f64()).unwrap(),
+            previous_delay_time: F::from(max_delay_time.to_secs_f64()).unwrap(),
         }
     }
     /// Set the delay length counted in frames/samples
@@ -283,7 +280,7 @@ impl<F: Float> AllpassFeedbackDelay<F> {
         delayed_sig - self.feedback * delay_write
     }
 }
-impl<F: Float> Gen for AllpassFeedbackDelay<F> {
+impl<F: Float> UGen for AllpassFeedbackDelay<F> {
     type Sample = F;
     type Inputs = U1;
     type Outputs = U1;
@@ -292,7 +289,7 @@ impl<F: Float> Gen for AllpassFeedbackDelay<F> {
     fn process(
         &mut self,
         _ctx: AudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         [self.process_sample(input[0])].into()
@@ -323,8 +320,7 @@ impl<F: Float> Gen for AllpassFeedbackDelay<F> {
 ///
 /// # Examples
 /// ```
-/// # use knyst::prelude::*;
-/// # use knaster_core::gen::delay::StaticSampleDelay;
+/// # use knaster_core::delay::StaticSampleDelay;
 /// let mut delay = StaticSampleDelay::<f64>::new(4);
 /// assert_eq!(delay.read(), 0.0);
 /// delay.write_and_advance(1.0);

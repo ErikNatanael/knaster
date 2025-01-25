@@ -11,7 +11,7 @@ pub use wavetable_vec::*;
 
 use crate::{PFloat, Param, ParameterError, ParameterRange, ParameterValue};
 
-use super::{AudioCtx, Gen, GenFlags};
+use super::{AudioCtx, UGen, UGenFlags};
 #[cfg(any(feature = "alloc", feature = "std"))]
 mod wavetable_vec {
     use crate::core::eprintln;
@@ -26,7 +26,7 @@ mod wavetable_vec {
 
     use crate::{
         dsp::wavetable::{NonAaWavetable, Wavetable, WavetablePhase, FRACTIONAL_PART, TABLE_SIZE},
-        AudioCtx, Gen, GenFlags, PFloat, ParameterRange, ParameterType, ParameterValue,
+        AudioCtx, PFloat, ParameterRange, ParameterType, ParameterValue, UGen, UGenFlags,
     };
 
     /// Osciallator with an owned Wavetable
@@ -42,7 +42,7 @@ mod wavetable_vec {
 
     impl<F: Float> OscWt<F> {
         /// Set the frequency of the oscillation. This will be overwritten by the
-        /// input frequency if used as a Gen.
+        /// input frequency if used as a UGen.
         pub fn set_freq(&mut self, freq: F) {
             self.freq = freq;
             self.step = (freq.to_f64() * self.freq_to_phase_inc) as u32;
@@ -70,7 +70,7 @@ mod wavetable_vec {
         }
     }
 
-    impl<F: Float> Gen for OscWt<F> {
+    impl<F: Float> UGen for OscWt<F> {
         type Sample = F;
         type Inputs = U0;
         type Outputs = U1;
@@ -83,7 +83,7 @@ mod wavetable_vec {
         fn process(
             &mut self,
             _ctx: crate::AudioCtx,
-            _flags: &mut GenFlags,
+            _flags: &mut UGenFlags,
             _input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
         ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
             [self.next_sample()].into()
@@ -91,7 +91,7 @@ mod wavetable_vec {
         fn process_block<InBlock, OutBlock>(
             &mut self,
             _ctx: crate::BlockAudioCtx,
-            _flags: &mut GenFlags,
+            _flags: &mut UGenFlags,
             _input: &InBlock,
             output: &mut OutBlock,
         ) where
@@ -168,7 +168,7 @@ mod wavetable_vec {
             }
         }
         /// Set the frequency of the oscillation. This will be overwritten by the
-        /// input frequency if used as a Gen.
+        /// input frequency if used as a UGen.
         pub fn set_freq(&mut self, freq: F) {
             self.freq = freq;
             self.phase_increment = (freq.to_f64() * self.freq_to_phase_inc) as u32;
@@ -194,7 +194,7 @@ mod wavetable_vec {
         }
     }
 
-    impl<F: Float> Gen for SinWt<F> {
+    impl<F: Float> UGen for SinWt<F> {
         type Sample = F;
         type Inputs = U0;
         type Outputs = U1;
@@ -209,7 +209,7 @@ mod wavetable_vec {
         fn process(
             &mut self,
             _ctx: AudioCtx,
-            _flags: &mut GenFlags,
+            _flags: &mut UGenFlags,
             _input: Frame<Self::Sample, Self::Inputs>,
         ) -> Frame<Self::Sample, Self::Outputs> {
             [self.next_sample()].into()
@@ -273,7 +273,7 @@ impl<F: Float> Phasor<F> {
         self.step = freq * self.freq_to_phase_step_mult;
     }
 }
-impl<F: Float> Gen for Phasor<F> {
+impl<F: Float> UGen for Phasor<F> {
     type Sample = F;
     type Inputs = U0;
     type Outputs = U1;
@@ -285,7 +285,7 @@ impl<F: Float> Gen for Phasor<F> {
     fn process(
         &mut self,
         _ctx: AudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         let mut out = Frame::default();
@@ -346,7 +346,7 @@ impl<F: Float> SinNumeric<F> {
     }
 }
 
-impl<F: Float> Gen for SinNumeric<F> {
+impl<F: Float> UGen for SinNumeric<F> {
     type Sample = F;
     type Inputs = U0;
     type Outputs = U1;
@@ -363,7 +363,7 @@ impl<F: Float> Gen for SinNumeric<F> {
     fn process(
         &mut self,
         _ctx: AudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         let out = ((self.phase + self.phase_offset) * F::TAU).sin();

@@ -1,5 +1,5 @@
 use crate::numeric_array::NumericArray;
-use crate::{AudioCtx, BlockAudioCtx, Gen, GenFlags, PFloat, ParameterRange, ParameterValue};
+use crate::{AudioCtx, BlockAudioCtx, PFloat, ParameterRange, ParameterValue, UGen, UGenFlags};
 use knaster_primitives::typenum::{U0, U1, U3, U4};
 use knaster_primitives::{Block, BlockRead, Float, Frame};
 
@@ -43,7 +43,7 @@ impl<F: Float> EnvAsr<F> {
         self.state = AsrState::Attacking;
     }
     #[inline(always)]
-    pub fn next_sample(&mut self, flags: &mut GenFlags, sample_in_block: u32) -> F {
+    pub fn next_sample(&mut self, flags: &mut UGenFlags, sample_in_block: u32) -> F {
         let out: F;
         match self.state {
             AsrState::Stopped => {
@@ -75,7 +75,7 @@ impl<F: Float> EnvAsr<F> {
     }
 }
 
-impl<F: Float> Gen for EnvAsr<F> {
+impl<F: Float> UGen for EnvAsr<F> {
     type Sample = F;
     type Inputs = U0;
     type Outputs = U1;
@@ -104,7 +104,7 @@ impl<F: Float> Gen for EnvAsr<F> {
     fn process(
         &mut self,
         _ctx: AudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         let out = self.next_sample(flags, 0);
@@ -113,7 +113,7 @@ impl<F: Float> Gen for EnvAsr<F> {
     fn process_block<InBlock, OutBlock>(
         &mut self,
         _ctx: BlockAudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         _input: &InBlock,
         output: &mut OutBlock,
     ) where
@@ -223,7 +223,7 @@ impl<F: Float> EnvAr<F> {
         self.state = ArState::Attacking;
     }
     #[inline(always)]
-    pub fn next_sample(&mut self, flags: &mut GenFlags, sample_in_block: u32) -> F {
+    pub fn next_sample(&mut self, flags: &mut UGenFlags, sample_in_block: u32) -> F {
         let out: F;
         match self.state {
             ArState::Stopped => {
@@ -253,7 +253,7 @@ impl<F: Float> EnvAr<F> {
         out
     }
 }
-impl<F: Float> Gen for EnvAr<F> {
+impl<F: Float> UGen for EnvAr<F> {
     type Sample = F;
     type Inputs = U0;
     type Outputs = U1;
@@ -282,7 +282,7 @@ impl<F: Float> Gen for EnvAr<F> {
     fn process(
         &mut self,
         _ctx: AudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         let out = self.next_sample(flags, 0);
@@ -291,7 +291,7 @@ impl<F: Float> Gen for EnvAr<F> {
     fn process_block<InBlock, OutBlock>(
         &mut self,
         _ctx: BlockAudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         _input: &InBlock,
         output: &mut OutBlock,
     ) where

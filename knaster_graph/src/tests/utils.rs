@@ -1,17 +1,18 @@
 use knaster_core::{
-    typenum::{U0, U1}, Float, Gen, GenFlags, PFloat, ParameterRange,
+    typenum::{U0, U1},
+    Float, PFloat, ParameterRange, UGen, UGenFlags,
 };
 
 /// Outputs a static number every frame
-pub(crate) struct TestNumGen<F> {
+pub(crate) struct TestNumUGen<F> {
     number: F,
 }
-impl<F: Float> TestNumGen<F> {
+impl<F: Float> TestNumUGen<F> {
     pub fn new(n: F) -> Self {
         Self { number: n }
     }
 }
-impl<F: Float> Gen for TestNumGen<F> {
+impl<F: Float> UGen for TestNumUGen<F> {
     type Sample = F;
 
     type Inputs = U0;
@@ -21,7 +22,7 @@ impl<F: Float> Gen for TestNumGen<F> {
     fn process(
         &mut self,
         _ctx: knaster_core::AudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         _input: knaster_core::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         [self.number].into()
@@ -49,10 +50,10 @@ impl<F: Float> Gen for TestNumGen<F> {
 }
 
 /// Outputs a static number every frame
-pub(crate) struct TestInPlusParamGen<F> {
+pub(crate) struct TestInPlusParamUGen<F> {
     number: F,
 }
-impl<F: Float> TestInPlusParamGen<F> {
+impl<F: Float> TestInPlusParamUGen<F> {
     pub fn new() -> Self {
         Self { number: F::ZERO }
     }
@@ -60,7 +61,7 @@ impl<F: Float> TestInPlusParamGen<F> {
         self.number = n;
     }
 }
-impl<F: Float> Gen for TestInPlusParamGen<F> {
+impl<F: Float> UGen for TestInPlusParamUGen<F> {
     type Sample = F;
 
     type Inputs = U1;
@@ -70,7 +71,7 @@ impl<F: Float> Gen for TestInPlusParamGen<F> {
     fn process(
         &mut self,
         _ctx: knaster_core::AudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         input: knaster_core::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         [self.number + input[0]].into()

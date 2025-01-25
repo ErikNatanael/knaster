@@ -1,6 +1,6 @@
 use alloc::boxed::Box;
 use knaster_core::typenum::U1;
-use knaster_core::{numeric_array::NumericArray, Gen, PFloat, Param, Size};
+use knaster_core::{numeric_array::NumericArray, PFloat, Param, Size, UGen};
 
 use crate::{
     graph::{NodeId, NodeKey},
@@ -140,7 +140,7 @@ impl Connectable for ConnectionChain {
         }
     }
 }
-impl<G: Gen> Connectable for Handle<G> {
+impl<G: UGen> Connectable for Handle<G> {
     fn to<T: Into<ChainElement>>(&self, other: T) -> ConnectionChain {
         ConnectionChain {
             source: Some(Box::new(ConnectionChain::chain_start(ChainElement {
@@ -161,7 +161,7 @@ impl<G: Gen> Connectable for Handle<G> {
         todo!()
     }
 }
-impl<G: Gen> From<&Handle<G>> for ChainElement {
+impl<G: UGen> From<&Handle<G>> for ChainElement {
     fn from(value: &Handle<G>) -> Self {
         Self {
             kind: ChainSinkKind::Node {

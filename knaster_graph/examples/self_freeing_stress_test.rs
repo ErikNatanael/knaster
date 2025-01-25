@@ -2,12 +2,12 @@ use std::time::Duration;
 
 use anyhow::Result;
 use knaster_core::envelopes::EnvAsr;
-use knaster_core::math::{MathGen, Mul};
+use knaster_core::math::{MathUGen, Mul};
 use knaster_core::typenum::U1;
 use knaster_core::{
     osc::SinNumeric,
     typenum::{U0, U2},
-    wrappers_core::{GenWrapperCoreExt, WrSmoothParams},
+    wrappers_core::{UGenWrapperCoreExt, WrSmoothParams},
     Done, Trigger,
 };
 use knaster_graph::handle::AnyHandle;
@@ -66,7 +66,7 @@ fn main() -> Result<()> {
             asr.set(("release_time", release_time)).unwrap();
             asr.set(("t_restart", Trigger)).unwrap();
             previous_asr = Some(asr.clone().into_any());
-            let mult = graph.push(MathGen::<_, U1, Mul>::new());
+            let mult = graph.push(MathUGen::<_, U1, Mul>::new());
             // connect them together
             graph.connect_nodes(&osc1, &mult, 0, 0, false)?;
             graph.connect_nodes(&asr, &mult, 0, 1, false)?;

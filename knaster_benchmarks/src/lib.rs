@@ -1,6 +1,6 @@
-use knaster_graph::{AudioCtx, Float, Frame, Gen, GenFlags, ParameterRange, ParameterValue};
 use knaster_graph::numeric_array::NumericArray;
 use knaster_graph::typenum::{U0, U1};
+use knaster_graph::{AudioCtx, Float, Frame, ParameterRange, ParameterValue, UGen, UGenFlags};
 
 pub fn add(signal: &[f32], rhs: f32, output: &mut [f32]) {
     for (sig, out) in signal.iter().zip(output.iter_mut()) {
@@ -20,15 +20,15 @@ pub fn add_chunked(signal: &[f32], rhs: f32, output: &mut [f32]) {
     }
 }
 /// Outputs a static number every frame
-pub struct TestNumGen<F> {
+pub struct TestNumUGen<F> {
     number: F,
 }
-impl<F: Float> TestNumGen<F> {
+impl<F: Float> TestNumUGen<F> {
     pub fn new(n: F) -> Self {
         Self { number: n }
     }
 }
-impl<F: Float> Gen for TestNumGen<F> {
+impl<F: Float> UGen for TestNumUGen<F> {
     type Sample = F;
 
     type Inputs = U0;
@@ -38,29 +38,20 @@ impl<F: Float> Gen for TestNumGen<F> {
     fn process(
         &mut self,
         _ctx: AudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         [self.number].into()
     }
     type Parameters = U0;
 
-    fn param_descriptions(
-    ) -> NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         [].into()
     }
 
-    fn param_range(
-    ) -> NumericArray<ParameterRange, Self::Parameters>
-    {
+    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
         [].into()
     }
 
-    fn param_apply(
-        &mut self,
-        _ctx: AudioCtx,
-        _index: usize,
-        _value: ParameterValue,
-    ) {
-    }
+    fn param_apply(&mut self, _ctx: AudioCtx, _index: usize, _value: ParameterValue) {}
 }

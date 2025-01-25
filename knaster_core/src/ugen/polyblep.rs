@@ -25,7 +25,7 @@ Permission has been granted to release this port under the WDL/IPlug license:
 use crate::num_derive::{FromPrimitive, ToPrimitive};
 use crate::numeric_array::NumericArray;
 use crate::{
-    AudioCtx, Gen, GenFlags, PInteger, PIntegerConvertible, ParameterRange, ParameterValue,
+    AudioCtx, PInteger, PIntegerConvertible, ParameterRange, ParameterValue, UGen, UGenFlags,
 };
 use knaster_primitives::{Float, Frame};
 use std::ops::Mul;
@@ -112,7 +112,7 @@ pub struct PolyBlep<F: Copy = f32> {
     pulse_width: F, // [0.0..1.0]
     t: F,           // The current phase [0.0..1.0) of the oscillator.
 }
-impl<F: Float> Gen for PolyBlep<F> {
+impl<F: Float> UGen for PolyBlep<F> {
     type Sample = F;
     type Inputs = U0;
     type Outputs = U1;
@@ -127,7 +127,7 @@ impl<F: Float> Gen for PolyBlep<F> {
     fn process(
         &mut self,
         _ctx: AudioCtx,
-        _flags: &mut GenFlags,
+        _flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         [self.get_and_inc()].into()

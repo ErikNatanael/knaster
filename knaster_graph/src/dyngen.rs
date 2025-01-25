@@ -1,22 +1,22 @@
 use crate::block::{AggregateBlockRead, RawBlock};
 use alloc::vec::Vec;
 use knaster_core::typenum::*;
-use knaster_core::{AudioCtx, BlockAudioCtx, Float, Gen, GenFlags, ParameterValue};
+use knaster_core::{AudioCtx, BlockAudioCtx, Float, ParameterValue, UGen, UGenFlags};
 
-/// Type erasing trait to allow us to store [`Gen`]s as trait objects. It
-/// requires all nodes that are added to the [`Graph`] to implement both [`Gen`]
+/// Type erasing trait to allow us to store [`UGen`]s as trait objects. It
+/// requires all nodes that are added to the [`Graph`] to implement both [`UGen`]
 /// and [`Parameterable`].
 ///
 ///
 /// For type erasure, we cannot be generic over the types of blocks. This is not
 /// a problem since this interface is essentially Graph internal. A different
 /// graph implementation can make a different tradeoff with different types.
-pub trait DynGen<F> {
+pub trait DynUGen<F> {
     fn init(&mut self, ctx: &AudioCtx);
     fn process_block(
         &mut self,
         ctx: BlockAudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: &AggregateBlockRead<F>,
         output: &mut RawBlock<F>,
     ) where
@@ -28,7 +28,7 @@ pub trait DynGen<F> {
     fn param_apply(&mut self, ctx: AudioCtx, parameter: usize, value: ParameterValue);
     fn param_descriptions(&self) -> Vec<&'static str>;
 }
-impl<F: Float, T: Gen<Sample = F>> DynGen<F> for T {
+impl<F: Float, T: UGen<Sample = F>> DynUGen<F> for T {
     fn init(&mut self, ctx: &AudioCtx) {
         self.init(ctx)
     }
@@ -36,7 +36,7 @@ impl<F: Float, T: Gen<Sample = F>> DynGen<F> for T {
     fn process_block(
         &mut self,
         ctx: BlockAudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: &AggregateBlockRead<F>,
         output: &mut RawBlock<F>,
     ) where

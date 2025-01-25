@@ -1,7 +1,7 @@
 use knaster_primitives::{numeric_array::NumericArray, Frame};
 
 use crate::core::eprintln;
-use crate::{AudioCtx, Gen, GenFlags, ParameterValue};
+use crate::{AudioCtx, ParameterValue, UGen, UGenFlags};
 
 /// Enables sample accurate parameter changes within a block. Changes must be
 /// scheduled in the order they are to be applied.
@@ -10,7 +10,7 @@ use crate::{AudioCtx, Gen, GenFlags, ParameterValue};
 /// be scheduled per block.
 ///
 /// This wrapper needs to be outside of other wrappers_graph that can run partial blocks, such as [`WrSmoothParams`] and [`WrArParams`]
-pub struct WrHiResParams<const DELAYED_CHANGES_PER_BLOCK: usize, T: Gen> {
+pub struct WrHiResParams<const DELAYED_CHANGES_PER_BLOCK: usize, T: UGen> {
     gen: T,
     // frame in block, parameter index, value
     waiting_changes: [Option<(u16, usize, ParameterValue)>; DELAYED_CHANGES_PER_BLOCK],
@@ -20,7 +20,7 @@ pub struct WrHiResParams<const DELAYED_CHANGES_PER_BLOCK: usize, T: Gen> {
     next_delay_i: usize,
 }
 
-impl<T: Gen, const DELAYED_CHANGES_PER_BLOCK: usize> WrHiResParams<DELAYED_CHANGES_PER_BLOCK, T> {
+impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> WrHiResParams<DELAYED_CHANGES_PER_BLOCK, T> {
     pub fn new(gen: T) -> Self {
         WrHiResParams {
             gen,
@@ -31,7 +31,7 @@ impl<T: Gen, const DELAYED_CHANGES_PER_BLOCK: usize> WrHiResParams<DELAYED_CHANG
     }
 }
 
-impl<T: Gen, const DELAYED_CHANGES_PER_BLOCK: usize> Gen
+impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
     for WrHiResParams<DELAYED_CHANGES_PER_BLOCK, T>
 {
     type Sample = T::Sample;
@@ -47,7 +47,7 @@ impl<T: Gen, const DELAYED_CHANGES_PER_BLOCK: usize> Gen
     fn process(
         &mut self,
         ctx: AudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         // The block size is one so all available changes should be applied
@@ -61,7 +61,7 @@ impl<T: Gen, const DELAYED_CHANGES_PER_BLOCK: usize> Gen
     fn process_block<InBlock, OutBlock>(
         &mut self,
         ctx: crate::BlockAudioCtx,
-        flags: &mut GenFlags,
+        flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where

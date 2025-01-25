@@ -174,7 +174,7 @@ impl GraphInspection {
 #[derive(Debug, Clone)]
 /// Metadata about a node in a graph
 pub struct NodeInspection {
-    /// The name of the node (usually the name of the Gen inside it)
+    /// The name of the node (usually the name of the UGen inside it)
     pub name: String,
     /// The address of the n    ode, usable to schedule changes to the node or free it
     pub address: NodeKey,

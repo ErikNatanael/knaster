@@ -16,7 +16,7 @@ pub enum ParameterValue {
     Float(PFloat),
     Trigger,
     Integer(PInteger),
-    /// The smoothing setting for a Float parameter. Smoothing is not built into all Gens, you generally need a Wrapper to do smoothing for you.
+    /// The smoothing setting for a Float parameter. Smoothing is not built into all UGens, you generally need a Wrapper to do smoothing for you.
     Smoothing(ParameterSmoothing, Rate),
 }
 
