@@ -113,6 +113,9 @@ impl ParameterRange {
     pub fn one() -> Self {
         ParameterRange::Float(0., 1.)
     }
+    pub fn boolean() -> Self {
+        ParameterRange::Integer(PInteger(0), PInteger(1))
+    }
     pub fn ty(self) -> ParameterType {
         match self {
             ParameterRange::Float(_, _) | ParameterRange::Nyquist => ParameterType::Float,
