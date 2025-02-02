@@ -32,6 +32,10 @@ impl Seconds {
         seconds: 0,
         subsecond_tesimals: 0,
     };
+    pub const MAX: Self = Self {
+        seconds: u32::MAX,
+        subsecond_tesimals: u32::MAX,
+    };
     #[allow(missing_docs)]
     pub fn new(seconds: u32, subsample_tesimals: u32) -> Self {
         Self {
@@ -83,7 +87,12 @@ impl Seconds {
             + ((self.subsecond_tesimals as u64 * sample_rate)
                 / SUBSECOND_TESIMALS_PER_SECOND as u64)
     }
-
+    /// Convert to samples at a specific sample rate.
+    pub fn to_samples_f64(&self, sample_rate: f64) -> f64 {
+        self.seconds as f64 * sample_rate
+            + ((self.subsecond_tesimals as f64 * sample_rate)
+                / SUBSECOND_TESIMALS_PER_SECOND as f64)
+    }
     /// Returns self - other if self is bigger than or equal to other, otherwise None
     #[must_use]
     pub fn checked_sub(self, rhs: Self) -> Option<Self> {
@@ -308,6 +317,16 @@ impl Beats {
     #[must_use]
     pub fn saturating_sub(self, rhs: Self) -> Self {
         self.checked_sub(rhs).unwrap_or(Self::ZERO)
+    }
+}
+impl From<f32> for Beats {
+    fn from(value: f32) -> Self {
+        Beats::from_beats_f32(value)
+    }
+}
+impl From<f64> for Beats {
+    fn from(value: f64) -> Self {
+        Beats::from_beats_f64(value)
     }
 }
 impl crate::core::iter::Sum for Beats {
