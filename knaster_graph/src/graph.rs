@@ -1,11 +1,6 @@
-use crate::core::{
-    cell::UnsafeCell,
-    dbg, format,
-    sync::atomic::{AtomicBool, Ordering},
-};
 use crate::{
     buffer_allocator::BufferAllocator,
-    connectable::{ChainElement, ChainSinkKind, Channels, Sink, Source},
+    connectable::{Channels, NodeOrGraph, Source},
     core::sync::atomic::AtomicU64,
     edge::{Edge, NodeKeyOrGraph, ParameterEdge},
     graph_gen::GraphGen,
@@ -13,6 +8,14 @@ use crate::{
     node::Node,
     task::{ArParameterChange, BlockOrGraphInput, OutputTask, Task, TaskData},
     SchedulingChannelProducer, SharedFrameClock,
+};
+use crate::{
+    connectable::Connectable,
+    core::{
+        cell::UnsafeCell,
+        dbg, format,
+        sync::atomic::{AtomicBool, Ordering},
+    },
 };
 use alloc::{borrow::ToOwned, boxed::Box, string::String, string::ToString, vec, vec::Vec};
 use std::collections::VecDeque;
@@ -736,45 +739,31 @@ impl<F: Float> Graph<F> {
     /// ```
     pub fn connect_replace<N: Size>(
         &mut self,
-        source: impl Into<Source>,
+        source: impl Into<Connectable>,
         source_channels: impl Into<Channels<N>>,
         sink_channels: impl Into<Channels<N>>,
-        sink: impl Into<Sink>,
+        sink: impl Into<Connectable>,
     ) -> Result<(), GraphError> {
-        match (source.into(), sink.into()) {
-            (Source::Graph, Sink::Node(sink)) => {
-                for (so_chan, si_chan) in source_channels
-                    .into()
-                    .into_iter()
-                    .zip(sink_channels.into().into_iter())
-                {
+        let source = source.into();
+        let sink = sink.into();
+        for (so_chan, si_chan) in source_channels
+            .into()
+            .into_iter()
+            .zip(sink_channels.into().into_iter())
+        {
+            let (source, so_chan) = source.for_channel(so_chan);
+            let (sink, si_chan) = sink.for_channel(si_chan);
+            match (source, sink) {
+                (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
                     self.connect_input_to_node(sink, so_chan, si_chan, false)?;
                 }
-            }
-            (Source::Node(source), Sink::Node(sink)) => {
-                for (so_chan, si_chan) in source_channels
-                    .into()
-                    .into_iter()
-                    .zip(sink_channels.into().into_iter())
-                {
+                (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
                     self.connect_nodes(source, sink, so_chan, si_chan, false)?;
                 }
-            }
-            (Source::Node(source), Sink::Graph) => {
-                for (so_chan, si_chan) in source_channels
-                    .into()
-                    .into_iter()
-                    .zip(sink_channels.into().into_iter())
-                {
+                (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
                     self.connect_node_to_output(source, so_chan, si_chan, false)?;
                 }
-            }
-            (Source::Graph, Sink::Graph) => {
-                for (so_chan, si_chan) in source_channels
-                    .into()
-                    .into_iter()
-                    .zip(sink_channels.into().into_iter())
-                {
+                (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
                     self.connect_input_to_output(so_chan, si_chan, false)?;
                 }
             }
@@ -785,45 +774,31 @@ impl<F: Float> Graph<F> {
     /// existing inputs to the sink, use [`Graph::connect_replace`]
     pub fn connect<N: Size>(
         &mut self,
-        source: impl Into<Source>,
+        source: impl Into<Connectable>,
         source_channels: impl Into<Channels<N>>,
         sink_channels: impl Into<Channels<N>>,
-        sink: impl Into<Sink>,
+        sink: impl Into<Connectable>,
     ) -> Result<(), GraphError> {
-        match (source.into(), sink.into()) {
-            (Source::Graph, Sink::Node(sink)) => {
-                for (so_chan, si_chan) in source_channels
-                    .into()
-                    .into_iter()
-                    .zip(sink_channels.into().into_iter())
-                {
+        let source = source.into();
+        let sink = sink.into();
+        for (so_chan, si_chan) in source_channels
+            .into()
+            .into_iter()
+            .zip(sink_channels.into().into_iter())
+        {
+            let (source, so_chan) = source.for_channel(so_chan);
+            let (sink, si_chan) = sink.for_channel(si_chan);
+            match (source, sink) {
+                (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
                     self.connect_input_to_node(sink, so_chan, si_chan, true)?;
                 }
-            }
-            (Source::Node(source), Sink::Node(sink)) => {
-                for (so_chan, si_chan) in source_channels
-                    .into()
-                    .into_iter()
-                    .zip(sink_channels.into().into_iter())
-                {
+                (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
                     self.connect_nodes(source, sink, so_chan, si_chan, true)?;
                 }
-            }
-            (Source::Node(source), Sink::Graph) => {
-                for (so_chan, si_chan) in source_channels
-                    .into()
-                    .into_iter()
-                    .zip(sink_channels.into().into_iter())
-                {
+                (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
                     self.connect_node_to_output(source, so_chan, si_chan, true)?;
                 }
-            }
-            (Source::Graph, Sink::Graph) => {
-                for (so_chan, si_chan) in source_channels
-                    .into()
-                    .into_iter()
-                    .zip(sink_channels.into().into_iter())
-                {
+                (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
                     self.connect_input_to_output(so_chan, si_chan, true)?;
                 }
             }
@@ -1520,16 +1495,6 @@ impl<F: Float> Graph<F> {
         // mutability.
         unsafe { &mut *self.nodes.get() }
     }
-    pub fn output(&self) -> ChainElement {
-        ChainElement {
-            kind: ChainSinkKind::GraphConnection {
-                from_chan: 0,
-                channels: self.num_outputs,
-            },
-            inputs: self.num_inputs,
-            outputs: self.num_outputs,
-        }
-    }
     pub fn set_mortality(
         &mut self,
         node: impl Into<NodeId>,
@@ -1666,6 +1631,11 @@ pub enum FreeError {
 impl<F: Float> From<&Graph<F>> for NodeId {
     fn from(value: &Graph<F>) -> Self {
         value.self_node_id
+    }
+}
+impl<F: Float> From<&Graph<F>> for Connectable {
+    fn from(value: &Graph<F>) -> Self {
+        Connectable::SingleNode(value.self_node_id)
     }
 }
 // impl<F: Float> From<&Graph<F>> for Source {

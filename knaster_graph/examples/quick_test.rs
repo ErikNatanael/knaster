@@ -12,7 +12,7 @@ use knaster_core::{
     UGen,
 };
 use knaster_core::{Done, Seconds};
-use knaster_graph::connectable::Sink;
+use knaster_graph::connectable::NodeOrGraph;
 use knaster_graph::runner::RunnerOptions;
 use knaster_graph::{
     audio_backend::{
@@ -81,7 +81,7 @@ fn main() -> Result<()> {
         graph.connect(&noise, 0, 0, &lpf)?;
         graph.connect_replace(&lpf, 0, 0, &mult)?;
         graph.connect_replace(&env, 0, 1, &mult)?;
-        graph.connect_replace(&mult, [0, 0], [0, 1], Sink::Graph)?;
+        graph.connect_replace(&mult, [0, 0], [0, 1], NodeOrGraph::Graph)?;
         graph.commit_changes()?;
 
         // let inspection = top_level_graph.inspection();

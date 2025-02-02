@@ -4,6 +4,7 @@
 //! - Typesafe Handle types
 
 use crate::{
+    connectable::NodeSubset,
     core::{eprintln, marker::PhantomData},
     graph::{GraphError, NodeId},
     SchedulingEvent, SchedulingTime, SchedulingToken, SharedFrameClock,
@@ -119,9 +120,14 @@ impl<T: UGen> Handle<T> {
         T::Outputs::USIZE
     }
 }
-impl<T> From<&Handle<T>> for NodeId {
-    fn from(value: &Handle<T>) -> Self {
-        value.raw_handle.node
+// impl<T> From<&Handle<T>> for NodeId {
+//     fn from(value: &Handle<T>) -> Self {
+//         value.raw_handle.node
+//     }
+// }
+impl<T: HandleTrait> From<&T> for NodeId {
+    fn from(value: &T) -> Self {
+        value.node_id()
     }
 }
 pub trait HandleTrait: Sized {
@@ -131,6 +137,13 @@ pub trait HandleTrait: Sized {
     fn node_id(&self) -> NodeId;
     fn inputs(&self) -> usize;
     fn outputs(&self) -> usize;
+    fn subset(&self, start_channel: usize, channels: usize) -> NodeSubset {
+        NodeSubset {
+            id: self.node_id(),
+            channels,
+            start_channel,
+        }
+    }
     /// Returns time of the Runner connected to this
     fn current_frame_time(&self) -> Seconds;
     /// True if it is still possible to send values. This does not necessarily mean that the node
