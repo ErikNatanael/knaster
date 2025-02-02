@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["std", "unstable"]
+default = ["std", "unstable", "sound_files"]
 # Enables the alloc in no_std. `alloc` does nothing if `std` is enabled.
 alloc = ["knaster_primitives/alloc"]
 # Enables the standard library. `alloc` does nothing if `std` is enabled.
@@ -16,6 +16,7 @@ unstable = ["target-features"]
 symphonia = ["dep:symphonia"]
 # Requires std to be enabled
 hound = ["dep:hound"]
+sound_files = ["symphonia", "hound"]
 
 [dependencies]
 knaster_primitives = { path = "../knaster_primitives" }

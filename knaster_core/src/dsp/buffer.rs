@@ -83,23 +83,29 @@ impl<F: Float> Buffer<F> {
     }
     /// Linearly interpolate between the value in between to samples
     #[inline]
-    pub fn get_linear_interp(&self, index: F) -> F {
+    pub fn get_linear_interp(&self, index: F, channel: usize) -> F {
         let mix = index.fract();
-        let index_u = index.to_usize().unwrap();
+        let index_u = index.to_usize().unwrap() * self.num_channels + channel;
         unsafe {
             *self.buffer.get_unchecked(index_u) * (F::ONE - mix)
-                + *self.buffer.get_unchecked((index_u + 1) % self.buffer.len()) * mix
+                + *self
+                    .buffer
+                    .get_unchecked((index_u + self.num_channels) % self.buffer.len())
+                    * mix
         }
     }
     /// Linearly interpolate between the value in between to samples using an f64 as an index. f64
     /// indexing is necessary for long buffers.
     #[inline]
-    pub fn get_linear_interp_f64(&self, index: f64) -> F {
+    pub fn get_linear_interp_f64(&self, index: f64, channel: usize) -> F {
         let mix = F::new(index.fract());
-        let index_u = index as usize;
+        let index_u = index as usize * self.num_channels + channel;
         unsafe {
             *self.buffer.get_unchecked(index_u) * (F::ONE - mix)
-                + *self.buffer.get_unchecked((index_u + 1) % self.buffer.len()) * mix
+                + *self
+                    .buffer
+                    .get_unchecked((index_u + self.num_channels) % self.buffer.len())
+                    * mix
         }
     }
     /// Get the samples for all channels at the index.
@@ -118,8 +124,8 @@ impl<F: Float> Buffer<F> {
         self.num_channels
     }
     /// The sample rate of the buffer. This depends on the loaded sound file or generated buffer and may be different from the sample rate of a graph playing the buffer.
-    pub fn sample_rate(&self) -> usize {
-        self.sample_rate as usize
+    pub fn sample_rate(&self) -> f64 {
+        self.sample_rate
     }
     /// Returns the length of the buffer in seconds
     pub fn length_seconds(&self) -> f64 {
@@ -138,6 +144,8 @@ impl<F: Float> Buffer<F> {
     }
 }
 
+#[cfg(any(feature = "std", feature = "alloc"))]
+use crate::core::boxed::Box;
 #[cfg(feature = "symphonia")]
 impl<F: Float> Buffer<F> {
     /// Create a [`Buffer`] by loading a sound file from disk. Currently
@@ -145,7 +153,7 @@ impl<F: Float> Buffer<F> {
     pub fn from_sound_file(path: impl Into<PathBuf>) -> Result<Self, BufferError> {
         let path = path.into();
         let mut buffer = Vec::new();
-        let inp_file = File::open(&path).expect("Buffer: failed to open file!");
+        let inp_file = std::fs::File::open(&path).expect("Buffer: failed to open file!");
         // hint to the format registry of the decoder what file format it might be
         let mut hint = Hint::new();
         // Provide the file extension as a hint.
@@ -240,7 +248,7 @@ impl<F: Float> Buffer<F> {
                                 let duration = audio_buf.capacity() as u64;
 
                                 // Create the Sample sample buffer.
-                                sample_buf = Some(SampleBuffer::<Sample>::new(duration, spec));
+                                sample_buf = Some(SampleBuffer::<f32>::new(duration, spec));
                             }
 
                             // Copy the decoded audio buffer into the sample buffer in an interleaved format.
@@ -291,7 +299,7 @@ impl<F: Float> Buffer<F> {
                 cp.channels.unwrap().bits().count_ones() as usize,
             )
         };
-        let buffer = buffer.into_iter().map(|v| v as Sample).collect();
+        let buffer = buffer.into_iter().map(|v| F::from(v).unwrap()).collect();
         // TODO: Return Err if there's no audio data
         Ok(Self::from_vec_interleaved(
             buffer,
@@ -313,8 +321,8 @@ impl<F: Float> Buffer<F> {
         let mut writer = hound::WavWriter::create(path.into(), spec)?;
 
         for sample in &self.buffer {
-            let amplitude = i16::MAX as Sample;
-            writer.write_sample((sample * amplitude) as i16)?;
+            let amplitude = F::from(i16::MAX).unwrap();
+            writer.write_sample((*sample * amplitude).to_f32() as i16)?;
         }
         Ok(())
     }

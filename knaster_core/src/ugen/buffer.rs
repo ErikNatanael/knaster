@@ -2,16 +2,22 @@ use core::marker::PhantomData;
 use std::sync::Arc;
 
 use knaster_primitives::{
-    typenum::{U0, U1, U3},
+    numeric_array::NumericArray,
+    typenum::{U0, U5},
     Float, Seconds, Size,
 };
 
-use crate::dsp::buffer::Buffer;
+use crate::{dsp::buffer::Buffer, ParameterRange};
 
 use super::UGen;
 
-/// Reads a sample from a buffer and outputs it. In a multi channel [`Buffer`] only the first channel will be read.
-/// TODO: Support rate through an argument with a default constant of 1
+/// Reads a sample from a buffer and outputs it. The generic `Channels` determines how many
+/// channels will be read from the buffer.
+///
+/// `duration_s` is the playback duration before looping or stopping. If given a negative value,
+/// the duration will default to the buffer length.
+// TODO: Negative rate, meaning the cmp for being finished needs to be inverted and the end_frame
+// needs to be start_frame - dur_frame instead.
 #[derive(Clone, Debug)]
 pub struct BufferReader<F: Copy, Channels: Size> {
     buffer: Arc<Buffer<F>>,
@@ -23,28 +29,39 @@ pub struct BufferReader<F: Copy, Channels: Size> {
     finished: bool,
     /// true if the [`BufferReader`] should loop the buffer
     pub looping: bool,
-    start_time: Seconds,
+    start_frame: f64,
+    dur_frame: f64,
+    end_frame: f64,
     _marker: PhantomData<Channels>,
 }
 
 impl<F: Float, Channels: Size> BufferReader<F, Channels> {
+    const RATE: usize = 0;
+    const LOOP: usize = 1;
+    const START_SECS: usize = 2;
+    const DURATION_SECS: usize = 3;
+    const T_RESTART: usize = 4;
     #[allow(missing_docs)]
     #[must_use]
     pub fn new(buffer: impl Into<Arc<Buffer<F>>>, rate: f64, looping: bool) -> Self {
+        let buffer = buffer.into();
+        let buffer_length = buffer.length_seconds();
         BufferReader {
-            buffer: buffer.into(),
+            buffer,
             read_pointer: 0.0,
             base_rate: 0.0,
             rate,
             finished: false,
             looping,
-            start_time: Seconds::ZERO,
+            start_frame: 0.,
+            end_frame: buffer_length,
+            dur_frame: buffer_length,
             _marker: PhantomData,
         }
     }
     /// Jump back to the start of the buffer
     fn reset(&mut self) {
-        self.jump_to(0.0);
+        self.jump_to(self.start_frame);
     }
     /// Jump to a specific point in the buffer in samples
     fn jump_to(&mut self, new_pointer_pos: f64) {
@@ -53,39 +70,61 @@ impl<F: Float, Channels: Size> BufferReader<F, Channels> {
     }
     /// Jump to a specific point in the buffer in samples. Has to be called before processing starts.
     pub fn start_at(mut self, start_time: Seconds) -> Self {
-        self.start_time = start_time;
+        self.start_frame = start_time.to_secs_f64();
         self
     }
 }
 impl<F: Float, Channels: Size> UGen for BufferReader<F, Channels> {
     fn init(&mut self, ctx: &super::AudioCtx) {
         self.base_rate = self.buffer.buf_rate_scale(ctx.sample_rate());
-        let start_frame = self.start_time.to_samples(self.buffer.sample_rate() as u64);
-        self.jump_to(start_frame as f64);
+        self.start_frame =
+            Seconds::from_secs_f64(self.start_frame).to_samples_f64(self.buffer.sample_rate());
+        self.dur_frame =
+            Seconds::from_secs_f64(self.dur_frame).to_samples_f64(self.buffer.sample_rate());
+        self.end_frame = self.start_frame + self.dur_frame;
+        self.jump_to(self.start_frame);
     }
 
     type Sample = F;
 
     type Inputs = U0;
 
-    type Outputs = U1;
+    type Outputs = Channels;
 
-    type Parameters = U3;
+    type Parameters = U5;
 
     fn process(
         &mut self,
-        ctx: super::AudioCtx,
+        _ctx: super::AudioCtx,
         flags: &mut super::UGenFlags,
-        input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
+        _input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
-        todo!()
+        let mut output = NumericArray::default();
+        if self.finished {
+            output.fill(F::ZERO);
+            return output;
+        }
+        for chan in 0..Channels::USIZE {
+            let sample = self.buffer.get_linear_interp_f64(self.read_pointer, chan);
+            output[chan] = sample;
+        }
+        self.read_pointer += self.base_rate * self.rate;
+        if self.read_pointer >= self.end_frame {
+            self.finished = true;
+            if self.looping {
+                self.reset();
+            } else {
+                flags.mark_done(0);
+            }
+        }
+        output
     }
 
     fn process_block<InBlock, OutBlock>(
         &mut self,
         ctx: super::BlockAudioCtx,
         flags: &mut super::UGenFlags,
-        input: &InBlock,
+        _input: &InBlock,
         output: &mut OutBlock,
     ) where
         InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
@@ -94,12 +133,12 @@ impl<F: Float, Channels: Size> UGen for BufferReader<F, Channels> {
         let mut stop_sample = None;
         if !self.finished {
             for i in 0..ctx.block_size() {
-                let samples = self.buffer.get_interleaved((self.read_pointer) as usize);
-                for (out_num, sample) in samples.iter().take(Channels::USIZE).enumerate() {
-                    output.write(*sample, out_num, i);
+                for chan in 0..Channels::USIZE {
+                    let sample = self.buffer.get_linear_interp_f64(self.read_pointer, chan);
+                    output.write(sample, chan, i);
                 }
                 self.read_pointer += self.base_rate * self.rate;
-                if self.read_pointer >= self.buffer.num_frames() {
+                if self.read_pointer >= self.end_frame {
                     self.finished = true;
                     if self.looping {
                         self.reset();
@@ -126,17 +165,48 @@ impl<F: Float, Channels: Size> UGen for BufferReader<F, Channels> {
 
     fn param_descriptions(
     ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
-        ["rate", "loop", "t_restart"].into()
+        ["rate", "loop", "start_s", "duration_s", "t_restart"].into()
     }
 
     fn param_range(
     ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
     {
-        todo!()
+        [
+            ParameterRange::infinite_float(),
+            ParameterRange::boolean(),
+            ParameterRange::positive_infinite_float(),
+            ParameterRange::infinite_float(),
+            ParameterRange::Trigger,
+        ]
+        .into()
     }
 
-    fn param_apply(&mut self, ctx: super::AudioCtx, index: usize, value: crate::ParameterValue) {
-        todo!()
+    fn param_apply(&mut self, _ctx: super::AudioCtx, index: usize, value: crate::ParameterValue) {
+        match index {
+            Self::RATE => {
+                self.rate = value.f().unwrap();
+            }
+            Self::LOOP => match value {
+                crate::ParameterValue::Float(f) => self.looping = f != 0.0,
+                crate::ParameterValue::Trigger => self.looping = !self.looping,
+                crate::ParameterValue::Integer(pinteger) => self.looping = pinteger.0 != 0,
+                _ => (),
+            },
+            Self::START_SECS => {
+                let start_time = Seconds::from_secs_f64(value.f().unwrap());
+                self.start_frame = start_time.to_samples_f64(self.buffer.sample_rate());
+                self.end_frame = self.start_frame + self.dur_frame;
+            }
+            Self::DURATION_SECS => {
+                let dur_time = Seconds::from_secs_f64(value.f().unwrap());
+                self.dur_frame = dur_time.to_samples_f64(self.buffer.sample_rate());
+                self.end_frame = self.start_frame + self.dur_frame;
+            }
+            Self::T_RESTART => {
+                self.reset();
+            }
+            _ => (),
+        }
     }
 }
 
