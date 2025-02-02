@@ -261,16 +261,20 @@ pub struct Phasor<F> {
 
 impl<F: Float> Phasor<F> {
     #[allow(missing_docs)]
-    pub fn new() -> Self {
+    pub fn new(freq: f64) -> Self {
         Self {
             phase: 0.0,
-            step: 0.0,
+            step: freq,
             freq_to_phase_step_mult: 0.0,
             _phantom: PhantomData,
         }
     }
-    pub fn set_freq(&mut self, freq: f64) {
-        self.step = freq * self.freq_to_phase_step_mult;
+    fn set_freq(&mut self, freq: f64) {
+        if self.freq_to_phase_step_mult == 0.0 {
+            self.step = freq;
+        } else {
+            self.step = freq * self.freq_to_phase_step_mult;
+        }
     }
 }
 impl<F: Float> UGen for Phasor<F> {
@@ -280,6 +284,7 @@ impl<F: Float> UGen for Phasor<F> {
     #[allow(missing_docs)]
     fn init(&mut self, ctx: &AudioCtx) {
         self.freq_to_phase_step_mult = 1.0_f64 / (ctx.sample_rate() as f64);
+        self.set_freq(self.step);
     }
 
     fn process(
