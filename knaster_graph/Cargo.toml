@@ -10,6 +10,7 @@ std = ["knaster_core/std", "slotmap/std", "thiserror/std"]
 unstable = ["knaster_core/unstable"]
 jack = ["dep:jack"]
 assert_no_alloc = ["dep:assert_no_alloc"]
+sound_files = ["knaster_core/sound_files"]
 
 [dependencies]
 knaster_core = { path = "../knaster_core" }
