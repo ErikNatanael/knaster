@@ -70,3 +70,55 @@ impl<F: Float> UGen for DoneOnTrig<F> {
         }
     }
 }
+
+pub struct Constant<F: Float> {
+    value: F,
+}
+impl<F: Float> Constant<F> {
+    pub fn new(value: F) -> Self {
+        Self { value }
+    }
+}
+impl<F: Float> UGen for Constant<F> {
+    type Sample = F;
+
+    type Inputs = U0;
+
+    type Outputs = U1;
+
+    type Parameters = U1;
+
+    fn process(
+        &mut self,
+        _ctx: AudioCtx,
+        _flags: &mut UGenFlags,
+        _input: Frame<Self::Sample, Self::Inputs>,
+    ) -> Frame<Self::Sample, Self::Outputs> {
+        [self.value].into()
+    }
+    fn process_block<InBlock, OutBlock>(
+        &mut self,
+        _ctx: super::BlockAudioCtx,
+        _flags: &mut UGenFlags,
+        _input: &InBlock,
+        output: &mut OutBlock,
+    ) where
+        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+    {
+        output.channel_as_slice_mut(0).fill(self.value);
+    }
+
+    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
+        [ParameterRange::infinite_float()].into()
+    }
+    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+        ["value"].into()
+    }
+
+    fn param_apply(&mut self, _ctx: AudioCtx, index: usize, value: ParameterValue) {
+        if index == 0 {
+            self.value = value.f().unwrap();
+        }
+    }
+}
