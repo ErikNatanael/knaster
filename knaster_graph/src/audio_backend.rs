@@ -1,5 +1,7 @@
 #[cfg(feature = "cpal")]
 pub mod cpal;
+#[cfg(feature = "jack")]
+pub mod jack;
 
 use alloc::string::String;
 
@@ -9,9 +11,10 @@ use crate::runner::Runner;
 
 /// Unified API for different backends.
 pub trait AudioBackend {
+    type Sample: Float;
     /// Starts processing and returns a [`Controller`]. This is the easiest
     /// option and will run the [`Controller`] in a loop on a new thread.
-    fn start_processing<F: Float>(&mut self, runner: Runner<F>) -> Result<(), AudioBackendError>;
+    fn start_processing(&mut self, runner: Runner<Self::Sample>) -> Result<(), AudioBackendError>;
     /// Stop the backend
     fn stop(&mut self) -> Result<(), AudioBackendError>;
     /// Get the native sample rate of the backend
@@ -35,7 +38,7 @@ pub enum AudioBackendError {
     CouldNotCreateNode(String),
     #[cfg(feature = "jack")]
     #[error(transparent)]
-    JackError(#[from] jack::Error),
+    JackError(#[from] ::jack::Error),
     #[cfg(feature = "cpal")]
     #[error(transparent)]
     CpalDevicesError(#[from] ::cpal::DevicesError),

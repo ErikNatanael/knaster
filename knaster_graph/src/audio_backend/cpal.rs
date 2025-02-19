@@ -1,3 +1,5 @@
+use core::marker::PhantomData;
+
 use crate::audio_backend::{AudioBackend, AudioBackendError};
 use crate::core::{eprintln, println};
 use crate::runner::Runner;
@@ -21,11 +23,12 @@ impl Default for CpalBackendOptions {
     }
 }
 /// CPAL backend for convenience. The CPAL backend currently does not support passing on audio inputs from outside the program.
-pub struct CpalBackend {
+pub struct CpalBackend<F> {
     stream: Option<cpal::Stream>,
     sample_rate: u32,
     config: cpal::SupportedStreamConfig,
     device: cpal::Device,
+    _marker: PhantomData<F>,
 }
 
 /// # Safety
@@ -34,10 +37,10 @@ pub struct CpalBackend {
 ///
 /// More info:
 /// https://github.com/RustAudio/cpal/blob/582e93c41d6073df5d5da871989c5fd581ea04b8/src/platform/mod.rs
-unsafe impl Send for CpalBackend {}
-unsafe impl Sync for CpalBackend {}
+unsafe impl<F> Send for CpalBackend<F> {}
+unsafe impl<F> Sync for CpalBackend<F> {}
 
-impl CpalBackend {
+impl<F> CpalBackend<F> {
     /// Create a new CpalBackend using the default host, getting a device, but not a stream.
     pub fn new(options: CpalBackendOptions) -> Result<Self, AudioBackendError> {
         let host = cpal::default_host();
@@ -62,6 +65,7 @@ impl CpalBackend {
             sample_rate: config.sample_rate().0 as u32,
             config,
             device,
+            _marker: PhantomData,
         })
     }
     /// The number of outputs for the device's default output config
@@ -73,8 +77,9 @@ impl CpalBackend {
     }
 }
 
-impl AudioBackend for CpalBackend {
-    fn start_processing<F: Float>(&mut self, runner: Runner<F>) -> Result<(), AudioBackendError> {
+impl<F: Float> AudioBackend for CpalBackend<F> {
+    type Sample = F;
+    fn start_processing(&mut self, runner: Runner<Self::Sample>) -> Result<(), AudioBackendError> {
         if self.stream.is_some() {
             return Err(AudioBackendError::BackendAlreadyRunning);
         }
