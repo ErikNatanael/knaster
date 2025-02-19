@@ -7,6 +7,9 @@ edition = "2021"
 default = ["std"]
 std = ["knaster_graph/std"]
 unstable = ["knaster_graph/unstable"]
+sound_files = ["knaster_graph/sound_files"]
+jack = ["knaster_graph/jack"]
+cpal = ["knaster_graph/cpal"]
 
 [dependencies]
 knaster_graph = { path = "../knaster_graph/" }
