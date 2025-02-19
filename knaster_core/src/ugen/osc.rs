@@ -139,8 +139,8 @@ mod wavetable_vec {
         }
     }
 
-    static SINE_WAVETABLE_F32: LazyLock<NonAaWavetable<f32>> =
-        LazyLock::new(|| NonAaWavetable::sine());
+    pub static SINE_WAVETABLE_F32: LazyLock<NonAaWavetable<f32>> =
+        LazyLock::new(NonAaWavetable::sine);
     /// Sine wave based on a wavetable lookup.
     ///
     /// A sine wave does not need to be anti-aliased so it uses a simpler
