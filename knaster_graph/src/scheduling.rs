@@ -80,6 +80,11 @@ impl SchedulingTime {
     ) -> u64 {
         if self.absolute {
             let t = self.seconds.to_samples(sample_rate);
+            // TODO: Real logging
+            #[cfg(debug_assertions)]
+            if t < frame_clock {
+                std::eprintln!("Event was scheduled late {}, {}", t, frame_clock);
+            }
             t.saturating_sub(frame_clock)
         } else {
             let samples = self.seconds.to_samples(sample_rate);
