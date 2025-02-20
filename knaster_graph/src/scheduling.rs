@@ -64,7 +64,7 @@ impl SharedFrameClock {
 ///
 /// The time can be relative to when the event is received on the audio thread, or in absolute
 /// samples. When converting from primitives
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct SchedulingTime {
     seconds: Seconds,
     absolute: bool,
