@@ -1,6 +1,6 @@
 use crate::{
     buffer_allocator::BufferAllocator,
-    connectable::{Channels, NodeOrGraph, Source},
+    connectable::{Channels, NodeOrGraph},
     core::sync::atomic::AtomicU64,
     edge::{Edge, NodeKeyOrGraph, ParameterEdge},
     graph_gen::GraphGen,
@@ -892,9 +892,7 @@ impl<F: Float> Graph<F> {
                         assert!(channel_in_source < source_node.outputs);
                         // Safety: The buffer has at least `source_node.outputs`
                         // channels of data of size `self.block_size`.
-                        let buffer = unsafe {
-                            buffer.offset((channel_in_source * self.block_size) as isize)
-                        };
+                        let buffer = unsafe { buffer.add(channel_in_source * self.block_size) };
                         apc.push(ArParameterChange {
                             node: node_index,
                             parameter_index,
@@ -958,6 +956,12 @@ impl<F: Float> Graph<F> {
                 }
             }
         }
+        // Add parameter edges as dependents
+        for (_key, edges) in &self.node_parameter_edges {
+            for edge in edges {
+                (unsafe { &mut *self.nodes.get() })[edge.source].num_output_dependents += 1;
+            }
+        }
 
         let mut graph_input_pointers_to_nodes = Vec::new();
         // Assign buffers
@@ -994,6 +998,14 @@ impl<F: Float> Graph<F> {
                             .unwrap()
                             .push((edge.channel_in_source, channel_index));
                     }
+                }
+            }
+            // Also parameter inputs
+            let param_edges = &self.node_parameter_edges[key];
+            for edge in param_edges {
+                let block = self.get_nodes()[edge.source].node_output;
+                if let crate::node::NodeOutput::Offset(block) = block {
+                    self.buffer_allocator.return_block(block);
                 }
             }
             if let Some(graph_inputs_to_node) = input_pointers_to_node {
@@ -1327,14 +1339,26 @@ impl<F: Float> Graph<F> {
     ) -> Vec<NodeKey> {
         let mut node_order = Vec::with_capacity(self.get_nodes().capacity());
         while !nodes_to_process.is_empty() {
-            let node_index = *nodes_to_process.last().unwrap();
+            let node_key = *nodes_to_process.last().unwrap();
 
-            let input_edges = &self.node_input_edges[node_index];
+            let input_edges = &self.node_input_edges[node_key];
             let mut found_unvisited = false;
             // There is probably room for optimisation here by managing to
             // not iterate the edges multiple times.
             for edge in input_edges.iter().filter_map(|e| *e) {
                 if let NodeKeyOrGraph::Node(source) = edge.source {
+                    if !visited.contains(&source) {
+                        nodes_to_process.push(source);
+                        visited.insert(source);
+                        found_unvisited = true;
+                        break;
+                    }
+                }
+            }
+            if !found_unvisited {
+                let param_input_edges = &self.node_parameter_edges[node_key];
+                for edge in param_input_edges.iter() {
+                    let source = edge.source;
                     if !visited.contains(&source) {
                         nodes_to_process.push(source);
                         visited.insert(source);
@@ -1417,7 +1441,7 @@ impl<F: Float> Graph<F> {
         }
 
         let stack = self.depth_first_search(&mut visited, &mut nodes_to_process);
-        self.node_order.extend(stack.into_iter());
+        self.node_order.extend(stack);
 
         // Check if feedback nodes need to be added to the node order
         // TODO: Update for new feedback edge system
