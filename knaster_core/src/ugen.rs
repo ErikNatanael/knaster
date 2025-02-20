@@ -345,6 +345,7 @@ pub trait UGen {
     #[allow(unused)]
     unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const Self::Sample) {
         // TODO: Proper errors
+        #[cfg(debug_assertions)]
         eprintln!("Warning: Audio rate parameter buffer set, but did not reach a WrArParams and will have no effect.");
     }
     /// Sets a delay to what frame within the next block the next parameter
@@ -358,6 +359,7 @@ pub trait UGen {
     #[allow(unused)]
     fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
         // TODO: Proper errors
+        #[cfg(debug_assertions)]
         eprintln!("Warning: Parameter delay set, but did not reach a WrHiResParams and will have no effect.");
     }
     /// Apply a parameter change. Typechecks and bounds checks the arguments and
