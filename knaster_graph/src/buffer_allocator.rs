@@ -36,6 +36,7 @@ use crate::graph::OwnedRawBuffer;
 use alloc::vec::Vec;
 use knaster_core::Float;
 
+#[derive(Debug)]
 struct AllocatedBlock {
     start_offset: usize,
     len: usize,
@@ -110,17 +111,16 @@ impl<F: Float> BufferAllocator<F> {
         let len = num_channels * block_size;
         // 1. Try to use an existing allocated block in order of return. If only
         // part of a block is needed, split it.
-        if !self.return_order.is_empty() {
-            for i in (self.return_order.len() - 1)..=0 {
-                let index = self.return_order[i];
-                if self.allocated_blocks[index].outstanding_borrows == 0
-                    && self.allocated_blocks[index].len <= len
-                {
-                    // It's a match!
-                    self.allocated_blocks[index].outstanding_borrows = num_borrows;
-                    self.return_order.remove(i);
-                    return self.allocated_blocks[index].start_offset;
-                }
+        for i in 0..self.return_order.len() {
+            let i = self.return_order.len() - (i + 1);
+            let index = self.return_order[i];
+            if self.allocated_blocks[index].outstanding_borrows == 0
+                && self.allocated_blocks[index].len >= len
+            {
+                // It's a match!
+                self.allocated_blocks[index].outstanding_borrows = num_borrows;
+                self.return_order.remove(i);
+                return self.allocated_blocks[index].start_offset;
             }
         }
         // 2. If blocks are available, but too small, try to merge adjacent ones
