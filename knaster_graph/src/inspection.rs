@@ -169,6 +169,23 @@ impl GraphInspection {
         s.push_str("\n}");
         s
     }
+    #[cfg(feature = "std")]
+    pub fn show_dot_svg(&self) {
+        let dot_string = self.to_dot_string();
+        let mut dot_command = std::process::Command::new("dot")
+            .arg("-Tsvg")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut stdin = dot_command.stdin.take().expect("Failed to open stdin");
+        std::thread::spawn(move || {
+            std::io::Write::write_all(&mut stdin, dot_string.as_bytes()).unwrap();
+        });
+        let output = dot_command.wait_with_output().unwrap();
+        std::fs::write("graph.svg", output.stdout).unwrap();
+        open::that("graph.svg").unwrap();
+    }
 }
 
 #[derive(Debug, Clone)]
