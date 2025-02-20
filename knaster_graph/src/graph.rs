@@ -1130,7 +1130,8 @@ impl<F: Float> Graph<F> {
         // Maps a node key to the index in the Vec
         let mut node_key_processed = Vec::with_capacity(real_nodes.len());
         let mut nodes = Vec::with_capacity(real_nodes.len());
-        for (node_key, node) in real_nodes {
+        for &node_key in &self.node_order {
+            let node = &real_nodes[node_key];
             let mut input_edges = Vec::new();
             if let Some(edges) = self.node_input_edges.get(node_key) {
                 for (input_channel_index, edge) in edges
