@@ -98,21 +98,26 @@ pub struct OnePoleLpf<F: Float> {
 }
 impl<F: Float> OnePoleLpf<F> {
     #[allow(missing_docs)]
-    pub fn new() -> Self {
-        Self { op: OnePole::new() }
+    pub fn new(cutoff_freq: F) -> Self {
+        let mut op = OnePole::new();
+        op.b1 = cutoff_freq;
+        Self { op }
     }
 }
 
-impl<F: Float> Default for OnePoleLpf<F> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 impl<F: Float> UGen for OnePoleLpf<F> {
     type Sample = F;
     type Inputs = U1;
     type Outputs = U1;
     type Parameters = U1;
+    fn init(&mut self, ctx: &AudioCtx) {
+        // Only assume b1 is frequency if a0 is set to its standard value
+        if self.op.a0 == F::ONE {
+            let freq = self.op.b1;
+            self.op
+                .set_freq_lowpass(freq, F::new(ctx.sample_rate() as f32));
+        }
+    }
     fn process(
         &mut self,
         _ctx: AudioCtx,
