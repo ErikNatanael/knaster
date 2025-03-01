@@ -614,6 +614,7 @@ dependencies = [
  "fastrand",
  "hound",
  "knaster_primitives",
+ "no_denormals",
  "symphonia",
  "target-features",
  "thiserror 2.0.4",
@@ -633,6 +634,7 @@ dependencies = [
  "rand",
  "rtrb",
  "slotmap",
+ "smallvec",
  "thiserror 2.0.4",
 ]
 
@@ -739,6 +741,12 @@ checksum = "8c196769dd60fd4f363e11d948139556a344e79d451aeb2fa2fd040738ef7691"
 dependencies = [
  "jni-sys",
 ]
+
+[[package]]
+name = "no_denormals"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50a63f8a8efd33b4706cecbc4b845b0c63e9c883f8a5404a0fd7ce2a0933421f"
 
 [[package]]
 name = "nom"
@@ -1092,6 +1100,12 @@ checksum = "dbff4acf519f630b3a3ddcfaea6c06b42174d9a44bc70c620e9ed1649d58b82a"
 dependencies = [
  "version_check",
 ]
+
+[[package]]
+name = "smallvec"
+version = "1.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fcf8323ef1faaee30a44a340193b1ac6814fd9b7b4e88e9d4519a3e4abe1cfd"
 
 [[package]]
 name = "symphonia"

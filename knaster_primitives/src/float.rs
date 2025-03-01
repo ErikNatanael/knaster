@@ -28,6 +28,11 @@ pub trait Float:
     const ONE: Self;
     const PI: Self;
     const TAU: Self;
+    /// A good guess for a number which, when added to a signal as DC, will prevent denormals
+    /// without adding any perceivable noise to the output. This value is a compromise, you may
+    /// choose a larger value, which allows you to add it less frequently, or a smaller value,
+    /// having a smaller effect on the values produced.
+    const ANTI_DENORMAL: Self;
     fn from_usize(i: usize) -> Self;
     fn new<F: Float>(v: F) -> Self;
     fn to_f32(self) -> f32;
@@ -38,6 +43,7 @@ impl Float for f32 {
     const ONE: Self = 1.0;
     const PI: Self = f32::consts::PI;
     const TAU: Self = f32::consts::TAU;
+    const ANTI_DENORMAL: Self = 1e-20;
 
     fn from_usize(i: usize) -> Self {
         i as Self
@@ -61,6 +67,7 @@ impl Float for f64 {
     const ONE: Self = 1.0;
     const PI: Self = f64::consts::PI;
     const TAU: Self = f64::consts::TAU;
+    const ANTI_DENORMAL: Self = 1e-20;
 
     fn from_usize(i: usize) -> Self {
         i as Self
