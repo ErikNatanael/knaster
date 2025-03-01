@@ -9,8 +9,8 @@ use crate::{AudioCtx, ParameterValue, UGen, UGenFlags};
 /// `DelayedChangesPerBlock` determines the maximum number of changes that can
 /// be scheduled per block.
 ///
-/// This wrapper needs to be outside of other wrappers_graph that can run partial blocks, such as [`WrSmoothParams`] and [`WrArParams`]
-pub struct WrHiResParams<const DELAYED_CHANGES_PER_BLOCK: usize, T: UGen> {
+/// This wrapper needs to be outside of other wrappers that can run partial blocks, such as [`WrSmoothParams`] and [`WrArParams`]
+pub struct WrPreciseTiming<const DELAYED_CHANGES_PER_BLOCK: usize, T: UGen> {
     gen: T,
     // frame in block, parameter index, value
     waiting_changes: [Option<(u16, usize, ParameterValue)>; DELAYED_CHANGES_PER_BLOCK],
@@ -20,9 +20,11 @@ pub struct WrHiResParams<const DELAYED_CHANGES_PER_BLOCK: usize, T: UGen> {
     next_delay_i: usize,
 }
 
-impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> WrHiResParams<DELAYED_CHANGES_PER_BLOCK, T> {
+impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize>
+    WrPreciseTiming<DELAYED_CHANGES_PER_BLOCK, T>
+{
     pub fn new(gen: T) -> Self {
-        WrHiResParams {
+        WrPreciseTiming {
             gen,
             waiting_changes: [None; DELAYED_CHANGES_PER_BLOCK],
             next_delay: NumericArray::default(),
@@ -32,7 +34,7 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> WrHiResParams<DELAYED_CHAN
 }
 
 impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
-    for WrHiResParams<DELAYED_CHANGES_PER_BLOCK, T>
+    for WrPreciseTiming<DELAYED_CHANGES_PER_BLOCK, T>
 {
     type Sample = T::Sample;
 

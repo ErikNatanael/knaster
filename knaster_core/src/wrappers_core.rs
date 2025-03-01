@@ -43,7 +43,7 @@ pub trait UGenWrapperCoreExt<T: UGen> {
     /// will suffice.
     fn precise_timing<const MAX_CHANGES_PER_BLOCK: usize>(
         self,
-    ) -> WrHiResParams<MAX_CHANGES_PER_BLOCK, T>;
+    ) -> WrPreciseTiming<MAX_CHANGES_PER_BLOCK, T>;
 }
 
 impl<T: UGen> UGenWrapperCoreExt<T> for T {
@@ -96,7 +96,7 @@ impl<T: UGen> UGenWrapperCoreExt<T> for T {
 
     fn precise_timing<const MAX_CHANGES_PER_BLOCK: usize>(
         self,
-    ) -> WrHiResParams<MAX_CHANGES_PER_BLOCK, T> {
-        WrHiResParams::new(self)
+    ) -> WrPreciseTiming<MAX_CHANGES_PER_BLOCK, T> {
+        WrPreciseTiming::new(self)
     }
 }
