@@ -187,7 +187,6 @@ mod wavetable_vec {
         #[must_use]
         pub fn next_sample(&mut self) -> F {
             // Use the phase to index into the wavetable
-            // self.wavetable.get_linear_interp(temp_phase) * self.amp
             let sample = self.wavetable.get(self.phase + self.phase_offset);
             self.phase.increase(self.phase_increment);
             F::new(sample)
