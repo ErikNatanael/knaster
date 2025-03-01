@@ -1,6 +1,6 @@
 use crate::{
     buffer_allocator::BufferAllocator,
-    connectable::{Channels, NodeOrGraph},
+    connectable::{Channels, NodeOrGraph, NodeSubset},
     core::sync::atomic::AtomicU64,
     edge::{Edge, NodeKeyOrGraph, ParameterEdge},
     graph_gen::GraphGen,
@@ -751,20 +751,22 @@ impl<F: Float> Graph<F> {
             .into_iter()
             .zip(sink_channels.into().into_iter())
         {
-            let (source, so_chan) = source.for_channel(so_chan);
-            let (sink, si_chan) = sink.for_channel(si_chan);
-            match (source, sink) {
-                (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
-                    self.connect_input_to_node(sink, so_chan, si_chan, false)?;
-                }
-                (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
-                    self.connect_nodes(source, sink, so_chan, si_chan, false)?;
-                }
-                (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
-                    self.connect_node_to_output(source, so_chan, si_chan, false)?;
-                }
-                (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
-                    self.connect_input_to_output(so_chan, si_chan, false)?;
+            if let Some((source, so_chan)) = source.for_output_channel(so_chan) {
+                if let Some((sink, si_chan)) = sink.for_input_channel(si_chan) {
+                    match (source, sink) {
+                        (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
+                            self.connect_input_to_node(sink, so_chan, si_chan, false)?;
+                        }
+                        (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
+                            self.connect_nodes(source, sink, so_chan, si_chan, false)?;
+                        }
+                        (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
+                            self.connect_node_to_output(source, so_chan, si_chan, false)?;
+                        }
+                        (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
+                            self.connect_input_to_output(so_chan, si_chan, false)?;
+                        }
+                    }
                 }
             }
         }
@@ -786,20 +788,22 @@ impl<F: Float> Graph<F> {
             .into_iter()
             .zip(sink_channels.into().into_iter())
         {
-            let (source, so_chan) = source.for_channel(so_chan);
-            let (sink, si_chan) = sink.for_channel(si_chan);
-            match (source, sink) {
-                (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
-                    self.connect_input_to_node(sink, so_chan, si_chan, true)?;
-                }
-                (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
-                    self.connect_nodes(source, sink, so_chan, si_chan, true)?;
-                }
-                (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
-                    self.connect_node_to_output(source, so_chan, si_chan, true)?;
-                }
-                (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
-                    self.connect_input_to_output(so_chan, si_chan, true)?;
+            if let Some((source, so_chan)) = source.for_output_channel(so_chan) {
+                if let Some((sink, si_chan)) = sink.for_input_channel(si_chan) {
+                    match (source, sink) {
+                        (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
+                            self.connect_input_to_node(sink, so_chan, si_chan, true)?;
+                        }
+                        (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
+                            self.connect_nodes(source, sink, so_chan, si_chan, true)?;
+                        }
+                        (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
+                            self.connect_node_to_output(source, so_chan, si_chan, true)?;
+                        }
+                        (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
+                            self.connect_input_to_output(so_chan, si_chan, true)?;
+                        }
+                    }
                 }
             }
         }
@@ -1536,6 +1540,45 @@ impl<F: Float> Graph<F> {
     pub fn ctx(&self) -> AudioCtx {
         AudioCtx::new(self.sample_rate, self.block_size)
     }
+    /// Number of input channels going into this graph.
+    pub fn inputs(&self) -> usize {
+        self.num_inputs
+    }
+    /// Number of output channels going out from this graph.
+    pub fn outputs(&self) -> usize {
+        self.num_outputs
+    }
+    /// Connectable for connecting the Graph to other nodes within its parent graph.
+    pub fn as_node(&self) -> Connectable {
+        Connectable::from_node(
+            NodeSubset {
+                node: NodeOrGraph::Node(self.self_node_id),
+                channels: self.inputs(),
+                start_channel: 0,
+            },
+            NodeSubset {
+                node: NodeOrGraph::Node(self.self_node_id),
+                channels: self.outputs(),
+                start_channel: 0,
+            },
+        )
+    }
+    /// Connectable for connecting inside the graph. Note that inside the graph, the graph outputs
+    /// are sinks/inputs and the graph outputs are sources/outputs.
+    pub fn as_graph(&self) -> Connectable {
+        Connectable::from_node(
+            NodeSubset {
+                node: NodeOrGraph::Graph,
+                channels: self.outputs(),
+                start_channel: 0,
+            },
+            NodeSubset {
+                node: NodeOrGraph::Graph,
+                channels: self.inputs(),
+                start_channel: 0,
+            },
+        )
+    }
 }
 
 fn shorten_name(name: &str) -> String {
@@ -1659,8 +1702,19 @@ impl<F: Float> From<&Graph<F>> for NodeId {
     }
 }
 impl<F: Float> From<&Graph<F>> for Connectable {
-    fn from(value: &Graph<F>) -> Self {
-        Connectable::SingleNode(value.self_node_id)
+    fn from(h: &Graph<F>) -> Self {
+        Connectable::from_node(
+            NodeSubset {
+                node: NodeOrGraph::Node(h.self_node_id),
+                channels: h.inputs(),
+                start_channel: 0,
+            },
+            NodeSubset {
+                node: NodeOrGraph::Node(h.self_node_id),
+                channels: h.outputs(),
+                start_channel: 0,
+            },
+        )
     }
 }
 // impl<F: Float> From<&Graph<F>> for Source {

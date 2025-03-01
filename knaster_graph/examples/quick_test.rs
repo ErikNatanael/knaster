@@ -81,7 +81,7 @@ fn main() -> Result<()> {
         graph.connect(&noise, 0, 0, &lpf)?;
         graph.connect_replace(&lpf, 0, 0, &mult)?;
         graph.connect_replace(&env, 0, 1, &mult)?;
-        graph.connect_replace(&mult, [0, 0], [0, 1], NodeOrGraph::Graph)?;
+        graph.connect_replace(&mult, [0, 0], [0, 1], graph.as_graph())?;
         graph.commit_changes()?;
 
         // let inspection = top_level_graph.inspection();

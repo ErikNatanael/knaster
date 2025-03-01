@@ -4,7 +4,7 @@
 //! - Typesafe Handle types
 
 use crate::{
-    connectable::NodeSubset,
+    connectable::{NodeOrGraph, NodeSubset},
     core::{eprintln, marker::PhantomData},
     graph::{GraphError, NodeId},
     SchedulingEvent, SchedulingTime, SchedulingToken, SharedFrameClock,
@@ -139,7 +139,7 @@ pub trait HandleTrait: Sized {
     fn outputs(&self) -> usize;
     fn subset(&self, start_channel: usize, channels: usize) -> NodeSubset {
         NodeSubset {
-            id: self.node_id(),
+            node: NodeOrGraph::Node(self.node_id()),
             channels,
             start_channel,
         }

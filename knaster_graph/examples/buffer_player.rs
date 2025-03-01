@@ -69,7 +69,7 @@ fn main() -> Result<()> {
     let amp = g.push(Constant::new(0.5));
     g.connect(&amp, [0, 0], [2, 3], &mult)?;
     g.connect(&play, [0, 1], [0, 1], &mult)?;
-    g.connect(&mult, [0, 1], [0, 1], NodeOrGraph::Graph)?;
+    g.connect(&mult, [0, 1], [0, 1], g.as_graph())?;
     g.commit_changes()?;
     std::thread::sleep(Duration::from_secs_f32(2.5));
     play.change("t_restart")?.trig().send()?;

@@ -42,10 +42,10 @@ fn main() -> Result<()> {
     let osc3 = graph.push(SinNumeric::new(200. * 4.).wr_mul(0.2));
     osc3.set(("freq", 200. * 4.))?;
     // connect them together
-    graph.connect_replace(&osc1, 0, 0, NodeOrGraph::Graph)?;
+    graph.connect_replace(&osc1, 0, 0, graph.as_graph())?;
     graph.connect_node_to_output(&osc1, 0, 1, false)?;
-    graph.connect(&osc3, 0, 0, NodeOrGraph::Graph)?;
-    graph.connect(&osc2, 0, 0, NodeOrGraph::Graph)?;
+    graph.connect(&osc3, 0, 0, graph.as_graph())?;
+    graph.connect(&osc2, 0, 0, graph.as_graph())?;
     graph.commit_changes()?;
 
     let inspection = graph.inspection();
