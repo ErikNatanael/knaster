@@ -5,6 +5,8 @@ pub type SinWt = knaster_graph::osc::SinWt<f32>;
 
 pub type MathUGen<N, Op> = knaster_graph::math::MathUGen<f32, N, Op>;
 
+pub type Graph = knaster_graph::graph::Graph<f32>;
+
 pub type EnvAr = knaster_graph::envelopes::EnvAr<f32>;
 pub type EnvAsr = knaster_graph::envelopes::EnvAsr<f32>;
 
