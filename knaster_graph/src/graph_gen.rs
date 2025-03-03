@@ -266,7 +266,7 @@ fn apply_parameter_change<'a, 'b, F: Float>(
     // replace implicit 'static with 'b
     gens: &'a mut [(NodeKey, *mut (dyn DynUGen<F> + 'b))],
 ) -> Option<SchedulingEvent> {
-    let mut ready_to_apply = event.token.as_ref().map_or(true, |t| t.ready());
+    let mut ready_to_apply = event.token.as_ref().is_none_or(|t| t.ready());
     let mut delay_in_block = 0;
     if let Some(time) = &mut event.time {
         delay_in_block = time.to_samples_until_due(block_size, sample_rate, ctx.frame_clock());
