@@ -160,9 +160,8 @@ pub enum ParameterHint {
     Integer(PInteger, PInteger),
 }
 impl ParameterHint {
-    pub fn float<T>(with: impl FnOnce(&mut FloatHint) -> T) -> Self {
-        let mut hint = FloatHint::new();
-        with(&mut hint);
+    pub fn float(with: impl FnOnce(FloatHint) -> FloatHint) -> Self {
+        let hint = with(FloatHint::new());
         Self::Float(hint)
     }
     pub fn from_pinteger<T: PIntegerConvertible>() -> ParameterHint {
