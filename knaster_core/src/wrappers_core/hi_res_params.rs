@@ -11,7 +11,7 @@ use crate::{AudioCtx, ParameterValue, UGen, UGenFlags};
 ///
 /// This wrapper needs to be outside of other wrappers that can run partial blocks, such as [`WrSmoothParams`] and [`WrArParams`]
 pub struct WrPreciseTiming<const DELAYED_CHANGES_PER_BLOCK: usize, T: UGen> {
-    gen: T,
+    ugen: T,
     // frame in block, parameter index, value
     waiting_changes: [Option<(u16, usize, ParameterValue)>; DELAYED_CHANGES_PER_BLOCK],
     // The time that the next change to the given parameter index should be delayed by.
@@ -23,9 +23,9 @@ pub struct WrPreciseTiming<const DELAYED_CHANGES_PER_BLOCK: usize, T: UGen> {
 impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize>
     WrPreciseTiming<DELAYED_CHANGES_PER_BLOCK, T>
 {
-    pub fn new(gen: T) -> Self {
+    pub fn new(ugen: T) -> Self {
         WrPreciseTiming {
-            gen,
+            ugen,
             waiting_changes: [None; DELAYED_CHANGES_PER_BLOCK],
             next_delay: NumericArray::default(),
             next_delay_i: 0,
@@ -43,7 +43,7 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
     type Outputs = T::Outputs;
 
     fn init(&mut self, ctx: &AudioCtx) {
-        self.gen.init(ctx);
+        self.ugen.init(ctx);
     }
 
     fn process(
@@ -55,10 +55,10 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
         // The block size is one so all available changes should be applied
         for waiting_change in &mut self.waiting_changes {
             if let Some((_delay, index, value)) = waiting_change.take() {
-                self.gen.param_apply(ctx, index, value);
+                self.ugen.param_apply(ctx, index, value);
             }
         }
-        self.gen.process(ctx, flags, input)
+        self.ugen.process(ctx, flags, input)
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
@@ -79,7 +79,7 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
             while change_i < num_changes_scheduled {
                 if let Some((delay, index, value)) = &self.waiting_changes[change_i] {
                     if (*delay as usize) <= block_i + ctx.block_start_offset() {
-                        self.gen.param_apply(ctx.into(), *index, *value);
+                        self.ugen.param_apply(ctx.into(), *index, *value);
                         self.waiting_changes[change_i] = None;
                     } else {
                         local_frames_to_process = local_frames_to_process
@@ -93,12 +93,12 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
                 break;
             }
             if local_frames_to_process == ctx.frames_to_process() {
-                self.gen.process_block(ctx, flags, input, output);
+                self.ugen.process_block(ctx, flags, input, output);
             } else {
                 let input = input.partial(block_i, local_frames_to_process);
                 let mut output = output.partial_mut(block_i, local_frames_to_process);
                 let partial_ctx = ctx.make_partial(block_i, local_frames_to_process);
-                self.gen
+                self.ugen
                     .process_block(partial_ctx, flags, &input, &mut output);
             }
             block_i += local_frames_to_process;
@@ -119,21 +119,18 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
 
     fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
         if self.next_delay[index] == 0 {
-            self.gen.param_apply(ctx, index, value);
+            self.ugen.param_apply(ctx, index, value);
+        } else if self.next_delay_i < DELAYED_CHANGES_PER_BLOCK {
+            self.waiting_changes[self.next_delay_i] = Some((self.next_delay[index], index, value));
+            self.next_delay_i += 1;
         } else {
-            if self.next_delay_i < DELAYED_CHANGES_PER_BLOCK {
-                self.waiting_changes[self.next_delay_i] =
-                    Some((self.next_delay[index], index, value));
-                self.next_delay_i += 1;
-            } else {
-                // TODO: Proper error reporting
-                eprintln!("Warning: Not enough space for echeduled changes in WrHiResParams, change ignored. Allocate more space for saving scheduled changes by setting the generic DelayedChangesPerBlock to a higher number.");
-            }
+            // TODO: Proper error reporting
+            eprintln!("Warning: Not enough space for echeduled changes in WrHiResParams, change ignored. Allocate more space for saving scheduled changes by setting the generic DelayedChangesPerBlock to a higher number.");
         }
     }
 
     unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
-        self.gen.set_ar_param_buffer(index, buffer)
+        unsafe { self.ugen.set_ar_param_buffer(index, buffer) }
     }
 
     fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {

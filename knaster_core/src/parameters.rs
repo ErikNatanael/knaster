@@ -145,6 +145,12 @@ impl FloatHint {
     }
 }
 
+impl Default for FloatHint {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// An inclusive range for the supported values of a parameter
 #[derive(Copy, Clone, Debug)]
 pub enum ParameterHint {

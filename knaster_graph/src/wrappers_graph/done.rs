@@ -15,7 +15,7 @@ use std::sync::Arc;
 /// changing what action is taken when the internal node is marked as done. See [`Done`] for more
 /// information.
 pub struct WrDone<T> {
-    pub(crate) gen: T,
+    pub(crate) ugen: T,
     pub(crate) free_self_flag: Arc<AtomicBool>,
     pub(crate) done_action: Done,
 }
@@ -48,7 +48,7 @@ where
     type Outputs = T::Outputs;
 
     fn init(&mut self, ctx: &AudioCtx) {
-        self.gen.init(ctx)
+        self.ugen.init(ctx)
     }
 
     fn process(
@@ -58,7 +58,7 @@ where
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         flags.mark_remove_self_supported();
-        let out = self.gen.process(ctx, flags, input);
+        let out = self.ugen.process(ctx, flags, input);
         self.process_flags(flags);
         out
     }
@@ -74,7 +74,7 @@ where
         OutBlock: Block<Sample = Self::Sample>,
     {
         flags.mark_remove_self_supported();
-        self.gen.process_block(ctx, flags, input, output);
+        self.ugen.process_block(ctx, flags, input, output);
         self.process_flags(flags);
     }
     type Parameters = Add1<T::Parameters>;
@@ -103,7 +103,7 @@ where
         if index == T::Parameters::USIZE {
             self.done_action = value.integer().unwrap().into();
         } else {
-            self.gen.param_apply(ctx, index, value);
+            self.ugen.param_apply(ctx, index, value);
         }
     }
 }

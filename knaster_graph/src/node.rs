@@ -25,7 +25,7 @@ pub(crate) struct Node<F> {
     pub(crate) is_graph: Option<GraphId>,
 
     /// STATIC DATA (won't change after the node has been created)
-    pub(crate) gen: *mut dyn DynUGen<F>,
+    pub(crate) ugen: *mut dyn DynUGen<F>,
     pub(crate) inputs: usize,
     pub(crate) outputs: usize,
     /// true if the node was not pushed manually to the Graph. Such nodes may
@@ -46,19 +46,19 @@ pub(crate) struct Node<F> {
     pub(crate) remove_me: Option<Arc<AtomicBool>>,
 }
 impl<F: Float> Node<F> {
-    pub fn new<T: DynUGen<F> + 'static>(name: String, gen: T) -> Self {
-        let parameter_descriptions = gen.param_descriptions().into_iter().collect();
-        let parameter_hints = gen.param_hints().into_iter().collect();
-        let inputs = gen.inputs();
-        let outputs = gen.outputs();
-        let boxed_gen = Box::new(gen);
+    pub fn new<T: DynUGen<F> + 'static>(name: String, ugen: T) -> Self {
+        let parameter_descriptions = ugen.param_descriptions().into_iter().collect();
+        let parameter_hints = ugen.param_hints().into_iter().collect();
+        let inputs = ugen.inputs();
+        let outputs = ugen.outputs();
+        let boxed_gen = Box::new(ugen);
         let ptr = Box::into_raw(boxed_gen);
 
         Self {
             name,
             parameter_descriptions,
             parameter_hints,
-            gen: ptr,
+            ugen: ptr,
             inputs,
             outputs,
             node_inputs: vec![crate::core::ptr::null_mut(); inputs],
@@ -70,7 +70,7 @@ impl<F: Float> Node<F> {
         }
     }
     pub fn init(&mut self, ctx: &AudioCtx) {
-        unsafe { &mut *(self.gen) }.init(ctx);
+        unsafe { &mut *(self.ugen) }.init(ctx);
     }
     pub(super) fn to_task(&self) -> Task<F> {
         let in_buffers = self.node_inputs.clone();
@@ -81,7 +81,7 @@ impl<F: Float> Node<F> {
         Task {
             in_buffers,
             out_buffer,
-            gen: self.gen,
+            ugen: self.ugen,
             output_channels: self.outputs,
         }
     }

@@ -275,9 +275,9 @@ fn apply_parameter_change<'a, 'b, F: Float>(
 
     let node_key = event.node_key;
     if ready_to_apply {
-        for (key, gen) in gens.iter_mut() {
+        for (key, ugen) in gens.iter_mut() {
             if *key == node_key {
-                let g = unsafe { &mut (**gen) };
+                let g = unsafe { &mut (**ugen) };
                 if delay_in_block > 0 {
                     g.set_delay_within_block_for_param(event.parameter, delay_in_block as u16);
                 }

@@ -302,10 +302,10 @@ impl<F: Float> Graph<F> {
     }
 
     /// Push something implementing [`UGen`] to the graph.
-    pub fn push<T: UGen<Sample = F> + 'static>(&mut self, gen: T) -> Handle<T> {
+    pub fn push<T: UGen<Sample = F> + 'static>(&mut self, ugen: T) -> Handle<T> {
         let name = std::any::type_name::<T>();
         let name = shorten_name(name);
-        let node = Node::new(name.to_owned(), gen);
+        let node = Node::new(name.to_owned(), ugen);
         let node_key = self.push_node(node);
 
         Handle::new(RawHandle::new(
@@ -323,7 +323,7 @@ impl<F: Float> Graph<F> {
     /// enables the node to free itself if it marks itself as done or for removal using [`GenFlags`].
     pub fn push_with_done_action<T: UGen<Sample = F> + 'static>(
         &mut self,
-        gen: T,
+        ugen: T,
         default_done_action: Done,
     ) -> Handle<WrDone<T>>
     where
@@ -332,14 +332,14 @@ impl<F: Float> Graph<F> {
         <<T as UGen>::Parameters as crate::core::ops::Add<B1>>::Output: Size,
     {
         let free_self_flag = Arc::new(AtomicBool::new(false));
-        let gen = WrDone {
-            gen,
+        let ugen = WrDone {
+            ugen,
             free_self_flag: free_self_flag.clone(),
             done_action: default_done_action,
         };
         let name = std::any::type_name::<T>();
         let name = shorten_name(name);
-        let mut node = Node::new(name.to_owned(), gen);
+        let mut node = Node::new(name.to_owned(), ugen);
         node.remove_me = Some(free_self_flag);
         let node_key = self.push_node(node);
         Handle::new(RawHandle::new(
@@ -921,7 +921,7 @@ impl<F: Float> Graph<F> {
         let gens: Vec<_> = self
             .node_order
             .iter()
-            .map(|key| (*key, nodes[*key].gen))
+            .map(|key| (*key, nodes[*key].ugen))
             .collect();
         let ar_parameter_changes = self.generate_ar_parameter_changes();
         TaskData {
@@ -1651,10 +1651,9 @@ impl<F: Float> GraphGenCommunicator<F> {
     /// resoruces in the Graph can be freed before running this.
     /// GraphGenCommunicator will free its own resources.
     fn send_updated_tasks(&mut self, task_data: TaskData<F>) -> Result<(), GraphError> {
-        if let Err(e) = self.new_task_data_producer.push(task_data) {
-            Err(GraphError::SendToGraphGen(format!("{e}")))
-        } else {
-            Ok(())
+        match self.new_task_data_producer.push(task_data) {
+            Err(e) => Err(GraphError::SendToGraphGen(format!("{e}"))),
+            _ => Ok(()),
         }
     }
 }

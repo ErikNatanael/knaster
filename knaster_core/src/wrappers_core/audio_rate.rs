@@ -17,7 +17,7 @@ use crate::{
 /// Wrapper that enables setting a parameter to an audio rate signal. This must
 /// wrap a [`UGen`] for audio rate parameter changes to take effect.
 pub struct WrArParams<T: UGen> {
-    gen: T,
+    ugen: T,
     buffers: NumericArray<Option<*const T::Sample>, T::Parameters>,
     // Keeps track of where we are in a block if processing sample-by-sample
     block_index: usize,
@@ -26,9 +26,9 @@ pub struct WrArParams<T: UGen> {
 unsafe impl<T: UGen> Send for WrArParams<T> {}
 
 impl<T: UGen> WrArParams<T> {
-    pub fn new(gen: T) -> Self {
+    pub fn new(ugen: T) -> Self {
         Self {
-            gen,
+            ugen,
             buffers: NumericArray::default(),
             block_index: 0,
         }
@@ -43,7 +43,7 @@ impl<T: UGen> UGen for WrArParams<T> {
     type Outputs = T::Outputs;
 
     fn init(&mut self, ctx: &AudioCtx) {
-        self.gen.init(ctx);
+        self.ugen.init(ctx);
     }
 
     fn process(
@@ -55,12 +55,12 @@ impl<T: UGen> UGen for WrArParams<T> {
         for (param, buffer) in self.buffers.iter().enumerate() {
             if let Some(ptr) = buffer {
                 let value = unsafe { *ptr.add(self.block_index) }.to_f64() as PFloat;
-                self.gen
+                self.ugen
                     .param_apply(ctx, param, ParameterValue::Float(value))
             }
         }
-        self.block_index = (self.block_index + 1) % ctx.block_size() as usize;
-        self.gen.process(ctx, flags, input)
+        self.block_index = (self.block_index + 1) % ctx.block_size();
+        self.ugen.process(ctx, flags, input)
     }
     // TODO: Be more efficient about processing
 
@@ -76,7 +76,7 @@ impl<T: UGen> UGen for WrArParams<T> {
 
     fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
         if self.buffers[index].is_none() {
-            self.gen.param_apply(ctx, index, value);
+            self.ugen.param_apply(ctx, index, value);
         }
     }
 
@@ -92,7 +92,7 @@ impl<T: UGen> UGen for WrArParams<T> {
 ///
 /// For use in `knaster_graph`, prefer
 pub struct WrArParamToInput<T, ParamIndex> {
-    gen: T,
+    ugen: T,
     _index: PhantomData<ParamIndex>,
 }
 
@@ -112,7 +112,7 @@ where
 
     fn init(&mut self, ctx: &AudioCtx) {
         // TODO: check that this parameter is a float parameter
-        self.gen.init(ctx)
+        self.ugen.init(ctx)
     }
 
     fn process(
@@ -123,7 +123,7 @@ where
     ) -> Frame<Self::Sample, Self::Outputs> {
         // The index T::Inputs is one more than the previous number of audio
         // inputs, i.e. the one we added with the wrapper.
-        self.gen.param_apply(
+        self.ugen.param_apply(
             ctx,
             ParamIndex::USIZE,
             ParameterValue::Float(input[<T as UGen>::Inputs::USIZE].to_f64() as PFloat),
@@ -132,7 +132,7 @@ where
         for i in 0..T::Inputs::USIZE {
             new_input[i] = input[i];
         }
-        self.gen.process(ctx, flags, new_input)
+        self.ugen.process(ctx, flags, new_input)
     }
 
     fn process_block<InBlock, OutBlock>(
@@ -168,6 +168,6 @@ where
     }
 
     fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
-        self.gen.param_apply(ctx, index, value);
+        self.ugen.param_apply(ctx, index, value);
     }
 }

@@ -54,11 +54,11 @@ impl RawHandle {
         }
     }
     pub fn is_alive(&self) -> bool {
-        if let Ok(s) = self.sender.lock() {
+        match self.sender.lock() { Ok(s) => {
             !s.is_abandoned()
-        } else {
+        } _ => {
             false
-        }
+        }}
     }
     pub fn send(&self, event: SchedulingEvent) -> Result<(), GraphError> {
         // Lock should never be poisoned, but if it is we don't care.
@@ -165,12 +165,12 @@ impl<T: UGen> HandleTrait for Handle<T> {
         let param_index = match c.param {
             knaster_core::Param::Index(param_i) => param_i,
             knaster_core::Param::Desc(desc) => {
-                if let Some(param_i) = T::param_descriptions().iter().position(|d| *d == desc) {
+                match T::param_descriptions().iter().position(|d| *d == desc) { Some(param_i) => {
                     param_i
-                } else {
+                } _ => {
                     // Fail
                     return Err(ParameterError::DescriptionNotFound(desc).into());
-                }
+                }}
             }
         };
         let event = SchedulingEvent {
@@ -194,12 +194,12 @@ impl<T: UGen> HandleTrait for Handle<T> {
                 }
             }
             knaster_core::Param::Desc(desc) => {
-                if let Some(param_i) = T::param_descriptions().iter().position(|d| *d == desc) {
+                match T::param_descriptions().iter().position(|d| *d == desc) { Some(param_i) => {
                     param_i
-                } else {
+                } _ => {
                     // Fail
                     return Err(ParameterError::DescriptionNotFound(desc));
-                }
+                }}
             }
         };
         Ok(ParameterChange2 {

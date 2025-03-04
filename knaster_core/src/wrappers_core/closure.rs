@@ -6,12 +6,12 @@ use knaster_primitives::{Block, BlockRead};
 /// This is almost certainly not as performant as using wrappers_graph dedicated to a specific
 /// math operation, but good for prototyping and for when performance is not so important.
 pub struct WrClosure<T: UGen, C: FnMut(T::Sample) -> T::Sample + 'static> {
-    gen: T,
+    ugen: T,
     closure: C,
 }
 impl<T: UGen, C: FnMut(T::Sample) -> T::Sample + 'static> WrClosure<T, C> {
-    pub fn new(gen: T, closure: C) -> Self {
-        Self { gen, closure }
+    pub fn new(ugen: T, closure: C) -> Self {
+        Self { ugen, closure }
     }
 }
 impl<T: UGen, C: FnMut(T::Sample) -> T::Sample + 'static> UGen for WrClosure<T, C> {
@@ -20,7 +20,7 @@ impl<T: UGen, C: FnMut(T::Sample) -> T::Sample + 'static> UGen for WrClosure<T, 
     type Outputs = T::Outputs;
 
     fn init(&mut self, ctx: &crate::AudioCtx) {
-        self.gen.init(ctx);
+        self.ugen.init(ctx);
     }
 
     fn process(
@@ -29,7 +29,7 @@ impl<T: UGen, C: FnMut(T::Sample) -> T::Sample + 'static> UGen for WrClosure<T, 
         flags: &mut UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
-        let mut out = self.gen.process(ctx, flags, input);
+        let mut out = self.ugen.process(ctx, flags, input);
         for sample in &mut out {
             *sample = (self.closure)(*sample);
         }
@@ -45,7 +45,7 @@ impl<T: UGen, C: FnMut(T::Sample) -> T::Sample + 'static> UGen for WrClosure<T, 
         InBlock: BlockRead<Sample = Self::Sample>,
         OutBlock: Block<Sample = Self::Sample>,
     {
-        self.gen.process_block(ctx, flags, input, output);
+        self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
             for sample in channel {
                 *sample = (self.closure)(*sample);
@@ -55,24 +55,25 @@ impl<T: UGen, C: FnMut(T::Sample) -> T::Sample + 'static> UGen for WrClosure<T, 
 
     type Parameters = T::Parameters;
 
-    fn param_descriptions(
-    ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions()
+    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
 
-    fn param_hints(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
-    {
+    fn param_hints()
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 
     fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
-        T::param_apply(&mut self.gen, ctx, index, value)
+        T::param_apply(&mut self.ugen, ctx, index, value)
     }
     unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
-        self.gen.set_ar_param_buffer(index, buffer);
+        unsafe {
+            self.ugen.set_ar_param_buffer(index, buffer);
+        }
     }
     fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
-        self.gen.set_delay_within_block_for_param(index, delay);
+        self.ugen.set_delay_within_block_for_param(index, delay);
     }
 }

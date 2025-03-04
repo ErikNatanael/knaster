@@ -5,7 +5,6 @@ use crate::core::format;
 use crate::core::vec;
 
 use crate::audio_backend::{AudioBackend, AudioBackendError};
-use crate::graph::Graph;
 use crate::runner::Runner;
 #[cfg(all(debug_assertions, feature = "assert_no_alloc"))]
 use assert_no_alloc::*;
@@ -43,11 +42,12 @@ impl<F: Float> JackBackend<F> {
 impl<F: Float> AudioBackend for JackBackend<F> {
     type Sample = F;
     fn stop(&mut self) -> Result<(), AudioBackendError> {
-        if let Some(JackClient::Active(active_client)) = self.client.take() {
-            active_client.deactivate().unwrap();
-            Ok(())
-        } else {
-            return Err(AudioBackendError::BackendNotRunning);
+        match self.client.take() {
+            Some(JackClient::Active(active_client)) => {
+                active_client.deactivate().unwrap();
+                Ok(())
+            }
+            _ => Err(AudioBackendError::BackendNotRunning),
         }
     }
 
@@ -71,38 +71,41 @@ impl<F: Float> AudioBackend for JackBackend<F> {
         &mut self,
         runner: crate::runner::Runner<Self::Sample>,
     ) -> Result<(), AudioBackendError> {
-        if let Some(JackClient::Passive(client)) = self.client.take() {
-            let mut in_ports = vec![];
-            let mut out_ports = vec![];
-            let num_inputs = runner.inputs();
-            let num_outputs = runner.outputs();
-            for i in 0..num_inputs {
-                in_ports.push(client.register_port(&format!("in_{i}"), jack::AudioIn::default())?);
+        match self.client.take() {
+            Some(JackClient::Passive(client)) => {
+                let mut in_ports = vec![];
+                let mut out_ports = vec![];
+                let num_inputs = runner.inputs();
+                let num_outputs = runner.outputs();
+                for i in 0..num_inputs {
+                    in_ports
+                        .push(client.register_port(&format!("in_{i}"), jack::AudioIn::default())?);
+                }
+                for i in 0..num_outputs {
+                    out_ports.push(
+                        client.register_port(&format!("out_{i}"), jack::AudioOut::default())?,
+                    );
+                }
+                let input_block = VecBlock::new(num_inputs, self.block_size);
+                let mut input_block_pointers = Vec::with_capacity(num_inputs);
+                for i in 0..num_inputs {
+                    input_block_pointers.push(input_block.channel_as_slice(i).as_ptr());
+                }
+                let jack_process = JackProcess {
+                    runner,
+                    in_ports,
+                    out_ports,
+                    input_block,
+                    input_block_pointers,
+                };
+                // Activate the client, which starts the processing.
+                let active_client = client
+                    .activate_async(JackNotifications, jack_process)
+                    .unwrap();
+                self.client = Some(JackClient::Active(active_client));
+                Ok(())
             }
-            for i in 0..num_outputs {
-                out_ports
-                    .push(client.register_port(&format!("out_{i}"), jack::AudioOut::default())?);
-            }
-            let input_block = VecBlock::new(num_inputs, self.block_size);
-            let mut input_block_pointers = Vec::with_capacity(num_inputs);
-            for i in 0..num_inputs {
-                input_block_pointers.push(input_block.channel_as_slice(i).as_ptr());
-            }
-            let jack_process = JackProcess {
-                runner,
-                in_ports,
-                out_ports,
-                input_block,
-                input_block_pointers,
-            };
-            // Activate the client, which starts the processing.
-            let active_client = client
-                .activate_async(JackNotifications::default(), jack_process)
-                .unwrap();
-            self.client = Some(JackClient::Active(active_client));
-            Ok(())
-        } else {
-            Err(AudioBackendError::BackendAlreadyRunning)
+            _ => Err(AudioBackendError::BackendAlreadyRunning),
         }
     }
 }

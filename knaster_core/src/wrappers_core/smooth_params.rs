@@ -9,16 +9,16 @@ use crate::{parameters::*, AudioCtx, BlockAudioCtx, Rate, UGen, UGenFlags};
 /// the type of smoothing to be applied. Then set the parameter to a new value.
 /// The value will be interpolated from the old to the new value.
 pub struct WrSmoothParams<T: UGen> {
-    gen: T,
+    ugen: T,
     parameters: NumericArray<Rate, T::Parameters>,
     smoothing: NumericArray<ParameterSmoothing, T::Parameters>,
     smoothing_state: NumericArray<ParameterSmoothingState, T::Parameters>,
 }
 
 impl<T: UGen> WrSmoothParams<T> {
-    pub fn new(gen: T) -> Self {
+    pub fn new(ugen: T) -> Self {
         Self {
-            gen,
+            ugen,
             parameters: NumericArray::default(),
             smoothing: NumericArray::default(),
             // TODO: Initialise state to default parameter values
@@ -106,7 +106,7 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
     type Outputs = T::Outputs;
 
     fn init(&mut self, ctx: &AudioCtx) {
-        self.gen.init(ctx)
+        self.ugen.init(ctx)
     }
 
     fn process(
@@ -118,11 +118,11 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
         // We only have potentially block rate parameters, run the whole block
         for (j, state) in self.smoothing_state.iter_mut().enumerate() {
             if let Some(new_value) = state.next_value(1, 0) {
-                self.gen
+                self.ugen
                     .param_apply(ctx, j, ParameterValue::Float(new_value))
             }
         }
-        self.gen.process(ctx, flags, input)
+        self.ugen.process(ctx, flags, input)
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
@@ -153,14 +153,14 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
                 if there_is_a_new_smoothing_value {
                     for (j, state) in self.smoothing_state.iter_mut().enumerate() {
                         if let Some(new_value) = state.next_value(ctx.block_size(), i) {
-                            self.gen
+                            self.ugen
                                 .param_apply(ctx.into(), j, ParameterValue::Float(new_value))
                         }
                     }
                     let input = input.partial(i, 1);
                     let mut output = output.partial_mut(i, 1);
                     let partial_ctx = ctx.make_partial(i, 1);
-                    self.gen
+                    self.ugen
                         .process_block(partial_ctx, flags, &input, &mut output);
                     i += 1;
                 } else {
@@ -168,7 +168,7 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
                     let input = input.partial(i, input.block_size() - i);
                     let mut output = output.partial_mut(i, output.block_size() - i);
                     let partial_ctx = ctx.make_partial(i, ctx.block_size() - i);
-                    self.gen
+                    self.ugen
                         .process_block(partial_ctx, flags, &input, &mut output);
                     break;
                 }
@@ -177,11 +177,11 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
             // We only have potentially block rate parameters, run the whole block
             for (j, state) in self.smoothing_state.iter_mut().enumerate() {
                 if let Some(new_value) = state.next_value(ctx.block_size(), 0) {
-                    self.gen
+                    self.ugen
                         .param_apply(ctx.into(), j, ParameterValue::Float(new_value))
                 }
             }
-            self.gen.process_block(ctx, flags, input, output);
+            self.ugen.process_block(ctx, flags, input, output);
         }
     }
     type Parameters = T::Parameters;
@@ -201,14 +201,14 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
         // Received a new parameter change.
         match value {
             ParameterValue::Integer(_) | ParameterValue::Trigger => {
-                self.gen.param_apply(ctx, index, value)
+                self.ugen.param_apply(ctx, index, value)
             }
             ParameterValue::Float(float_value) => {
                 // With an audio rate parameter, ignore other incoming parameter changes
                 if !matches!(self.parameters[index], Rate::AudioRate { .. }) {
                     match &mut self.smoothing_state[index] {
                         ParameterSmoothingState::None { .. } => {
-                            self.gen.param_apply(ctx, index, value)
+                            self.ugen.param_apply(ctx, index, value)
                         }
                         ParameterSmoothingState::Linear {
                             start_value,

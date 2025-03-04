@@ -97,9 +97,9 @@ impl<F: Float> Runner<F> {
         let mut ctx = BlockAudioCtx::new(AudioCtx::new(self.sample_rate, self.block_size));
         ctx.set_frame_clock(self.frame_clock);
         let mut flags = UGenFlags::new();
-        let gen = self.graph_node.gen;
+        let ugen = self.graph_node.ugen;
         let input = unsafe { AggregateBlockRead::new(input_pointers, self.block_size) };
-        unsafe { &mut (*gen) }.process_block(ctx, &mut flags, &input, &mut self.output_block);
+        unsafe { &mut (*ugen) }.process_block(ctx, &mut flags, &input, &mut self.output_block);
         self.frame_clock += self.block_size as u64;
         self.shared_frame_clock
             .store_new_time(Seconds::from_samples(

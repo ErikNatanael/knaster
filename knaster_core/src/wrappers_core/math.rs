@@ -14,12 +14,12 @@ use crate::{AudioCtx, UGen, UGenFlags};
 
 /// `gen` * `value`
 pub struct WrMul<T: UGen> {
-    gen: T,
+    ugen: T,
     value: T::Sample,
 }
 impl<T: UGen> WrMul<T> {
-    pub fn new(gen: T, value: T::Sample) -> Self {
-        Self { gen, value }
+    pub fn new(ugen: T, value: T::Sample) -> Self {
+        Self { ugen, value }
     }
 }
 impl<T: UGen> UGen for WrMul<T>
@@ -34,7 +34,7 @@ where
     type Outputs = T::Outputs;
 
     fn init(&mut self, ctx: &AudioCtx) {
-        self.gen.init(ctx);
+        self.ugen.init(ctx);
     }
 
     fn process(
@@ -43,7 +43,7 @@ where
         flags: &mut UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
-        let mut out = self.gen.process(ctx, flags, input);
+        let mut out = self.ugen.process(ctx, flags, input);
         for sample in &mut out {
             *sample *= self.value;
         }
@@ -59,7 +59,7 @@ where
         InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
         OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
     {
-        self.gen.process_block(ctx, flags, input, output);
+        self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
             for sample in channel {
                 *sample *= self.value;
@@ -95,25 +95,27 @@ where
         if index == T::Parameters::USIZE {
             self.value = T::Sample::new(value.float().unwrap());
         } else {
-            T::param_apply(&mut self.gen, ctx, index, value)
+            T::param_apply(&mut self.ugen, ctx, index, value)
         }
     }
     unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
-        self.gen.set_ar_param_buffer(index, buffer);
+        unsafe {
+            self.ugen.set_ar_param_buffer(index, buffer);
+        }
     }
     fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
-        self.gen.set_delay_within_block_for_param(index, delay);
+        self.ugen.set_delay_within_block_for_param(index, delay);
     }
 }
 
 /// `gen` + `value`
 pub struct WrAdd<T: UGen> {
-    gen: T,
+    ugen: T,
     value: T::Sample,
 }
 impl<T: UGen> WrAdd<T> {
-    pub fn new(gen: T, value: T::Sample) -> Self {
-        Self { gen, value }
+    pub fn new(ugen: T, value: T::Sample) -> Self {
+        Self { ugen, value }
     }
 }
 impl<T: UGen> UGen for WrAdd<T> {
@@ -122,7 +124,7 @@ impl<T: UGen> UGen for WrAdd<T> {
     type Outputs = T::Outputs;
 
     fn init(&mut self, ctx: &AudioCtx) {
-        self.gen.init(ctx);
+        self.ugen.init(ctx);
     }
     fn process(
         &mut self,
@@ -130,7 +132,7 @@ impl<T: UGen> UGen for WrAdd<T> {
         flags: &mut UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
-        let mut out = self.gen.process(ctx, flags, input);
+        let mut out = self.ugen.process(ctx, flags, input);
         for sample in &mut out {
             *sample += self.value;
         }
@@ -146,7 +148,7 @@ impl<T: UGen> UGen for WrAdd<T> {
         InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
         OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
     {
-        self.gen.process_block(ctx, flags, input, output);
+        self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
             for sample in channel {
                 *sample += self.value;
@@ -167,24 +169,26 @@ impl<T: UGen> UGen for WrAdd<T> {
     }
 
     fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
-        T::param_apply(&mut self.gen, ctx, index, value)
+        T::param_apply(&mut self.ugen, ctx, index, value)
     }
     unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
-        self.gen.set_ar_param_buffer(index, buffer);
+        unsafe {
+            self.ugen.set_ar_param_buffer(index, buffer);
+        }
     }
     fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
-        self.gen.set_delay_within_block_for_param(index, delay);
+        self.ugen.set_delay_within_block_for_param(index, delay);
     }
 }
 
 /// `gen` - `value`
 pub struct WrSub<T: UGen> {
-    gen: T,
+    ugen: T,
     value: T::Sample,
 }
 impl<T: UGen> WrSub<T> {
-    pub fn new(gen: T, value: T::Sample) -> Self {
-        Self { gen, value }
+    pub fn new(ugen: T, value: T::Sample) -> Self {
+        Self { ugen, value }
     }
 }
 impl<T: UGen> UGen for WrSub<T> {
@@ -193,7 +197,7 @@ impl<T: UGen> UGen for WrSub<T> {
     type Outputs = T::Outputs;
 
     fn init(&mut self, ctx: &AudioCtx) {
-        self.gen.init(ctx);
+        self.ugen.init(ctx);
     }
     fn process(
         &mut self,
@@ -201,7 +205,7 @@ impl<T: UGen> UGen for WrSub<T> {
         flags: &mut UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
-        let mut out = self.gen.process(ctx, flags, input);
+        let mut out = self.ugen.process(ctx, flags, input);
         for sample in &mut out {
             *sample -= self.value;
         }
@@ -217,7 +221,7 @@ impl<T: UGen> UGen for WrSub<T> {
         InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
         OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
     {
-        self.gen.process_block(ctx, flags, input, output);
+        self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
             for sample in channel {
                 *sample -= self.value;
@@ -238,24 +242,26 @@ impl<T: UGen> UGen for WrSub<T> {
     }
 
     fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
-        T::param_apply(&mut self.gen, ctx, index, value)
+        T::param_apply(&mut self.ugen, ctx, index, value)
     }
     unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
-        self.gen.set_ar_param_buffer(index, buffer);
+        unsafe {
+            self.ugen.set_ar_param_buffer(index, buffer);
+        }
     }
     fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
-        self.gen.set_delay_within_block_for_param(index, delay);
+        self.ugen.set_delay_within_block_for_param(index, delay);
     }
 }
 /// The inverse of WrSub, i.e. the inner UGen is the right hand operand:
 /// `value` - `ugen`
 pub struct WrVSub<T: UGen> {
-    gen: T,
+    ugen: T,
     value: T::Sample,
 }
 impl<T: UGen> WrVSub<T> {
-    pub fn new(gen: T, value: T::Sample) -> Self {
-        Self { gen, value }
+    pub fn new(ugen: T, value: T::Sample) -> Self {
+        Self { ugen, value }
     }
 }
 impl<T: UGen> UGen for WrVSub<T> {
@@ -264,7 +270,7 @@ impl<T: UGen> UGen for WrVSub<T> {
     type Outputs = T::Outputs;
 
     fn init(&mut self, ctx: &AudioCtx) {
-        self.gen.init(ctx);
+        self.ugen.init(ctx);
     }
     fn process(
         &mut self,
@@ -272,7 +278,7 @@ impl<T: UGen> UGen for WrVSub<T> {
         flags: &mut UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
-        let mut out = self.gen.process(ctx, flags, input);
+        let mut out = self.ugen.process(ctx, flags, input);
         for sample in &mut out {
             *sample = self.value - *sample;
         }
@@ -289,7 +295,7 @@ impl<T: UGen> UGen for WrVSub<T> {
         InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
         OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
     {
-        self.gen.process_block(ctx, flags, input, output);
+        self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
             for sample in channel {
                 *sample = self.value - *sample;
@@ -310,24 +316,26 @@ impl<T: UGen> UGen for WrVSub<T> {
     }
 
     fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
-        T::param_apply(&mut self.gen, ctx, index, value)
+        T::param_apply(&mut self.ugen, ctx, index, value)
     }
     unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
-        self.gen.set_ar_param_buffer(index, buffer);
+        unsafe {
+            self.ugen.set_ar_param_buffer(index, buffer);
+        }
     }
     fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
-        self.gen.set_delay_within_block_for_param(index, delay);
+        self.ugen.set_delay_within_block_for_param(index, delay);
     }
 }
 
 /// `gen` / `value`
 pub struct WrDiv<T: UGen> {
-    gen: T,
+    ugen: T,
     value: T::Sample,
 }
 impl<T: UGen> WrDiv<T> {
-    pub fn new(gen: T, value: T::Sample) -> Self {
-        Self { gen, value }
+    pub fn new(ugen: T, value: T::Sample) -> Self {
+        Self { ugen, value }
     }
 }
 impl<T: UGen> UGen for WrDiv<T> {
@@ -336,7 +344,7 @@ impl<T: UGen> UGen for WrDiv<T> {
     type Outputs = T::Outputs;
 
     fn init(&mut self, ctx: &AudioCtx) {
-        self.gen.init(ctx);
+        self.ugen.init(ctx);
     }
     fn process(
         &mut self,
@@ -344,7 +352,7 @@ impl<T: UGen> UGen for WrDiv<T> {
         flags: &mut UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
-        let mut out = self.gen.process(ctx, flags, input);
+        let mut out = self.ugen.process(ctx, flags, input);
         for sample in &mut out {
             *sample /= self.value;
         }
@@ -360,7 +368,7 @@ impl<T: UGen> UGen for WrDiv<T> {
         InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
         OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
     {
-        self.gen.process_block(ctx, flags, input, output);
+        self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
             for sample in channel {
                 *sample /= self.value;
@@ -381,24 +389,26 @@ impl<T: UGen> UGen for WrDiv<T> {
     }
 
     fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
-        T::param_apply(&mut self.gen, ctx, index, value)
+        T::param_apply(&mut self.ugen, ctx, index, value)
     }
     unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
-        self.gen.set_ar_param_buffer(index, buffer);
+        unsafe {
+            self.ugen.set_ar_param_buffer(index, buffer);
+        }
     }
     fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
-        self.gen.set_delay_within_block_for_param(index, delay);
+        self.ugen.set_delay_within_block_for_param(index, delay);
     }
 }
 
 /// `value` / `gen`
 pub struct WrVDiv<T: UGen> {
-    gen: T,
+    ugen: T,
     value: T::Sample,
 }
 impl<T: UGen> WrVDiv<T> {
-    pub fn new(gen: T, value: T::Sample) -> Self {
-        Self { gen, value }
+    pub fn new(ugen: T, value: T::Sample) -> Self {
+        Self { ugen, value }
     }
 }
 impl<T: UGen> UGen for WrVDiv<T> {
@@ -407,7 +417,7 @@ impl<T: UGen> UGen for WrVDiv<T> {
     type Outputs = T::Outputs;
 
     fn init(&mut self, ctx: &AudioCtx) {
-        self.gen.init(ctx);
+        self.ugen.init(ctx);
     }
     fn process(
         &mut self,
@@ -415,7 +425,7 @@ impl<T: UGen> UGen for WrVDiv<T> {
         flags: &mut UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
-        let mut out = self.gen.process(ctx, flags, input);
+        let mut out = self.ugen.process(ctx, flags, input);
         for sample in &mut out {
             *sample = self.value / *sample;
         }
@@ -432,7 +442,7 @@ impl<T: UGen> UGen for WrVDiv<T> {
         InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
         OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
     {
-        self.gen.process_block(ctx, flags, input, output);
+        self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
             for sample in channel {
                 *sample = self.value / *sample;
@@ -453,24 +463,26 @@ impl<T: UGen> UGen for WrVDiv<T> {
     }
 
     fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
-        T::param_apply(&mut self.gen, ctx, index, value)
+        T::param_apply(&mut self.ugen, ctx, index, value)
     }
     unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
-        self.gen.set_ar_param_buffer(index, buffer);
+        unsafe {
+            self.ugen.set_ar_param_buffer(index, buffer);
+        }
     }
     fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
-        self.gen.set_delay_within_block_for_param(index, delay);
+        self.ugen.set_delay_within_block_for_param(index, delay);
     }
 }
 
 /// `gen.powf(value)`
 pub struct WrPowf<T: UGen> {
-    gen: T,
+    ugen: T,
     value: T::Sample,
 }
 impl<T: UGen> WrPowf<T> {
-    pub fn new(gen: T, value: T::Sample) -> Self {
-        Self { gen, value }
+    pub fn new(ugen: T, value: T::Sample) -> Self {
+        Self { ugen, value }
     }
 }
 impl<T: UGen> UGen for WrPowf<T> {
@@ -479,7 +491,7 @@ impl<T: UGen> UGen for WrPowf<T> {
     type Outputs = T::Outputs;
 
     fn init(&mut self, ctx: &AudioCtx) {
-        self.gen.init(ctx);
+        self.ugen.init(ctx);
     }
     fn process(
         &mut self,
@@ -487,7 +499,7 @@ impl<T: UGen> UGen for WrPowf<T> {
         flags: &mut UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
-        let mut out = self.gen.process(ctx, flags, input);
+        let mut out = self.ugen.process(ctx, flags, input);
         for sample in &mut out {
             *sample = sample.powf(self.value);
         }
@@ -504,7 +516,7 @@ impl<T: UGen> UGen for WrPowf<T> {
         InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
         OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
     {
-        self.gen.process_block(ctx, flags, input, output);
+        self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
             for sample in channel {
                 *sample = sample.powf(self.value);
@@ -525,24 +537,26 @@ impl<T: UGen> UGen for WrPowf<T> {
     }
 
     fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
-        T::param_apply(&mut self.gen, ctx, index, value)
+        T::param_apply(&mut self.ugen, ctx, index, value)
     }
     unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
-        self.gen.set_ar_param_buffer(index, buffer);
+        unsafe {
+            self.ugen.set_ar_param_buffer(index, buffer);
+        }
     }
     fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
-        self.gen.set_delay_within_block_for_param(index, delay);
+        self.ugen.set_delay_within_block_for_param(index, delay);
     }
 }
 
 /// `gen.powi(value)`
 pub struct WrPowi<T: UGen> {
-    gen: T,
+    ugen: T,
     value: i32,
 }
 impl<T: UGen> WrPowi<T> {
-    pub fn new(gen: T, value: i32) -> Self {
-        Self { gen, value }
+    pub fn new(ugen: T, value: i32) -> Self {
+        Self { ugen, value }
     }
 }
 impl<T: UGen> UGen for WrPowi<T> {
@@ -551,7 +565,7 @@ impl<T: UGen> UGen for WrPowi<T> {
     type Outputs = T::Outputs;
 
     fn init(&mut self, ctx: &AudioCtx) {
-        self.gen.init(ctx);
+        self.ugen.init(ctx);
     }
     fn process(
         &mut self,
@@ -559,7 +573,7 @@ impl<T: UGen> UGen for WrPowi<T> {
         flags: &mut UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
-        let mut out = self.gen.process(ctx, flags, input);
+        let mut out = self.ugen.process(ctx, flags, input);
         for sample in &mut out {
             *sample = sample.powi(self.value);
         }
@@ -575,7 +589,7 @@ impl<T: UGen> UGen for WrPowi<T> {
         InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
         OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
     {
-        self.gen.process_block(ctx, flags, input, output);
+        self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
             for sample in channel {
                 *sample = sample.powi(self.value);
@@ -595,12 +609,14 @@ impl<T: UGen> UGen for WrPowi<T> {
     }
 
     fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
-        T::param_apply(&mut self.gen, ctx, index, value)
+        T::param_apply(&mut self.ugen, ctx, index, value)
     }
     unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
-        self.gen.set_ar_param_buffer(index, buffer);
+        unsafe {
+            self.ugen.set_ar_param_buffer(index, buffer);
+        }
     }
     fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
-        self.gen.set_delay_within_block_for_param(index, delay);
+        self.ugen.set_delay_within_block_for_param(index, delay);
     }
 }

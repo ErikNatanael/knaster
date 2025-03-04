@@ -12,7 +12,7 @@ use crate::dyngen::DynUGen;
 use crate::graph::{NodeKey, OwnedRawBuffer};
 
 pub struct Task<F> {
-    pub(crate) gen: *mut dyn DynUGen<F>,
+    pub(crate) ugen: *mut dyn DynUGen<F>,
     // Sequential buffers of a certain channel count
     pub(crate) in_buffers: Vec<*const F>,
     pub(crate) out_buffer: *mut F,
@@ -24,7 +24,7 @@ impl<F: Float> Task<F> {
         let mut output =
             unsafe { RawBlock::new(self.out_buffer, self.output_channels, ctx.block_size()) };
         unsafe {
-            (*self.gen).process_block(ctx, flags, &input, &mut output);
+            (*self.ugen).process_block(ctx, flags, &input, &mut output);
         }
     }
 }
