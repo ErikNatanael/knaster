@@ -56,7 +56,9 @@ impl PIntegerConvertible for usize {
 
 #[derive(Debug, Clone, Error)]
 pub enum ParameterError {
-    #[error("Description parameters are not supported in this contect. Please use the parameter index instead. Description: `{0}`")]
+    #[error(
+        "Description parameters are not supported in this contect. Please use the parameter index instead. Description: `{0}`"
+    )]
     DescriptionNotSupported(&'static str),
     #[error("The parameter description `{0}` does not match any parameter on this `UGen`")]
     DescriptionNotFound(&'static str),
@@ -64,7 +66,9 @@ pub enum ParameterError {
     WrongParameterType,
     #[error("The parameter index is out of bounds.")]
     ParameterIndexOutOfBounds,
-    #[error("The graph within which the node you are trying to set parameters for does not exist anymore.")]
+    #[error(
+        "The graph within which the node you are trying to set parameters for does not exist anymore."
+    )]
     GraphWasFreed,
 }
 #[derive(Debug, Clone, Copy)]

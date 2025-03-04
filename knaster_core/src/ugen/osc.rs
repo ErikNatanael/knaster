@@ -3,9 +3,9 @@ use crate::core::eprintln;
 use crate::core::marker::PhantomData;
 
 use knaster_primitives::{
-    numeric_array::NumericArray,
-    typenum::{Unsigned, U0, U1, U3},
     Float, Frame,
+    numeric_array::NumericArray,
+    typenum::{U0, U1, U3, Unsigned},
 };
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub use wavetable_vec::*;
@@ -19,14 +19,14 @@ mod wavetable_vec {
     use crate::core::sync::LazyLock;
 
     use knaster_primitives::{
+        Float, Frame,
         numeric_array::NumericArray,
         typenum::{U0, U1, U3},
-        Float, Frame,
     };
 
     use crate::{
-        dsp::wavetable::{NonAaWavetable, Wavetable, WavetablePhase, FRACTIONAL_PART, TABLE_SIZE},
         AudioCtx, ParameterHint, ParameterType, ParameterValue, UGen, UGenFlags,
+        dsp::wavetable::{FRACTIONAL_PART, NonAaWavetable, TABLE_SIZE, Wavetable, WavetablePhase},
     };
 
     /// Osciallator with an owned Wavetable
@@ -229,8 +229,8 @@ mod wavetable_vec {
 
         fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
             NumericArray::from([
-                ParameterHint::positive_infinite_float(),
-                ParameterHint::infinite_float(),
+                ParameterHint::float(|h| h.logarithmic(true).minmax(0., 20000.)),
+                ParameterHint::float(|h| h.minmax(0., 1.)),
                 ParameterHint::Trigger,
             ])
         }
@@ -303,14 +303,13 @@ impl<F: Float> UGen for Phasor<F> {
 
     type Parameters = U1;
 
-    fn param_descriptions(
-    ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions()
+    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         ["freq"].into()
     }
 
-    fn param_hints(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
-    {
+    fn param_hints()
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
         [ParameterHint::infinite_float()].into()
     }
 
@@ -385,7 +384,7 @@ impl<F: Float> UGen for SinNumeric<F> {
 
     fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         NumericArray::from([
-            ParameterHint::positive_infinite_float(),
+            ParameterHint::float(|h| h.logarithmic(true).nyquist()),
             ParameterHint::infinite_float(),
             ParameterHint::Trigger,
         ])

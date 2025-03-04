@@ -308,8 +308,8 @@ impl<F: Float> UGen for EnvAr<F> {
     }
     fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         [
-            ParameterHint::positive_infinite_float(),
-            ParameterHint::positive_infinite_float(),
+            ParameterHint::float(|h| h.logarithmic(true).minmax(0.0, 20.0)),
+            ParameterHint::float(|h| h.logarithmic(true).minmax(0.0, 20.0)),
             ParameterHint::Trigger,
         ]
         .into()

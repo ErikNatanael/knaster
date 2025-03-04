@@ -1,9 +1,9 @@
-use crate::{core::ops::Add, ParameterHint};
+use crate::{ParameterHint, core::ops::Add};
 
 use knaster_primitives::{
-    numeric_array::NumericArray,
-    typenum::{bit::B1, Add1, Unsigned},
     Float, FloatMethods, Size,
+    numeric_array::NumericArray,
+    typenum::{Add1, Unsigned, bit::B1},
 };
 
 use crate::{AudioCtx, UGen, UGenFlags};
@@ -68,8 +68,8 @@ where
     }
     type Parameters = Add1<T::Parameters>;
 
-    fn param_descriptions(
-    ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions()
+    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         let gd = T::param_descriptions();
         let mut d = NumericArray::default();
         for i in 0..T::Parameters::USIZE {
@@ -79,15 +79,14 @@ where
         d
     }
 
-    fn param_hints(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
-    {
+    fn param_hints()
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
         let gd = T::param_hints();
         let mut d = NumericArray::default();
         for i in 0..T::Parameters::USIZE {
             d[i] = gd[i];
         }
-        d[T::Parameters::USIZE] = ParameterHint::infinite_float();
+        d[T::Parameters::USIZE] = ParameterHint::float(|h| h.logarithmic(true).infinite());
         d
     }
 
@@ -157,14 +156,13 @@ impl<T: UGen> UGen for WrAdd<T> {
     }
     type Parameters = T::Parameters;
 
-    fn param_descriptions(
-    ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions()
+    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
 
-    fn param_hints(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
-    {
+    fn param_hints()
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 
@@ -230,14 +228,13 @@ impl<T: UGen> UGen for WrSub<T> {
     }
     type Parameters = T::Parameters;
 
-    fn param_descriptions(
-    ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions()
+    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
 
-    fn param_hints(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
-    {
+    fn param_hints()
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 
@@ -304,14 +301,13 @@ impl<T: UGen> UGen for WrVSub<T> {
     }
     type Parameters = T::Parameters;
 
-    fn param_descriptions(
-    ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions()
+    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
 
-    fn param_hints(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
-    {
+    fn param_hints()
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 
@@ -377,14 +373,13 @@ impl<T: UGen> UGen for WrDiv<T> {
     }
     type Parameters = T::Parameters;
 
-    fn param_descriptions(
-    ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions()
+    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
 
-    fn param_hints(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
-    {
+    fn param_hints()
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 
@@ -451,14 +446,13 @@ impl<T: UGen> UGen for WrVDiv<T> {
     }
     type Parameters = T::Parameters;
 
-    fn param_descriptions(
-    ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions()
+    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
 
-    fn param_hints(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
-    {
+    fn param_hints()
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 
@@ -525,14 +519,13 @@ impl<T: UGen> UGen for WrPowf<T> {
     }
     type Parameters = T::Parameters;
 
-    fn param_descriptions(
-    ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions()
+    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
 
-    fn param_hints(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
-    {
+    fn param_hints()
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 
@@ -598,13 +591,12 @@ impl<T: UGen> UGen for WrPowi<T> {
     }
     type Parameters = T::Parameters;
 
-    fn param_descriptions(
-    ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions()
+    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
-    fn param_hints(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
-    {
+    fn param_hints()
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 
