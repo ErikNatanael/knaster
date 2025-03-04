@@ -12,7 +12,6 @@ use knaster_core::{
     UGen,
 };
 use knaster_core::{Done, Seconds};
-use knaster_graph::connectable::NodeOrGraph;
 use knaster_graph::runner::RunnerOptions;
 use knaster_graph::{
     audio_backend::{

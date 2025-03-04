@@ -1,6 +1,6 @@
 use crate::{
     typenum::{U0, U1},
-    Float, PFloat, ParameterHint, UGen, UGenFlags,
+    Float, ParameterHint, UGen, UGenFlags,
 };
 
 /// Outputs a static number every frame

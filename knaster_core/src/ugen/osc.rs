@@ -10,7 +10,7 @@ use knaster_primitives::{
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub use wavetable_vec::*;
 
-use crate::{PFloat, Param, ParameterError, ParameterHint, ParameterValue};
+use crate::{Param, ParameterError, ParameterHint, ParameterValue};
 
 use super::{AudioCtx, UGen, UGenFlags};
 #[cfg(any(feature = "alloc", feature = "std"))]
@@ -26,7 +26,7 @@ mod wavetable_vec {
 
     use crate::{
         dsp::wavetable::{NonAaWavetable, Wavetable, WavetablePhase, FRACTIONAL_PART, TABLE_SIZE},
-        AudioCtx, PFloat, ParameterHint, ParameterType, ParameterValue, UGen, UGenFlags,
+        AudioCtx, ParameterHint, ParameterType, ParameterValue, UGen, UGenFlags,
     };
 
     /// Osciallator with an owned Wavetable

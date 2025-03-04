@@ -10,7 +10,6 @@ use knaster_core::{
     wrappers_core::{UGenWrapperCoreExt, WrSmoothParams},
     ParameterSmoothing, UGen,
 };
-use knaster_graph::connectable::NodeOrGraph;
 use knaster_graph::runner::RunnerOptions;
 use knaster_graph::{
     audio_backend::{

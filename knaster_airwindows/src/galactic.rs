@@ -11,7 +11,7 @@ use knaster_core::{
     delay::StaticSampleDelay,
     noise::next_randomness_seed,
     typenum::{U2, U5},
-    AudioCtx, Float, ParameterHint, Seconds, UGen,
+    AudioCtx, Float, ParameterHint, UGen,
 };
 
 pub struct Galactic<F> {

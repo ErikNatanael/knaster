@@ -9,7 +9,7 @@ use crate::core::eprintln;
 use crate::graph::{GraphId, NodeId, NodeKey};
 use crate::handle::{AnyHandle, RawHandle};
 use crate::{SchedulingChannelProducer, SharedFrameClock};
-use alloc::{format, string::String, string::ToString, vec, vec::Vec};
+use alloc::{format, string::String, string::ToString, vec::Vec};
 use knaster_core::ParameterHint;
 
 /// The metadata of a Graph

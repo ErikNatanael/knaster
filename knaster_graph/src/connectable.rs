@@ -1,4 +1,3 @@
-use crate::core::vec::Vec;
 use crate::handle::HandleTrait;
 use knaster_core::typenum::U1;
 use knaster_core::{numeric_array::NumericArray, Size};
@@ -192,12 +191,12 @@ mod tests {
         SharedFrameClock,
     };
 
-    use super::Connectable;
+    
 
     #[test]
     fn connect_connectables() {
         // Compile test, this should compile, there is no assertion
-        let (mut g, node) = Graph::<f32>::new::<U0, U1>(
+        let (g, node) = Graph::<f32>::new::<U0, U1>(
             GraphOptions::default(),
             NodeId::top_level_graph_node_id(),
             SharedFrameClock::new(),

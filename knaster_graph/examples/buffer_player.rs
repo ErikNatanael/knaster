@@ -5,16 +5,9 @@ use std::time::Duration;
 use anyhow::Result;
 use knaster_core::buffer::BufferReader;
 use knaster_core::dsp::buffer::Buffer;
-use knaster_core::envelopes::EnvAr;
 use knaster_core::math::{MathUGen, Mul};
-use knaster_core::osc::SinWt;
-use knaster_core::pan::Pan2;
 use knaster_core::util::Constant;
-use knaster_core::{
-    typenum::{U0, U1, U2},
-    wrappers_core::UGenWrapperCoreExt,
-};
-use knaster_graph::connectable::NodeOrGraph;
+use knaster_core::typenum::{U0, U2};
 use knaster_graph::runner::RunnerOptions;
 use knaster_graph::{
     audio_backend::{
@@ -24,7 +17,6 @@ use knaster_graph::{
     handle::HandleTrait,
     runner::Runner,
 };
-use rand::{thread_rng, Rng};
 
 fn main() -> Result<()> {
     let mut backend = CpalBackend::new(CpalBackendOptions::default())?;

@@ -1,7 +1,7 @@
 use crate::core::sync::atomic::AtomicBool;
 use crate::core::sync::Arc;
 use crate::core::{eprintln, vec, vec::Vec};
-use alloc::{boxed::Box, string::String, string::ToString};
+use alloc::{boxed::Box, string::String};
 
 use knaster_core::{AudioCtx, Float, ParameterHint};
 

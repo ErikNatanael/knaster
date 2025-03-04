@@ -1,5 +1,5 @@
 use crate::numeric_array::NumericArray;
-use crate::{AudioCtx, BlockAudioCtx, PFloat, ParameterHint, ParameterValue, UGen, UGenFlags};
+use crate::{AudioCtx, BlockAudioCtx, ParameterHint, ParameterValue, UGen, UGenFlags};
 use knaster_primitives::typenum::{U0, U1, U3, U4};
 use knaster_primitives::{Block, BlockRead, Float, Frame};
 
