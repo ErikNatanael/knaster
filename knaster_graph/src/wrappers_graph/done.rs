@@ -1,7 +1,7 @@
 use knaster_core::numeric_array::NumericArray;
 use knaster_core::typenum::{Add1, Unsigned, B1};
 use knaster_core::{
-    AudioCtx, Block, BlockAudioCtx, BlockRead, Done, Frame, ParameterRange, ParameterValue, Size,
+    AudioCtx, Block, BlockAudioCtx, BlockRead, Done, Frame, ParameterHint, ParameterValue, Size,
     UGen, UGenFlags,
 };
 use std::ops::Add;
@@ -89,13 +89,13 @@ where
         d
     }
 
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
-        let gd = T::param_range();
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
+        let gd = T::param_hints();
         let mut d = NumericArray::default();
         for i in 0..T::Parameters::USIZE {
             d[i] = gd[i];
         }
-        d[T::Parameters::USIZE] = ParameterRange::from_pinteger::<Done>();
+        d[T::Parameters::USIZE] = ParameterHint::from_pinteger::<Done>();
         d
     }
 

@@ -1,6 +1,6 @@
 use knaster_core::{
     typenum::{U0, U1},
-    Float, PFloat, ParameterRange, UGen, UGenFlags,
+    Float, PFloat, ParameterHint, UGen, UGenFlags,
 };
 
 /// Outputs a static number every frame
@@ -34,8 +34,8 @@ impl<F: Float> UGen for TestNumUGen<F> {
         [].into()
     }
 
-    fn param_range(
-    ) -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterRange, Self::Parameters>
+    fn param_hints(
+    ) -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::Parameters>
     {
         [].into()
     }
@@ -83,14 +83,10 @@ impl<F: Float> UGen for TestInPlusParamUGen<F> {
         ["number"].into()
     }
 
-    fn param_range(
-    ) -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterRange, Self::Parameters>
+    fn param_hints(
+    ) -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::Parameters>
     {
-        [ParameterRange::Float(
-            PFloat::NEG_INFINITY,
-            PFloat::INFINITY,
-        )]
-        .into()
+        [ParameterHint::infinite_float()].into()
     }
 
     fn param_apply(

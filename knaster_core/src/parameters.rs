@@ -83,49 +83,115 @@ impl From<&'static str> for Param {
     }
 }
 
-/// An inclusive range for the supported values of a parameter
-#[derive(Copy, Clone)]
-pub enum ParameterRange {
-    Float(PFloat, PFloat),
+#[derive(Copy, Clone, Debug)]
+pub enum FloatRange {
+    Range(PFloat, PFloat),
     /// Less than `sample_rate/2`. Some filters blow up above this frequency.
     Nyquist,
+    Infinite,
+    PositiveInfinite,
+    NegativeInfinite,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum FloatKind {
+    Amplitude,
+    Frequency,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct FloatHint {
+    pub default: Option<PFloat>,
+    pub range: Option<FloatRange>,
+    pub kind: Option<FloatKind>,
+    pub is_logarithmic: Option<bool>,
+}
+impl FloatHint {
+    pub fn new() -> Self {
+        Self {
+            default: None,
+            range: None,
+            kind: None,
+            is_logarithmic: None,
+        }
+    }
+    pub fn default(mut self, v: PFloat) -> Self {
+        self.default = Some(v);
+        self
+    }
+    pub fn minmax(mut self, min: PFloat, max: PFloat) -> Self {
+        self.range = Some(FloatRange::Range(min, max));
+        self
+    }
+    pub fn infinite(mut self) -> Self {
+        self.range = Some(FloatRange::Infinite);
+        self
+    }
+    pub fn positive_infinite(mut self) -> Self {
+        self.range = Some(FloatRange::PositiveInfinite);
+        self
+    }
+    pub fn negative_infinite(mut self) -> Self {
+        self.range = Some(FloatRange::NegativeInfinite);
+        self
+    }
+    pub fn nyquist(mut self) -> Self {
+        self.range = Some(FloatRange::Nyquist);
+        self
+    }
+    pub fn logarithmic(mut self, b: bool) -> Self {
+        self.is_logarithmic = Some(b);
+        self
+    }
+}
+
+/// An inclusive range for the supported values of a parameter
+#[derive(Copy, Clone, Debug)]
+pub enum ParameterHint {
+    Float(FloatHint),
     /// Triggers do not have a range
     Trigger,
     Integer(PInteger, PInteger),
 }
-impl ParameterRange {
-    pub fn from_pinteger<T: PIntegerConvertible>() -> ParameterRange {
-        let range = T::pinteger_range();
-        ParameterRange::Integer(range.0, range.1)
+impl ParameterHint {
+    pub fn float<T>(with: impl FnOnce(&mut FloatHint) -> T) -> Self {
+        let mut hint = FloatHint::new();
+        with(&mut hint);
+        Self::Float(hint)
     }
+    pub fn from_pinteger<T: PIntegerConvertible>() -> ParameterHint {
+        let range = T::pinteger_range();
+        ParameterHint::Integer(range.0, range.1)
+    }
+    // TODO: deprecate these helpers and use the proper syntax
     pub fn nyquist() -> Self {
-        ParameterRange::Nyquist
+        Self::float(|h| h.nyquist())
     }
     pub fn infinite_float() -> Self {
-        ParameterRange::Float(PFloat::NEG_INFINITY, PFloat::INFINITY)
+        Self::float(|h| h.infinite())
     }
     pub fn positive_infinite_float() -> Self {
-        ParameterRange::Float(0., PFloat::INFINITY)
+        Self::float(|h| h.positive_infinite())
     }
     pub fn negative_infinite_float() -> Self {
-        ParameterRange::Float(PFloat::NEG_INFINITY, 0.)
+        Self::float(|h| h.negative_infinite())
     }
     pub fn one() -> Self {
-        ParameterRange::Float(0., 1.)
+        Self::float(|h| h.minmax(0.0, 1.))
     }
     pub fn boolean() -> Self {
-        ParameterRange::Integer(PInteger(0), PInteger(1))
+        ParameterHint::Integer(PInteger(0), PInteger(1))
     }
     pub fn ty(self) -> ParameterType {
         match self {
-            ParameterRange::Float(_, _) | ParameterRange::Nyquist => ParameterType::Float,
-            ParameterRange::Trigger => ParameterType::Trigger,
-            ParameterRange::Integer(_, _) => ParameterType::Integer,
+            ParameterHint::Float(_) => ParameterType::Float,
+            ParameterHint::Trigger => ParameterType::Trigger,
+            ParameterHint::Integer(_, _) => ParameterType::Integer,
         }
     }
 }
-impl Default for ParameterRange {
+impl Default for ParameterHint {
     fn default() -> Self {
-        Self::Float(PFloat::NEG_INFINITY, PFloat::INFINITY)
+        Self::Float(FloatHint::new())
     }
 }

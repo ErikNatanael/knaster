@@ -3,9 +3,14 @@
 //! Metadata from the structs in this module can be used to visualise and/or
 //! manipulate a graph based on the whole graph structure.
 
+use std::sync::{Arc, Mutex};
+
 use crate::core::eprintln;
-use crate::graph::{GraphId, NodeKey};
+use crate::graph::{GraphId, NodeId, NodeKey};
+use crate::handle::{AnyHandle, RawHandle};
+use crate::{SchedulingChannelProducer, SharedFrameClock};
 use alloc::{format, string::String, string::ToString, vec, vec::Vec};
+use knaster_core::ParameterHint;
 
 /// The metadata of a Graph
 // TODO: Feedback edges
@@ -23,19 +28,43 @@ pub struct GraphInspection {
     /// The ID of the graph
     pub graph_id: crate::graph::GraphId,
     pub graph_name: String,
+    /// The same kind of send that is used in a Handle
+    pub param_sender: Arc<Mutex<SchedulingChannelProducer>>,
+    /// The frame clock of the graph
+    pub shared_frame_clock: SharedFrameClock,
 }
 
 impl GraphInspection {
     /// Create an empty GraphInspection
-    pub fn empty() -> Self {
-        Self {
-            nodes: vec![],
-            num_inputs: 0,
-            num_outputs: 0,
-            graph_id: 0,
-            graph_output_edges: vec![],
-            graph_name: String::new(),
+    // pub fn empty() -> Self {
+    //     Self {
+    //         nodes: vec![],
+    //         num_inputs: 0,
+    //         num_outputs: 0,
+    //         graph_id: 0,
+    //         graph_output_edges: vec![],
+    //         graph_name: String::new(),
+    //     }
+    // }
+    pub fn node_handles(&self) -> Vec<AnyHandle> {
+        let mut handles = Vec::with_capacity(self.nodes.len());
+        for node in &self.nodes {
+            handles.push(AnyHandle {
+                raw_handle: RawHandle::new(
+                    NodeId {
+                        key: node.key,
+                        graph: self.graph_id,
+                    },
+                    self.param_sender.clone(),
+                    self.shared_frame_clock.clone(),
+                ),
+                parameters: node.parameter_descriptions.clone(),
+                parameter_hints: node.parameter_hints.clone(),
+                inputs: node.inputs,
+                outputs: node.outputs,
+            });
         }
+        handles
     }
     /// Generates the input to display the graph inspection using the Graphviz dot tool.
     pub fn to_dot_string(&self) -> String {
@@ -126,7 +155,7 @@ impl GraphInspection {
 
                 let source_name = match source {
                     EdgeSource::Node(node_key) => {
-                        if let Some(i) = self.nodes.iter().position(|n| n.address == *node_key) {
+                        if let Some(i) = self.nodes.iter().position(|n| n.key == *node_key) {
                             format!("\"{i}_{}\"", self.nodes[i].name)
                         } else {
                             eprintln!("Node in edge not found: {:?}", node_key);
@@ -151,7 +180,7 @@ impl GraphInspection {
             } = edge;
             let source_name = match source {
                 EdgeSource::Node(node_key) => {
-                    if let Some(j) = self.nodes.iter().position(|n| n.address == *node_key) {
+                    if let Some(j) = self.nodes.iter().position(|n| n.key == *node_key) {
                         format!("{j}_{}", self.nodes[j].name)
                     } else {
                         eprintln!("Node in edge not found: {:?}", node_key);
@@ -194,12 +223,13 @@ pub struct NodeInspection {
     /// The name of the node (usually the name of the UGen inside it)
     pub name: String,
     /// The address of the n    ode, usable to schedule changes to the node or free it
-    pub address: NodeKey,
+    pub key: NodeKey,
     pub inputs: usize,
     pub outputs: usize,
     /// Edges going into this node
     pub input_edges: Vec<EdgeInspection>,
-    pub parameter_descriptions: Vec<String>,
+    pub parameter_descriptions: Vec<&'static str>,
+    pub parameter_hints: Vec<ParameterHint>,
     pub pending_removal: bool,
     pub unconnected: bool,
     pub is_graph: Option<GraphId>,

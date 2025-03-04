@@ -10,10 +10,11 @@ pub mod polyblep;
 pub mod svf;
 pub mod util;
 
+#[cfg(feature = "std")]
 use crate::core::eprintln;
 use crate::core::ops::Deref;
 use crate::numeric_array::NumericArray;
-use crate::{Param, ParameterError, ParameterRange, ParameterType, ParameterValue};
+use crate::{Param, ParameterError, ParameterHint, ParameterType, ParameterValue};
 use knaster_primitives::{typenum::*, Block, BlockRead, Float, Frame, Size};
 
 /// Contains basic metadata about the context in which an audio process is
@@ -313,7 +314,7 @@ pub trait UGen {
     ///
     /// If not manually implemented, types are inferred from [`Gen::param_range`]
     fn param_types() -> NumericArray<ParameterType, Self::Parameters> {
-        Self::param_range().into_iter().map(|r| r.ty()).collect()
+        Self::param_hints().into_iter().map(|r| r.ty()).collect()
     }
     /// Specifies a name per parameter which can be used to refer to that parameter
     /// when calling [`Gen::param`].
@@ -323,7 +324,7 @@ pub trait UGen {
         NumericArray::default()
     }
     /// Specifies the range that is valid for each parameter.
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters>;
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters>;
     /// Set the parameter value without range or type checks.
     /// See Parameterable::param for a safer and more ergonomic interface.
     ///
@@ -345,7 +346,7 @@ pub trait UGen {
     #[allow(unused)]
     unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const Self::Sample) {
         // TODO: Proper errors
-        #[cfg(debug_assertions)]
+        #[cfg(all(debug_assertions, feature = "std"))]
         eprintln!("Warning: Audio rate parameter buffer set, but did not reach a WrArParams and will have no effect.");
     }
     /// Sets a delay to what frame within the next block the next parameter
@@ -359,7 +360,7 @@ pub trait UGen {
     #[allow(unused)]
     fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
         // TODO: Proper errors
-        #[cfg(debug_assertions)]
+        #[cfg(all(debug_assertions, feature = "std"))]
         eprintln!("Warning: Parameter delay set, but did not reach a WrHiResParams and will have no effect.");
     }
     /// Apply a parameter change. Typechecks and bounds checks the arguments and

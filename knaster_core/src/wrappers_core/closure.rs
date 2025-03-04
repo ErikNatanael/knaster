@@ -60,10 +60,10 @@ impl<T: UGen, C: FnMut(T::Sample) -> T::Sample + 'static> UGen for WrClosure<T, 
         T::param_descriptions()
     }
 
-    fn param_range(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
+    fn param_hints(
+    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
     {
-        T::param_range()
+        T::param_hints()
     }
 
     fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {

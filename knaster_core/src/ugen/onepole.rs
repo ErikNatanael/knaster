@@ -3,7 +3,7 @@
 
 use crate::numeric_array::NumericArray;
 use crate::typenum::U1;
-use crate::{AudioCtx, ParameterRange, ParameterValue, UGen, UGenFlags};
+use crate::{AudioCtx, ParameterHint, ParameterValue, UGen, UGenFlags};
 use knaster_primitives::{Float, Frame};
 
 // To use it as a DC blocker:
@@ -139,8 +139,8 @@ impl<F: Float> UGen for OnePoleLpf<F> {
         ["cutoff_freq"].into()
     }
 
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
-        [ParameterRange::Nyquist].into()
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
+        [ParameterHint::nyquist()].into()
     }
 
     fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
@@ -191,8 +191,8 @@ impl<F: Float> UGen for OnePoleHpf<F> {
         ["cutoff_freq"].into()
     }
 
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
-        [ParameterRange::Nyquist].into()
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
+        [ParameterHint::float(|h| h.nyquist())].into()
     }
 
     fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {

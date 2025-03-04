@@ -8,8 +8,7 @@ use crate::num_traits::FromPrimitive;
 use crate::numeric_array::NumericArray;
 use crate::typenum::{U1, U5};
 use crate::{
-    AudioCtx, PFloat, PInteger, PIntegerConvertible, ParameterRange, ParameterValue, UGen,
-    UGenFlags,
+    AudioCtx, PInteger, PIntegerConvertible, ParameterHint, ParameterValue, UGen, UGenFlags,
 };
 use knaster_primitives::num_traits;
 use knaster_primitives::{Float, Frame};
@@ -252,13 +251,13 @@ impl<F: Float> UGen for SvfFilter<F> {
     ) -> Frame<Self::Sample, Self::Outputs> {
         [self.process_sample(input[0])].into()
     }
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         [
-            ParameterRange::Float(20., 20000.),
-            ParameterRange::Float(0.0, PFloat::INFINITY),
-            ParameterRange::Float(PFloat::NEG_INFINITY, PFloat::INFINITY),
-            ParameterRange::from_pinteger::<SvfFilterType>(),
-            ParameterRange::Trigger,
+            ParameterHint::float(|h| h.nyquist()),
+            ParameterHint::positive_infinite_float(),
+            ParameterHint::infinite_float(),
+            ParameterHint::from_pinteger::<SvfFilterType>(),
+            ParameterHint::Trigger,
         ]
         .into()
     }

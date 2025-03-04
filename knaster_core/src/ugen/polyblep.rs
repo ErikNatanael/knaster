@@ -25,7 +25,7 @@ Permission has been granted to release this port under the WDL/IPlug license:
 use crate::num_derive::{FromPrimitive, ToPrimitive};
 use crate::numeric_array::NumericArray;
 use crate::{
-    AudioCtx, PInteger, PIntegerConvertible, ParameterRange, ParameterValue, UGen, UGenFlags,
+    AudioCtx, PInteger, PIntegerConvertible, ParameterHint, ParameterValue, UGen, UGenFlags,
 };
 use knaster_primitives::{Float, Frame};
 use std::ops::Mul;
@@ -133,11 +133,11 @@ impl<F: Float> UGen for PolyBlep<F> {
         [self.get_and_inc()].into()
     }
 
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         [
-            ParameterRange::nyquist(),
-            ParameterRange::one(),
-            ParameterRange::Integer(0.into(), 13.into()),
+            ParameterHint::nyquist(),
+            ParameterHint::one(),
+            ParameterHint::Integer(0.into(), 13.into()),
         ]
         .into()
     }
@@ -445,7 +445,7 @@ impl<F: Float> PolyBlep<F> {
         y += blep(self.t, self.freq_in_seconds_per_sample)
             - blep(t2, self.freq_in_seconds_per_sample);
 
-        return y;
+        y
     }
 
     fn sqr2(&mut self) -> F {
@@ -471,7 +471,7 @@ impl<F: Float> PolyBlep<F> {
 
         y += blep(t1, self.freq_in_seconds_per_sample) - blep(t2, self.freq_in_seconds_per_sample);
 
-        return F::new(0.5) * y;
+        F::new(0.5) * y
     }
 
     fn rect(&mut self) -> F {

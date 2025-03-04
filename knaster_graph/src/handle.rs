@@ -11,7 +11,8 @@ use crate::{
 };
 use alloc::{string::ToString, vec::Vec};
 use knaster_core::{
-    typenum::Unsigned, Param, ParameterError, ParameterSmoothing, ParameterValue, Seconds, UGen,
+    typenum::Unsigned, Param, ParameterError, ParameterHint, ParameterSmoothing, ParameterValue,
+    Seconds, UGen,
 };
 
 #[cfg(not(feature = "std"))]
@@ -25,10 +26,11 @@ use crate::SchedulingChannelProducer;
 /// stored in the struct. This is somewhat less efficient, but often required or significantly more
 /// ergonomic.
 pub struct AnyHandle {
-    raw_handle: RawHandle,
-    parameters: Vec<&'static str>,
-    inputs: usize,
-    outputs: usize,
+    pub(crate) raw_handle: RawHandle,
+    pub(crate) parameters: Vec<&'static str>,
+    pub(crate) parameter_hints: Vec<ParameterHint>,
+    pub(crate) inputs: usize,
+    pub(crate) outputs: usize,
 }
 
 /// Handle to a node with its type erased. This allows a less safe interaction with the node, but the handle can easily be stored.
@@ -109,6 +111,7 @@ impl<T: UGen> Handle<T> {
         AnyHandle {
             raw_handle: self.raw_handle,
             parameters: T::param_descriptions().into_iter().collect(),
+            parameter_hints: T::param_hints().into_iter().collect(),
             inputs: T::Inputs::USIZE,
             outputs: T::Outputs::USIZE,
         }
@@ -144,6 +147,9 @@ pub trait HandleTrait: Sized {
             start_channel,
         }
     }
+    fn parameters(&self) -> Vec<&'static str>;
+    fn hints(&self) -> Vec<ParameterHint>;
+
     /// Returns time of the Runner connected to this
     fn current_frame_time(&self) -> Seconds;
     /// True if it is still possible to send values. This does not necessarily mean that the node
@@ -178,22 +184,6 @@ impl<T: UGen> HandleTrait for Handle<T> {
         self.raw_handle.send(event)
     }
 
-    fn node_id(&self) -> NodeId {
-        self.raw_handle.node_id()
-    }
-
-    fn inputs(&self) -> usize {
-        T::Inputs::USIZE
-    }
-
-    fn outputs(&self) -> usize {
-        T::Outputs::USIZE
-    }
-
-    fn schedule_event(&self, event: SchedulingEvent) -> Result<(), GraphError> {
-        self.raw_handle.send(event)
-    }
-
     fn change(&self, param: impl Into<Param>) -> Result<ParameterChange2<Self>, ParameterError> {
         let param_index = match param.into() {
             knaster_core::Param::Index(param_i) => {
@@ -223,12 +213,36 @@ impl<T: UGen> HandleTrait for Handle<T> {
         })
     }
 
-    fn can_send(&self) -> bool {
-        self.raw_handle.is_alive()
+    fn schedule_event(&self, event: SchedulingEvent) -> Result<(), GraphError> {
+        self.raw_handle.send(event)
+    }
+
+    fn node_id(&self) -> NodeId {
+        self.raw_handle.node_id()
+    }
+
+    fn inputs(&self) -> usize {
+        T::Inputs::USIZE
+    }
+
+    fn outputs(&self) -> usize {
+        T::Outputs::USIZE
     }
 
     fn current_frame_time(&self) -> Seconds {
         self.raw_handle.current_frame_time()
+    }
+
+    fn can_send(&self) -> bool {
+        self.raw_handle.is_alive()
+    }
+
+    fn parameters(&self) -> Vec<&'static str> {
+        T::param_descriptions().to_vec()
+    }
+
+    fn hints(&self) -> Vec<ParameterHint> {
+        T::param_hints().to_vec()
     }
 }
 impl HandleTrait for AnyHandle {
@@ -255,22 +269,6 @@ impl HandleTrait for AnyHandle {
         };
         self.raw_handle.send(event)
     }
-    fn node_id(&self) -> NodeId {
-        self.raw_handle.node_id()
-    }
-
-    fn inputs(&self) -> usize {
-        self.inputs
-    }
-
-    fn outputs(&self) -> usize {
-        self.outputs
-    }
-
-    fn schedule_event(&self, event: SchedulingEvent) -> Result<(), GraphError> {
-        self.raw_handle.send(event)
-    }
-
     fn change(&self, param: impl Into<Param>) -> Result<ParameterChange2<Self>, ParameterError> {
         let param_index = match param.into() {
             knaster_core::Param::Index(param_i) => {
@@ -299,12 +297,36 @@ impl HandleTrait for AnyHandle {
         })
     }
 
-    fn can_send(&self) -> bool {
-        self.raw_handle.is_alive()
+    fn schedule_event(&self, event: SchedulingEvent) -> Result<(), GraphError> {
+        self.raw_handle.send(event)
+    }
+
+    fn node_id(&self) -> NodeId {
+        self.raw_handle.node_id()
+    }
+
+    fn inputs(&self) -> usize {
+        self.inputs
+    }
+
+    fn outputs(&self) -> usize {
+        self.outputs
     }
 
     fn current_frame_time(&self) -> Seconds {
         self.raw_handle.current_frame_time()
+    }
+
+    fn can_send(&self) -> bool {
+        self.raw_handle.is_alive()
+    }
+
+    fn parameters(&self) -> Vec<&'static str> {
+        self.parameters.clone()
+    }
+
+    fn hints(&self) -> Vec<ParameterHint> {
+        self.parameter_hints.clone()
     }
 }
 // pub trait Handleable: Sized {

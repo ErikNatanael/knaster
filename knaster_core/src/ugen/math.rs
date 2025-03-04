@@ -150,7 +150,7 @@ where
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         NumericArray::default()
     }
-    fn param_range() -> NumericArray<crate::ParameterRange, Self::Parameters> {
+    fn param_hints() -> NumericArray<crate::ParameterHint, Self::Parameters> {
         NumericArray::from([])
     }
     fn param_apply(&mut self, _ctx: crate::AudioCtx, _index: usize, _value: crate::ParameterValue) {
@@ -291,7 +291,7 @@ impl<F: Float, Op: Operation1<F>> UGen for Math1UGen<F, Op> {
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         NumericArray::default()
     }
-    fn param_range() -> NumericArray<crate::ParameterRange, Self::Parameters> {
+    fn param_hints() -> NumericArray<crate::ParameterHint, Self::Parameters> {
         NumericArray::from([])
     }
     fn param_apply(&mut self, _ctx: crate::AudioCtx, _index: usize, _value: crate::ParameterValue) {

@@ -1,5 +1,5 @@
 use crate::core::marker::PhantomData;
-use crate::{ParameterRange, ParameterValue};
+use crate::{ParameterHint, ParameterValue};
 
 use knaster_primitives::{
     numeric_array::NumericArray,
@@ -57,8 +57,8 @@ impl<F: Float> UGen for DoneOnTrig<F> {
         }
     }
 
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
-        [ParameterRange::Trigger].into()
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
+        [ParameterHint::Trigger].into()
     }
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         ["t_done"].into()
@@ -109,8 +109,8 @@ impl<F: Float> UGen for Constant<F> {
         output.channel_as_slice_mut(0).fill(self.value);
     }
 
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
-        [ParameterRange::infinite_float()].into()
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
+        [ParameterHint::infinite_float()].into()
     }
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         ["value"].into()

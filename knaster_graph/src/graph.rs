@@ -54,7 +54,7 @@ new_key_type! {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct NodeId {
     /// The key is only unique within the specific Graph
-    key: NodeKey,
+    pub(crate) key: NodeKey,
     pub(crate) graph: GraphId,
 }
 impl NodeId {
@@ -516,7 +516,7 @@ impl<F: Float> Graph<F> {
                 if let Some(index) = sink_node
                     .parameter_descriptions
                     .iter()
-                    .position(|s| s == desc)
+                    .position(|s| s == &desc)
                 {
                     if index >= sink_node.parameter_descriptions.len() {
                         return Err(GraphError::ParameterIndexOutOfBounds(index));
@@ -1169,11 +1169,12 @@ impl<F: Float> Graph<F> {
 
             nodes.push(NodeInspection {
                 name: node.name.to_string(),
-                address: node_key,
+                key: node_key,
                 inputs: node.inputs,
                 outputs: node.outputs,
                 input_edges,
                 parameter_descriptions: node.parameter_descriptions.clone(),
+                parameter_hints: node.parameter_hints.clone(),
                 pending_removal: self.node_keys_pending_removal.contains(&node_key),
                 unconnected: self.disconnected_nodes.contains(&node_key),
                 is_graph: None,
@@ -1202,6 +1203,11 @@ impl<F: Float> Graph<F> {
             graph_id: self.id,
             graph_output_edges,
             graph_name: self.name.clone(),
+            param_sender: self
+                .graph_gen_communicator
+                .scheduling_event_producer
+                .clone(),
+            shared_frame_clock: self.graph_gen_communicator.shared_frame_clock.clone(),
         }
     }
     fn clear_feedback_for_node(&mut self, node_key: NodeKey) -> Result<(), FreeError> {

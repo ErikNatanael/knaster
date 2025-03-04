@@ -11,7 +11,7 @@ use knaster_core::{
     delay::StaticSampleDelay,
     noise::next_randomness_seed,
     typenum::{U2, U5},
-    AudioCtx, Float, ParameterRange, Seconds, UGen,
+    AudioCtx, Float, ParameterHint, Seconds, UGen,
 };
 
 pub struct Galactic<F> {
@@ -105,15 +105,15 @@ impl<F: Float> UGen for Galactic<F> {
         self.process(input.channel_as_slice(0), input.channel_as_slice(1), o0, o1);
     }
 
-    fn param_range(
-    ) -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterRange, Self::Parameters>
+    fn param_hints(
+    ) -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::Parameters>
     {
         [
-            ParameterRange::one(),
-            ParameterRange::one(),
-            ParameterRange::one(),
-            ParameterRange::one(),
-            ParameterRange::one(),
+            ParameterHint::one(),
+            ParameterHint::one(),
+            ParameterHint::one(),
+            ParameterHint::one(),
+            ParameterHint::one(),
         ]
         .into()
     }

@@ -1,5 +1,5 @@
-use core::marker::PhantomData;
-use std::sync::Arc;
+use crate::core::marker::PhantomData;
+use crate::core::sync::Arc;
 
 use knaster_primitives::{
     numeric_array::NumericArray,
@@ -7,7 +7,7 @@ use knaster_primitives::{
     Float, Seconds, Size,
 };
 
-use crate::{dsp::buffer::Buffer, ParameterRange};
+use crate::{dsp::buffer::Buffer, ParameterHint};
 
 use super::UGen;
 
@@ -168,15 +168,15 @@ impl<F: Float, Channels: Size> UGen for BufferReader<F, Channels> {
         ["rate", "loop", "start_s", "duration_s", "t_restart"].into()
     }
 
-    fn param_range(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
+    fn param_hints(
+    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
     {
         [
-            ParameterRange::infinite_float(),
-            ParameterRange::boolean(),
-            ParameterRange::positive_infinite_float(),
-            ParameterRange::infinite_float(),
-            ParameterRange::Trigger,
+            ParameterHint::infinite_float(),
+            ParameterHint::boolean(),
+            ParameterHint::positive_infinite_float(),
+            ParameterHint::infinite_float(),
+            ParameterHint::Trigger,
         ]
         .into()
     }

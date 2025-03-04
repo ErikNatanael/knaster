@@ -3,7 +3,7 @@ use crate::core::sync::Arc;
 use crate::core::{eprintln, vec, vec::Vec};
 use alloc::{boxed::Box, string::String, string::ToString};
 
-use knaster_core::{AudioCtx, Float};
+use knaster_core::{AudioCtx, Float, ParameterHint};
 
 use crate::graph::GraphId;
 use crate::{buffer_allocator::BufferAllocator, dyngen::DynUGen, task::Task};
@@ -20,7 +20,8 @@ pub(crate) struct Node<F> {
     /// ACCESSIBILITY AND QOL
     // TODO: option to disable this and other optional QOL features in shipped builds
     pub(crate) name: String,
-    pub(crate) parameter_descriptions: Vec<String>,
+    pub(crate) parameter_descriptions: Vec<&'static str>,
+    pub(crate) parameter_hints: Vec<ParameterHint>,
     pub(crate) is_graph: Option<GraphId>,
 
     /// STATIC DATA (won't change after the node has been created)
@@ -46,11 +47,8 @@ pub(crate) struct Node<F> {
 }
 impl<F: Float> Node<F> {
     pub fn new<T: DynUGen<F> + 'static>(name: String, gen: T) -> Self {
-        let parameter_descriptions = gen
-            .param_descriptions()
-            .into_iter()
-            .map(|s| s.to_string())
-            .collect();
+        let parameter_descriptions = gen.param_descriptions().into_iter().collect();
+        let parameter_hints = gen.param_hints().into_iter().collect();
         let inputs = gen.inputs();
         let outputs = gen.outputs();
         let boxed_gen = Box::new(gen);
@@ -59,6 +57,7 @@ impl<F: Float> Node<F> {
         Self {
             name,
             parameter_descriptions,
+            parameter_hints,
             gen: ptr,
             inputs,
             outputs,

@@ -1,3 +1,4 @@
+#[cfg(feature = "std")]
 use crate::core::eprintln;
 use crate::core::marker::PhantomData;
 
@@ -9,14 +10,13 @@ use knaster_primitives::{
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub use wavetable_vec::*;
 
-use crate::{PFloat, Param, ParameterError, ParameterRange, ParameterValue};
+use crate::{PFloat, Param, ParameterError, ParameterHint, ParameterValue};
 
 use super::{AudioCtx, UGen, UGenFlags};
 #[cfg(any(feature = "alloc", feature = "std"))]
 mod wavetable_vec {
-    use crate::core::eprintln;
-    use core::marker::PhantomData;
-    use std::sync::LazyLock;
+    use crate::core::marker::PhantomData;
+    use crate::core::sync::LazyLock;
 
     use knaster_primitives::{
         numeric_array::NumericArray,
@@ -26,7 +26,7 @@ mod wavetable_vec {
 
     use crate::{
         dsp::wavetable::{NonAaWavetable, Wavetable, WavetablePhase, FRACTIONAL_PART, TABLE_SIZE},
-        AudioCtx, PFloat, ParameterRange, ParameterType, ParameterValue, UGen, UGenFlags,
+        AudioCtx, PFloat, ParameterHint, ParameterType, ParameterValue, UGen, UGenFlags,
     };
 
     /// Osciallator with an owned Wavetable
@@ -117,17 +117,17 @@ mod wavetable_vec {
             NumericArray::from(["freq", "phase_offset", "reset_phase"])
         }
 
-        fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
+        fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
             NumericArray::from([
-                ParameterRange::Float(0., PFloat::INFINITY),
-                ParameterRange::Float(PFloat::NEG_INFINITY, PFloat::INFINITY),
-                ParameterRange::Trigger,
+                ParameterHint::positive_infinite_float(),
+                ParameterHint::infinite_float(),
+                ParameterHint::Trigger,
             ])
         }
 
         fn param_apply(&mut self, _ctx: AudioCtx, index: usize, value: ParameterValue) {
             if matches!(value, ParameterValue::Smoothing(..)) {
-                eprintln!("Tried to set parameter smoothing with out a wrapper");
+                // eprintln!("Tried to set parameter smoothing with out a wrapper");
                 return;
             }
             match index {
@@ -227,17 +227,17 @@ mod wavetable_vec {
             NumericArray::from(["freq", "phase_offset", "reset_phase"])
         }
 
-        fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
+        fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
             NumericArray::from([
-                ParameterRange::Float(0., PFloat::INFINITY),
-                ParameterRange::Float(PFloat::NEG_INFINITY, PFloat::INFINITY),
-                ParameterRange::Trigger,
+                ParameterHint::positive_infinite_float(),
+                ParameterHint::infinite_float(),
+                ParameterHint::Trigger,
             ])
         }
 
         fn param_apply(&mut self, _ctx: AudioCtx, index: usize, value: ParameterValue) {
             if matches!(value, ParameterValue::Smoothing(..)) {
-                eprintln!("Tried to set parameter smoothing with out a wrapper");
+                // eprintln!("Tried to set parameter smoothing with out a wrapper");
                 return;
             }
             match index {
@@ -308,10 +308,10 @@ impl<F: Float> UGen for Phasor<F> {
         ["freq"].into()
     }
 
-    fn param_range(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
+    fn param_hints(
+    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
     {
-        [ParameterRange::Float(f64::NEG_INFINITY, f64::INFINITY)].into()
+        [ParameterHint::infinite_float()].into()
     }
 
     fn param_apply(&mut self, _ctx: AudioCtx, index: usize, value: crate::ParameterValue) {
@@ -383,11 +383,11 @@ impl<F: Float> UGen for SinNumeric<F> {
         NumericArray::from(["freq", "phase_offset", "reset_phase"])
     }
 
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         NumericArray::from([
-            ParameterRange::Float(0., PFloat::INFINITY),
-            ParameterRange::Float(PFloat::NEG_INFINITY, PFloat::INFINITY),
-            ParameterRange::Trigger,
+            ParameterHint::positive_infinite_float(),
+            ParameterHint::infinite_float(),
+            ParameterHint::Trigger,
         ])
     }
 

@@ -1,6 +1,6 @@
 use crate::{
     typenum::{U0, U1},
-    Float, PFloat, ParameterRange, UGen, UGenFlags,
+    Float, PFloat, ParameterHint, UGen, UGenFlags,
 };
 
 /// Outputs a static number every frame
@@ -33,8 +33,7 @@ impl<F: Float> UGen for TestNumUGen<F> {
         [].into()
     }
 
-    fn param_range() -> crate::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
-    {
+    fn param_hints() -> crate::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
         [].into()
     }
 
@@ -75,13 +74,8 @@ impl<F: Float> UGen for TestInPlusParamGen<F> {
         ["number"].into()
     }
 
-    fn param_range() -> crate::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
-    {
-        [ParameterRange::Float(
-            PFloat::NEG_INFINITY,
-            PFloat::INFINITY,
-        )]
-        .into()
+    fn param_hints() -> crate::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+        [ParameterHint::infinite_float()].into()
     }
 
     fn param_apply(&mut self, _ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {

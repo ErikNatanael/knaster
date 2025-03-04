@@ -1,4 +1,4 @@
-use crate::{core::ops::Add, ParameterRange};
+use crate::{core::ops::Add, ParameterHint};
 
 use knaster_primitives::{
     numeric_array::NumericArray,
@@ -79,15 +79,15 @@ where
         d
     }
 
-    fn param_range(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
+    fn param_hints(
+    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
     {
-        let gd = T::param_range();
+        let gd = T::param_hints();
         let mut d = NumericArray::default();
         for i in 0..T::Parameters::USIZE {
             d[i] = gd[i];
         }
-        d[T::Parameters::USIZE] = ParameterRange::infinite_float();
+        d[T::Parameters::USIZE] = ParameterHint::infinite_float();
         d
     }
 
@@ -160,10 +160,10 @@ impl<T: UGen> UGen for WrAdd<T> {
         T::param_descriptions()
     }
 
-    fn param_range(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
+    fn param_hints(
+    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
     {
-        T::param_range()
+        T::param_hints()
     }
 
     fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
@@ -231,10 +231,10 @@ impl<T: UGen> UGen for WrSub<T> {
         T::param_descriptions()
     }
 
-    fn param_range(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
+    fn param_hints(
+    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
     {
-        T::param_range()
+        T::param_hints()
     }
 
     fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
@@ -303,10 +303,10 @@ impl<T: UGen> UGen for WrVSub<T> {
         T::param_descriptions()
     }
 
-    fn param_range(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
+    fn param_hints(
+    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
     {
-        T::param_range()
+        T::param_hints()
     }
 
     fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
@@ -374,10 +374,10 @@ impl<T: UGen> UGen for WrDiv<T> {
         T::param_descriptions()
     }
 
-    fn param_range(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
+    fn param_hints(
+    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
     {
-        T::param_range()
+        T::param_hints()
     }
 
     fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
@@ -446,10 +446,10 @@ impl<T: UGen> UGen for WrVDiv<T> {
         T::param_descriptions()
     }
 
-    fn param_range(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
+    fn param_hints(
+    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
     {
-        T::param_range()
+        T::param_hints()
     }
 
     fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
@@ -518,10 +518,10 @@ impl<T: UGen> UGen for WrPowf<T> {
         T::param_descriptions()
     }
 
-    fn param_range(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
+    fn param_hints(
+    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
     {
-        T::param_range()
+        T::param_hints()
     }
 
     fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
@@ -588,10 +588,10 @@ impl<T: UGen> UGen for WrPowi<T> {
     ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
-    fn param_range(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
+    fn param_hints(
+    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
     {
-        T::param_range()
+        T::param_hints()
     }
 
     fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {

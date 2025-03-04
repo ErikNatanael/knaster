@@ -1,6 +1,6 @@
 use knaster_graph::numeric_array::NumericArray;
 use knaster_graph::typenum::{U0, U1};
-use knaster_graph::{AudioCtx, Float, Frame, ParameterRange, ParameterValue, UGen, UGenFlags};
+use knaster_graph::{AudioCtx, Float, Frame, ParameterHint, ParameterValue, UGen, UGenFlags};
 
 pub fn add(signal: &[f32], rhs: f32, output: &mut [f32]) {
     for (sig, out) in signal.iter().zip(output.iter_mut()) {
@@ -49,7 +49,7 @@ impl<F: Float> UGen for TestNumUGen<F> {
         [].into()
     }
 
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         [].into()
     }
 

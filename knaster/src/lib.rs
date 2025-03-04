@@ -7,7 +7,7 @@ extern crate std;
 
 // Switches between std and core based on features. This reduces boilerplate when importing.
 mod core {
-    #[cfg(all(feature = "alloc", not(feature = "std")))]
+    #[cfg(not(feature = "std"))]
     pub use alloc::*;
     #[cfg(not(feature = "std"))]
     pub use core::*;

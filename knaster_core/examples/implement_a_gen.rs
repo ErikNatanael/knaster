@@ -5,7 +5,7 @@ use knaster_core::{
     empty_block,
     numeric_array::NumericArray,
     typenum::{Unsigned, U0, U1, U3},
-    AudioCtx, Block, BlockAudioCtx, Float, Frame, Param, ParameterError, ParameterRange,
+    AudioCtx, Block, BlockAudioCtx, Float, Frame, Param, ParameterError, ParameterHint,
     ParameterType, ParameterValue, UGen, UGenFlags, VecBlock,
 };
 fn main() -> Result<()> {
@@ -96,7 +96,7 @@ impl<F: Float> UGen for Osc<F> {
         NumericArray::from(["freq", "phase_offset", "reset_phase"])
     }
 
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         todo!()
     }
 

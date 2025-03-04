@@ -244,7 +244,7 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
         [].into()
     }
 
-    fn param_range() -> NumericArray<knaster_core::ParameterRange, Self::Parameters> {
+    fn param_hints() -> NumericArray<knaster_core::ParameterHint, Self::Parameters> {
         [].into()
     }
 

@@ -190,8 +190,8 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
         T::param_descriptions()
     }
 
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
-        T::param_range()
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
+        T::param_hints()
     }
 
     fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {

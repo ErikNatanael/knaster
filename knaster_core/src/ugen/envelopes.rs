@@ -1,5 +1,5 @@
 use crate::numeric_array::NumericArray;
-use crate::{AudioCtx, BlockAudioCtx, PFloat, ParameterRange, ParameterValue, UGen, UGenFlags};
+use crate::{AudioCtx, BlockAudioCtx, PFloat, ParameterHint, ParameterValue, UGen, UGenFlags};
 use knaster_primitives::typenum::{U0, U1, U3, U4};
 use knaster_primitives::{Block, BlockRead, Float, Frame};
 
@@ -128,12 +128,12 @@ impl<F: Float> UGen for EnvAsr<F> {
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         ["attack_time", "release_time", "t_release", "t_restart"].into()
     }
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         [
-            ParameterRange::Float(0.0, PFloat::INFINITY),
-            ParameterRange::Float(0.0, PFloat::INFINITY),
-            ParameterRange::Trigger,
-            ParameterRange::Trigger,
+            ParameterHint::positive_infinite_float(),
+            ParameterHint::positive_infinite_float(),
+            ParameterHint::Trigger,
+            ParameterHint::Trigger,
         ]
         .into()
     }
@@ -306,11 +306,11 @@ impl<F: Float> UGen for EnvAr<F> {
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         ["attack_time", "release_time", "t_restart"].into()
     }
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         [
-            ParameterRange::Float(0.0, PFloat::INFINITY),
-            ParameterRange::Float(0.0, PFloat::INFINITY),
-            ParameterRange::Trigger,
+            ParameterHint::positive_infinite_float(),
+            ParameterHint::positive_infinite_float(),
+            ParameterHint::Trigger,
         ]
         .into()
     }

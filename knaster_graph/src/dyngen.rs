@@ -1,6 +1,6 @@
 use crate::block::{AggregateBlockRead, RawBlock};
 use alloc::vec::Vec;
-use knaster_core::typenum::*;
+use knaster_core::{typenum::*, ParameterHint};
 use knaster_core::{AudioCtx, BlockAudioCtx, Float, ParameterValue, UGen, UGenFlags};
 
 /// Type erasing trait to allow us to store [`UGen`]s as trait objects. It
@@ -27,6 +27,7 @@ pub trait DynUGen<F> {
     fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16);
     fn param_apply(&mut self, ctx: AudioCtx, parameter: usize, value: ParameterValue);
     fn param_descriptions(&self) -> Vec<&'static str>;
+    fn param_hints(&self) -> Vec<ParameterHint>;
 }
 impl<F: Float, T: UGen<Sample = F>> DynUGen<F> for T {
     fn init(&mut self, ctx: &AudioCtx) {
@@ -66,5 +67,9 @@ impl<F: Float, T: UGen<Sample = F>> DynUGen<F> for T {
 
     fn param_descriptions(&self) -> Vec<&'static str> {
         Self::param_descriptions().to_vec()
+    }
+
+    fn param_hints(&self) -> Vec<ParameterHint> {
+        Self::param_hints().to_vec()
     }
 }

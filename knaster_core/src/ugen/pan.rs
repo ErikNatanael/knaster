@@ -43,10 +43,10 @@ impl<F: Float> UGen for Pan2<F> {
         [signal * left_gain, signal * right_gain].into()
     }
 
-    fn param_range(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterRange, Self::Parameters>
+    fn param_hints(
+    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
     {
-        [crate::ParameterRange::Float(-1., 1.)].into()
+        [crate::ParameterHint::float(|h| h.minmax(-1., 1.))].into()
     }
 
     fn param_descriptions(

@@ -4,8 +4,9 @@
 //! - [`BufferReader`] for reading a single channel [`Buffer`] or only the first channel from a multi channel buffer
 //! - [`BufferReaderMulti`] for reading multiple channels from a [`Buffer`]. The number of channels is fixed once it has been added to a [`Graph`]
 
+#[cfg(feature = "std")]
 use crate::core::path::PathBuf;
-use crate::core::{vec, vec::Vec};
+use crate::core::{string::String, string::ToString, vec, vec::Vec};
 
 #[allow(unused)]
 use crate::ugen::buffer::BufferReader;
@@ -27,7 +28,7 @@ use symphonia::core::{
 #[derive(thiserror::Error, Debug)]
 pub enum BufferError {
     #[error("Tried to load a file in an unsupported format: {0}")]
-    FileFormatNotSupported(PathBuf),
+    FileFormatNotSupported(String),
     #[cfg(feature = "symphonia")]
     #[error("Symphonia error: {0}")]
     SymphoniaError(#[from] SymphoniaError),
@@ -279,7 +280,9 @@ impl<F: Float> Buffer<F> {
             }
             Err(_err) => {
                 // The input was not supported by any format reader.
-                return Err(BufferError::FileFormatNotSupported(path));
+                return Err(BufferError::FileFormatNotSupported(
+                    path.to_str().unwrap().to_string(),
+                ));
             }
         };
 

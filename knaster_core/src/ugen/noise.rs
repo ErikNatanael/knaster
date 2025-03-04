@@ -2,12 +2,12 @@
 //!
 //! Contains UGens producing noise and random numbers with different distributions and interpolations.
 
+use crate::core::marker::PhantomData;
 use crate::core::sync::atomic::AtomicU64;
 use crate::numeric_array::NumericArray;
 use crate::typenum::{U0, U1};
-use crate::{AudioCtx, ParameterRange, ParameterValue, UGen, UGenFlags};
+use crate::{AudioCtx, ParameterHint, ParameterValue, UGen, UGenFlags};
 use knaster_primitives::{Float, Frame};
-use std::marker::PhantomData;
 
 /// Used to seed random number generating Gens to create a deterministic result as long as all Gens are created in the same order from start.
 static NEXT_SEED: AtomicU64 = AtomicU64::new(0);
@@ -60,7 +60,7 @@ impl<F: Float> UGen for WhiteNoise<F> {
         [F::new(self.rng.f32() * 2.0 - 1.0)].into()
     }
 
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         [].into()
     }
 
@@ -149,7 +149,7 @@ impl<F: Float> UGen for PinkNoise<F> {
         [self.process_sample()].into()
     }
 
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         [].into()
     }
     fn param_apply(&mut self, _ctx: AudioCtx, _index: usize, _value: ParameterValue) {}
@@ -201,7 +201,7 @@ impl<F: Float> UGen for BrownNoise<F> {
         [self.last_output].into()
     }
 
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         [].into()
     }
 
@@ -269,8 +269,8 @@ impl<F: Float> UGen for RandomLin<F> {
         [out].into()
     }
 
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
-        [ParameterRange::positive_infinite_float()].into()
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
+        [ParameterHint::positive_infinite_float()].into()
     }
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         ["freq"].into()

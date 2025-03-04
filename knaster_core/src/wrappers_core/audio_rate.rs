@@ -70,8 +70,8 @@ impl<T: UGen> UGen for WrArParams<T> {
         T::param_descriptions()
     }
 
-    fn param_range() -> NumericArray<crate::parameters::ParameterRange, Self::Parameters> {
-        T::param_range()
+    fn param_hints() -> NumericArray<crate::parameters::ParameterHint, Self::Parameters> {
+        T::param_hints()
     }
 
     fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
@@ -163,8 +163,8 @@ where
         T::param_descriptions()
     }
 
-    fn param_range() -> NumericArray<crate::parameters::ParameterRange, Self::Parameters> {
-        T::param_range()
+    fn param_hints() -> NumericArray<crate::parameters::ParameterHint, Self::Parameters> {
+        T::param_hints()
     }
 
     fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {

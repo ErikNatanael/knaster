@@ -2,7 +2,7 @@ use crate::core::{vec, vec::Vec};
 
 use crate::numeric_array::NumericArray;
 use crate::typenum::{U1, U2};
-use crate::{AudioCtx, PFloat, ParameterRange, ParameterValue, UGen, UGenFlags};
+use crate::{AudioCtx, PFloat, ParameterHint, ParameterValue, UGen, UGenFlags};
 use knaster_primitives::{Float, Frame, Seconds};
 
 /// Delay by an integer number of samples, no interpolation. This is good for e.g. triggers.
@@ -53,8 +53,8 @@ impl<F: Float> UGen for SampleDelay<F> {
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         ["delay_time"].into()
     }
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
-        [ParameterRange::positive_infinite_float()].into()
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
+        [ParameterHint::positive_infinite_float()].into()
     }
 
     fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
@@ -217,8 +217,8 @@ impl<F: Float> UGen for AllpassDelay<F> {
         [out].into()
     }
 
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
-        [ParameterRange::positive_infinite_float()].into()
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
+        [ParameterHint::positive_infinite_float()].into()
     }
 
     fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
@@ -295,10 +295,10 @@ impl<F: Float> UGen for AllpassFeedbackDelay<F> {
         [self.process_sample(input[0])].into()
     }
 
-    fn param_range() -> NumericArray<ParameterRange, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         [
-            ParameterRange::positive_infinite_float(),
-            ParameterRange::one(),
+            ParameterHint::positive_infinite_float(),
+            ParameterHint::one(),
         ]
         .into()
     }
