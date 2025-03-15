@@ -142,12 +142,14 @@ fn free_node_when_done() {
     }
     // Run the code to free old nodes
     graph.commit_changes().unwrap();
-    assert!(graph.inspection().nodes[0].pending_removal);
+    assert_eq!(graph.inspection().nodes.len(), 0);
+    assert_eq!(graph.num_nodes_pending_removal(), 1);
     // Apply the new TaskData on the audio thread so that the node can be removed
     unsafe {
         runner.run(&[]);
     }
     // Now the node is removed
     graph.commit_changes().unwrap();
+    assert_eq!(graph.num_nodes_pending_removal(), 0);
     assert_eq!(graph.inspection().nodes.len(), 0);
 }

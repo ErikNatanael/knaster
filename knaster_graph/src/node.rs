@@ -1,5 +1,5 @@
-use crate::core::sync::atomic::AtomicBool;
 use crate::core::sync::Arc;
+use crate::core::sync::atomic::AtomicBool;
 use crate::core::{eprintln, vec, vec::Vec};
 use alloc::{boxed::Box, string::String};
 
@@ -29,11 +29,11 @@ pub(crate) struct Node<F> {
     pub(crate) inputs: usize,
     pub(crate) outputs: usize,
     /// true if the node was not pushed manually to the Graph. Such nodes may
-    /// also be removed automatically.
+    /// also be removed automatically when no longer needed.
     pub(crate) auto_added: bool,
 
     /// STATE FOR TASK GENERATION etc.
-    // TODO: Should this be NonNull<*const F> ??
+    pub(crate) num_feedback_dependents: usize,
     pub(crate) node_inputs: Vec<*const F>,
     pub(crate) node_output: NodeOutput<F>,
     /// The number of channels in potentially different nodes that depend
@@ -67,6 +67,7 @@ impl<F: Float> Node<F> {
             auto_added: false,
             is_graph: None,
             num_output_dependents: 0,
+            num_feedback_dependents: 0,
         }
     }
     pub fn init(&mut self, ctx: &AudioCtx) {

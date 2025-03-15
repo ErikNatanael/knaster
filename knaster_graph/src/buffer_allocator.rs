@@ -163,3 +163,9 @@ impl<F: Float> BufferAllocator<F> {
         self.buffer.add(offset)
     }
 }
+
+pub(crate) struct AllocationCopy<F> {
+    pub(crate) size: usize,
+    pub(crate) from_buf_ptr: *mut F,
+    pub(crate) to_buf_ptr: *mut F,
+}

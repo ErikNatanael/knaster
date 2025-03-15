@@ -39,3 +39,12 @@ According to <https://www.earlevel.com/main/2019/04/19/floating-point-denormals/
 ### Add the DC value to the first input value in a block
 
 Makes the denormal mitigation change depending on block size, but very cheap.
+
+# Feedback buffers
+
+Buffers holding the output of nodes which have a feedback edge from them need to be available after a graph change where the buffers may have been reassigned.
+
+Two ways of doing this:
+
+1. Permanent buffers in separate allocations for feedback nodes, incl. bookkeeping for returning them when no longer needed and keeping them alive when the Graph is dropped.
+2. Copying feedback buffer content whenever new task data is applied and buffers have been reassigned. This is simpler, and ensures that the buffer data is as close as possible in memory, but also incurrs the penalty of copying data on the audio thread.

@@ -1,4 +1,5 @@
 use crate::{
+    SchedulingEvent,
     core::{
         cell::UnsafeCell,
         eprintln,
@@ -7,21 +8,20 @@ use crate::{
         sync::atomic::{AtomicBool, Ordering},
     },
     dyngen::DynUGen,
-    SchedulingEvent,
 };
 use std::collections::VecDeque;
 use std::sync::Arc;
 
 use knaster_core::{
-    numeric_array::NumericArray, typenum::U0, BlockAudioCtx, Float, Size, UGen, UGenFlags,
+    BlockAudioCtx, Float, Size, UGen, UGenFlags, numeric_array::NumericArray, typenum::U0,
 };
 use slotmap::SlotMap;
 
 use crate::{
+    SchedulingChannelConsumer,
     graph::{NodeKey, OwnedRawBuffer},
     node::Node,
     task::TaskData,
-    SchedulingChannelConsumer,
 };
 
 /// This gets placed as a dyn UGen in a Node in a Graph. It's how the Graph gets
@@ -97,9 +97,11 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
                     td.apply_self_on_audio_thread();
                     let old_td = std::mem::replace(&mut self.current_task_data, td);
                     match self.task_data_to_be_dropped_producer.push(old_td) {
-                          Ok(_) => (),
-                          Err(e) => eprintln!("RingBuffer for TaskData to be dropped was full. Please increase the size of the RingBuffer. The GraphGen will drop the TaskData here instead. e: {e}"),
-                      }
+                        Ok(_) => (),
+                        Err(e) => eprintln!(
+                            "RingBuffer for TaskData to be dropped was full. Please increase the size of the RingBuffer. The GraphGen will drop the TaskData here instead. e: {e}"
+                        ),
+                    }
                 }
             }
         }
@@ -169,6 +171,7 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
             applied: _,
             ar_parameter_changes: _,
             gens: _,
+            buffer_data_to_copy_when_applied,
         } = task_data;
 
         if let Some(buffer_allocation) = new_buffer_allocation.take() {

@@ -1,5 +1,6 @@
 use crate::{
-    buffer_allocator::BufferAllocator,
+    SchedulingChannelProducer, SharedFrameClock,
+    buffer_allocator::{AllocationCopy, BufferAllocator},
     connectable::{Channels, NodeOrGraph, NodeSubset},
     core::sync::atomic::AtomicU64,
     edge::{Edge, NodeKeyOrGraph, ParameterEdge},
@@ -7,7 +8,6 @@ use crate::{
     handle::{Handle, RawHandle},
     node::Node,
     task::{ArParameterChange, BlockOrGraphInput, OutputTask, Task, TaskData},
-    SchedulingChannelProducer, SharedFrameClock,
 };
 use crate::{
     connectable::Connectable,
@@ -18,6 +18,7 @@ use crate::{
     },
 };
 use alloc::{borrow::ToOwned, boxed::Box, string::String, string::ToString, vec, vec::Vec};
+use core::ptr::null_mut;
 use std::collections::VecDeque;
 use std::{
     collections::HashSet,
@@ -27,12 +28,12 @@ use std::{
 use crate::inspection::{EdgeInspection, EdgeSource, GraphInspection, NodeInspection};
 use crate::wrappers_graph::done::WrDone;
 use knaster_core::{
+    AudioCtx, Done, Float, Param, ParameterError, Size, UGen,
     math::{Add, MathUGen},
     typenum::*,
-    AudioCtx, Done, Float, Param, ParameterError, Size, UGen,
 };
 use rtrb::RingBuffer;
-use slotmap::{new_key_type, SecondaryMap, SlotMap};
+use slotmap::{SecondaryMap, SlotMap, new_key_type};
 
 /// Unique id identifying a [`Graph`]. Is set from an atomic any time a [`Graph`] is created.
 ///
@@ -130,7 +131,7 @@ pub struct Graph<F: Float> {
     /// removal. TODO: Maybe it's actually faster and easier to just look
     /// through node_keys_to_free_when_safe than to bother with a HashSet since
     /// this list will almost always be tiny.
-    node_keys_pending_removal: HashSet<NodeKey>,
+    // node_keys_pending_removal: HashSet<NodeKey>,
     /// A list of input edges for every node. The input channel is the index into the boxed slice
     node_input_edges: SecondaryMap<NodeKey, Box<[Option<Edge>]>>,
     /// Edges which control a parameter of a node through the output of another
@@ -213,7 +214,7 @@ impl<F: Float> Graph<F> {
             node_order: Vec::with_capacity(DEFAULT_NUM_NODES),
             disconnected_nodes: vec![],
             node_keys_to_free_when_safe: vec![],
-            node_keys_pending_removal: HashSet::new(),
+            // node_keys_pending_removal: HashSet::new(),
             feedback_node_indices: vec![],
             output_edges: vec![None; Outputs::USIZE].into(),
             num_inputs: Inputs::USIZE,
@@ -227,7 +228,8 @@ impl<F: Float> Graph<F> {
             self_node_id: node_id,
         };
         // graph_gen
-        let task_data = graph.generate_task_data(Arc::new(AtomicBool::new(false)), Vec::new());
+        let task_data =
+            graph.generate_task_data(Arc::new(AtomicBool::new(false)), Vec::new(), Vec::new());
 
         //         use paste::paste;
         //         macro_rules! graph_gen_channels {
@@ -594,7 +596,6 @@ impl<F: Float> Graph<F> {
         if !sink.graph == self.id {
             return Err(GraphError::WrongGraph);
         }
-        dbg!(self.num_inputs, source_channel);
         if source_channel >= self.num_inputs {
             return Err(GraphError::GraphInputOutOfBounds(source_channel));
         }
@@ -914,6 +915,7 @@ impl<F: Float> Graph<F> {
         &mut self,
         applied_flag: Arc<AtomicBool>,
         graph_input_channels_to_nodes: Vec<(usize, Vec<(usize, usize)>)>,
+        allocation_buffer_copies: Vec<AllocationCopy<F>>,
     ) -> TaskData<F> {
         let tasks = self.generate_tasks().into_boxed_slice();
         let output_task = self.generate_output_tasks();
@@ -932,6 +934,7 @@ impl<F: Float> Graph<F> {
             ar_parameter_changes,
             gens,
             graph_input_channels_to_nodes,
+            buffer_data_to_copy_when_applied: allocation_buffer_copies,
         }
     }
     /// Assign buffers to nodes maximizing buffer reuse and cache locality
@@ -939,7 +942,25 @@ impl<F: Float> Graph<F> {
     ///
     /// Returns (node_index_in_order, Vec<(graph_input_channel, node_input_channel))
     #[must_use]
-    fn allocate_node_buffers(&mut self) -> Vec<(usize, Vec<(usize, usize)>)> {
+    fn allocate_node_buffers(
+        &mut self,
+    ) -> (Vec<(usize, Vec<(usize, usize)>)>, Vec<AllocationCopy<F>>) {
+        let mut allocation_copies = Vec::new();
+        let mut allocation_copies_keys = Vec::new();
+        // Add existing buffers for nodes with feedback
+        for key in &self.node_order {
+            let node = &self.get_nodes()[*key];
+            if node.num_feedback_dependents > 0 {
+                if let Some(from_buf_ptr) = node.node_output_ptr() {
+                    allocation_copies.push(AllocationCopy {
+                        size: node.outputs * self.block_size,
+                        from_buf_ptr,
+                        to_buf_ptr: null_mut(),
+                    });
+                    allocation_copies_keys.push(*key);
+                }
+            }
+        }
         // Recalculate the number of dependent channels of a node
         // TODO: This makes a lot of node lookups. Optimise?
         for (_key, node) in self.get_nodes_mut() {
@@ -1053,25 +1074,37 @@ impl<F: Float> Graph<F> {
             }
             unsafe { (&mut *self.nodes.get())[node_key].assign_inputs(inputs) };
         }
-        graph_input_pointers_to_nodes
+        // Assign new buffers to allocation copies
+        for (key, copy) in allocation_copies_keys
+            .into_iter()
+            .zip(allocation_copies.iter_mut())
+        {
+            let node = &self.get_nodes()[key];
+            copy.to_buf_ptr = node.node_output_ptr().unwrap();
+        }
+        (graph_input_pointers_to_nodes, allocation_copies)
     }
 
     /// Applies the latest changes to connections and added nodes in the graph on the audio thread and updates the scheduler.
     pub fn commit_changes(&mut self) -> Result<(), GraphError> {
         // We need to run free_old to know if there are nodes to free and hence a recalculation required.
         self.free_old();
-        self.graph_gen_communicator.free_old();
+        self.graph_gen_communicator.free_old_task_data();
         if self.recalculation_required {
             self.calculate_node_order();
-            let graph_input_pointers_to_nodes = self.allocate_node_buffers();
+            let (graph_input_pointers_to_nodes, allocation_buffer_copies) =
+                self.allocate_node_buffers();
 
             let ggc = &mut self.graph_gen_communicator;
             let current_change_flag = crate::core::mem::replace(
                 &mut ggc.next_change_flag,
                 Arc::new(AtomicBool::new(false)),
             );
-            let task_data =
-                self.generate_task_data(current_change_flag, graph_input_pointers_to_nodes);
+            let task_data = self.generate_task_data(
+                current_change_flag,
+                graph_input_pointers_to_nodes,
+                allocation_buffer_copies,
+            );
             self.graph_gen_communicator.send_updated_tasks(task_data)?;
             self.recalculation_required = false;
         }
@@ -1085,6 +1118,13 @@ impl<F: Float> Graph<F> {
         }
         if !self.node_mortality[node_key] {
             return Err(FreeError::ImmortalNode);
+        }
+        if self
+            .node_keys_to_free_when_safe
+            .iter()
+            .any(|(key, _)| *key == node_key)
+        {
+            return Ok(());
         }
 
         self.recalculation_required = true;
@@ -1135,7 +1175,7 @@ impl<F: Float> Graph<F> {
         let ggc = &mut self.graph_gen_communicator;
         self.node_keys_to_free_when_safe
             .push((node_key, ggc.next_change_flag.clone()));
-        self.node_keys_pending_removal.insert(node_key);
+        // self.node_keys_pending_removal.insert(node_key);
         Ok(())
     }
 
@@ -1175,7 +1215,6 @@ impl<F: Float> Graph<F> {
                 input_edges,
                 parameter_descriptions: node.parameter_descriptions.clone(),
                 parameter_hints: node.parameter_hints.clone(),
-                pending_removal: self.node_keys_pending_removal.contains(&node_key),
                 unconnected: self.disconnected_nodes.contains(&node_key),
                 is_graph: None,
             });
@@ -1254,6 +1293,9 @@ impl<F: Float> Graph<F> {
         // }
         Ok(())
     }
+    pub fn num_nodes_pending_removal(&self) -> usize {
+        self.node_keys_to_free_when_safe.len()
+    }
     /// Check if there are any old nodes or other resources that have been
     /// removed from the graph and can now be freed since they are no longer
     /// used on the audio thread.
@@ -1319,7 +1361,7 @@ impl<F: Float> Graph<F> {
             let (key, flag) = &self.node_keys_to_free_when_safe[i];
             if flag.load(Ordering::SeqCst) {
                 nodes.remove(*key);
-                self.node_keys_pending_removal.remove(key);
+                // self.node_keys_pending_removal.remove(key);
                 self.node_keys_to_free_when_safe.remove(i);
             } else {
                 i += 1;
@@ -1426,14 +1468,8 @@ impl<F: Float> Graph<F> {
     /// NB: Not real-time safe
     pub fn calculate_node_order(&mut self) {
         self.node_order.clear();
-        // Add feedback nodes first, their order doesn't matter
-        self.node_order.extend(self.feedback_node_indices.iter());
         // Set the visited status for all nodes to false
         let mut visited = HashSet::new();
-        // add the feedback node indices as visited
-        for &feedback_node_index in &self.feedback_node_indices {
-            visited.insert(feedback_node_index);
-        }
         let mut nodes_to_process = Vec::with_capacity(self.get_nodes_mut().capacity());
         for edge in self.output_edges.iter().filter_map(|e| *e) {
             if let NodeKeyOrGraph::Node(source) = edge.source {
@@ -1502,7 +1538,12 @@ impl<F: Float> Graph<F> {
         // Add all remaining nodes. These are not currently connected to anything.
         let mut remaining_nodes = vec![];
         for (node_key, _node) in self.get_nodes() {
-            if !visited.contains(&node_key) && !self.node_keys_pending_removal.contains(&node_key) {
+            if !visited.contains(&node_key)
+                && !self
+                    .node_keys_to_free_when_safe
+                    .iter()
+                    .any(|(key, _)| key == &node_key)
+            {
                 remaining_nodes.push(node_key);
             }
         }
@@ -1634,7 +1675,7 @@ struct GraphGenCommunicator<F: Float> {
     // free_node_queue_consumer: rtrb::Consumer<(NodeKey, GenState)>,
 }
 impl<F: Float> GraphGenCommunicator<F> {
-    fn free_old(&mut self) {
+    fn free_old_task_data(&mut self) {
         // If there are discarded tasks, check if they can be removed
         let num_to_remove = self.task_data_to_be_dropped_consumer.slots();
         let chunk = self

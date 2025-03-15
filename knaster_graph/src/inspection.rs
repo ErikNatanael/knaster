@@ -105,7 +105,7 @@ impl GraphInspection {
 
         // Generate every node
         for (i, node) in self.nodes.iter().enumerate() {
-            let color = if node.pending_removal { "red" } else { "black" };
+            let color = "black";
             s.push_str(&format!(
                 "\"{i}_{}\" [
                 style = \"filled\" penwidth = 5 fillcolor = \"white\" shape = \"plain\"
@@ -230,7 +230,6 @@ pub struct NodeInspection {
     pub input_edges: Vec<EdgeInspection>,
     pub parameter_descriptions: Vec<&'static str>,
     pub parameter_hints: Vec<ParameterHint>,
-    pub pending_removal: bool,
     pub unconnected: bool,
     pub is_graph: Option<GraphId>,
 }
