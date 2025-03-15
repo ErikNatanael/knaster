@@ -5,17 +5,17 @@ use knaster_core::envelopes::EnvAsr;
 use knaster_core::math::{MathUGen, Mul};
 use knaster_core::typenum::U1;
 use knaster_core::{
+    Done, PTrigger,
     osc::SinNumeric,
     typenum::{U0, U2},
     wrappers_core::{UGenWrapperCoreExt, WrSmoothParams},
-    Done, Trigger,
 };
 use knaster_graph::handle::AnyHandle;
 use knaster_graph::runner::RunnerOptions;
 use knaster_graph::{
     audio_backend::{
-        cpal::{CpalBackend, CpalBackendOptions},
         AudioBackend,
+        cpal::{CpalBackend, CpalBackendOptions},
     },
     graph::GraphOptions,
     handle::HandleTrait,
@@ -45,7 +45,7 @@ fn main() -> Result<()> {
         let mut release_time_phase: f64 = 0.0;
         loop {
             if let Some(asr) = previous_asr.take() {
-                asr.set((EnvAsr::<f32>::T_RELEASE, Trigger))?;
+                asr.set((EnvAsr::<f32>::T_RELEASE, PTrigger))?;
             }
             // push some nodes
             let mut graph = second_graph.subgraph::<U0, U1>(GraphOptions::default());
@@ -64,7 +64,7 @@ fn main() -> Result<()> {
             asr.set(("attack_time", attack_time)).unwrap();
             release_time_phase += 0.00013;
             asr.set(("release_time", release_time)).unwrap();
-            asr.set(("t_restart", Trigger)).unwrap();
+            asr.set(("t_restart", PTrigger)).unwrap();
             previous_asr = Some(asr.clone().into_any());
             let mult = graph.push(MathUGen::<_, U1, Mul>::new());
             // connect them together

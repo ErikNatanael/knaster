@@ -4,20 +4,23 @@
 //!
 
 use crate::num_derive::{FromPrimitive, ToPrimitive};
-use crate::num_traits::FromPrimitive;
 use crate::numeric_array::NumericArray;
 use crate::typenum::{U1, U5};
 use crate::{
     AudioCtx, PInteger, PIntegerConvertible, ParameterHint, ParameterValue, UGen, UGenFlags,
 };
+use knaster_macros::KnasterIntegerParameter;
 use knaster_primitives::num_traits;
 use knaster_primitives::{Float, Frame};
 
 /// Different supported filter types
-#[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq)]
+#[derive(
+    Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq, Default, KnasterIntegerParameter,
+)]
 #[num_traits = "num_traits"]
 #[repr(u8)]
 pub enum SvfFilterType {
+    #[default]
     #[allow(missing_docs)]
     Low = 0,
     #[allow(missing_docs)]
@@ -36,28 +39,6 @@ pub enum SvfFilterType {
     LowShelf,
     #[allow(missing_docs)]
     HighShelf,
-}
-impl SvfFilterType {
-    /// The number corresponding to the largest value when converting to an index
-    const MAX: usize = 8;
-}
-impl From<PInteger> for SvfFilterType {
-    fn from(value: PInteger) -> Self {
-        Self::from_usize(value.0).unwrap_or(SvfFilterType::Low)
-    }
-}
-impl From<SvfFilterType> for PInteger {
-    fn from(value: SvfFilterType) -> Self {
-        PInteger(value as usize)
-    }
-}
-impl PIntegerConvertible for SvfFilterType {
-    fn pinteger_range() -> (PInteger, PInteger) {
-        (
-            PInteger(SvfFilterType::Low as usize),
-            PInteger(SvfFilterType::MAX),
-        )
-    }
 }
 /// A versatile EQ filter implementation
 ///
@@ -256,7 +237,7 @@ impl<F: Float> UGen for SvfFilter<F> {
             ParameterHint::float(|h| h.nyquist()),
             ParameterHint::positive_infinite_float(),
             ParameterHint::infinite_float(),
-            ParameterHint::from_pinteger::<SvfFilterType>(),
+            ParameterHint::from_pinteger_enum::<SvfFilterType>(),
             ParameterHint::Trigger,
         ]
         .into()

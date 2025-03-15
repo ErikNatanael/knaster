@@ -5,24 +5,24 @@ use knaster_core::envelopes::EnvAsr;
 use knaster_core::math::{MathUGen, Mul};
 use knaster_core::noise::{RandomLin, WhiteNoise};
 use knaster_core::onepole::OnePoleHpf;
+use knaster_core::{Done, Seconds};
 use knaster_core::{
+    UGen,
     osc::SinNumeric,
     typenum::{U0, U1, U2},
     wrappers_core::{UGenWrapperCoreExt, WrSmoothParams},
-    UGen,
 };
-use knaster_core::{Done, Seconds};
 use knaster_graph::runner::RunnerOptions;
 use knaster_graph::{
     audio_backend::{
-        cpal::{CpalBackend, CpalBackendOptions},
         AudioBackend,
+        cpal::{CpalBackend, CpalBackendOptions},
     },
     graph::GraphOptions,
     handle::HandleTrait,
     runner::Runner,
 };
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 
 fn main() -> Result<()> {
     let mut backend = CpalBackend::new(CpalBackendOptions::default())?;
@@ -56,7 +56,7 @@ fn main() -> Result<()> {
         let env = graph.push_with_done_action(EnvAsr::new(0.2, 0.2), Done::FreeParent);
         env.set(("attack_time", 0.2))?;
         env.set(("release_time", 0.2))?;
-        env.set(("t_restart", knaster_graph::Trigger))?;
+        env.set(("t_restart", knaster_graph::PTrigger))?;
         env.change("t_release")?
             .trig()
             .after(Seconds::from_secs_f64(0.5));

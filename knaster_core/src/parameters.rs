@@ -7,6 +7,8 @@ pub use types::*;
 
 use thiserror::Error;
 
+use crate::core::string::String;
+
 // The current type of parameter changes. It is set here to easily change it in the future.
 // It would be more robust to make this a newtype, since it avoids the risk that code uses the concrete type instead of the type alias, but the cost to ergonomics is significant.
 pub type PFloat = f64;
@@ -15,7 +17,7 @@ pub type PFloat = f64;
 ///
 /// Similar to a Bang in PureData in that it's a separate type value that triggers something to happen. It is unlike Bang in that Gen's only receive `Trigger`s on specific dedicated parameter indices, whereas `inlet`s in PureData often accept multiple types of parameters.
 #[derive(Copy, Clone, Debug)]
-pub struct Trigger;
+pub struct PTrigger;
 
 /// A parameter integer type backed by a usize.
 ///
@@ -29,6 +31,8 @@ pub trait PIntegerConvertible: From<PInteger> + Into<PInteger> {
     // fn to_pinteger(self) -> PInteger;
     // fn from_pinteger(val: PInteger) -> Self;
     fn pinteger_range() -> (PInteger, PInteger);
+    #[cfg(any(feature = "std", feature = "alloc"))]
+    fn pinteger_descriptions(v: PInteger) -> String;
 }
 impl From<PInteger> for usize {
     fn from(val: PInteger) -> Self {
@@ -41,16 +45,37 @@ impl From<usize> for PInteger {
     }
 }
 impl PIntegerConvertible for usize {
-    // fn to_pinteger(self) -> PInteger {
-    //     PInteger(self)
-    // }
-    //
-    // fn from_pinteger(val: PInteger) -> Self {
-    //     val.0
-    // }
-
     fn pinteger_range() -> (PInteger, PInteger) {
         (PInteger(usize::MIN), PInteger(usize::MAX))
+    }
+
+    #[cfg(any(feature = "std", feature = "alloc"))]
+    fn pinteger_descriptions(v: PInteger) -> String {
+        crate::core::format!("{}", v.0)
+    }
+}
+impl From<PInteger> for bool {
+    fn from(val: PInteger) -> Self {
+        val.0 > 0
+    }
+}
+impl From<bool> for PInteger {
+    fn from(val: bool) -> Self {
+        PInteger(if val { 1 } else { 0 })
+    }
+}
+impl PIntegerConvertible for bool {
+    fn pinteger_range() -> (PInteger, PInteger) {
+        (PInteger(0), PInteger(1))
+    }
+
+    #[cfg(any(feature = "std", feature = "alloc"))]
+    fn pinteger_descriptions(v: PInteger) -> String {
+        if v.0 > 0 {
+            String::from("True")
+        } else {
+            String::from("False")
+        }
     }
 }
 
@@ -104,13 +129,13 @@ pub enum FloatKind {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct FloatHint {
+pub struct PFloatHint {
     pub default: Option<PFloat>,
     pub range: Option<FloatRange>,
     pub kind: Option<FloatKind>,
     pub is_logarithmic: Option<bool>,
 }
-impl FloatHint {
+impl PFloatHint {
     pub fn new() -> Self {
         Self {
             default: None,
@@ -149,28 +174,68 @@ impl FloatHint {
     }
 }
 
-impl Default for FloatHint {
+impl Default for PFloatHint {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Hint metadata for a `PInteger` parameter. Hints are useful for accessibility, debugging and
+/// GUIs
+#[derive(Copy, Clone, Debug)]
+pub struct PIntegerHint {
+    pub default: Option<PInteger>,
+    pub range: (PInteger, PInteger),
+    #[cfg(any(feature = "std", feature = "alloc"))]
+    value_descriptions: Option<fn(PInteger) -> crate::core::string::String>,
+}
+impl PIntegerHint {
+    pub fn new(range: (PInteger, PInteger)) -> Self {
+        Self {
+            default: None,
+            range,
+            value_descriptions: None,
+        }
+    }
+    #[cfg(any(feature = "std", feature = "alloc"))]
+    /// Returns descriptions of the values for this parameter.
+    pub fn descriptions(&self) -> Option<crate::core::vec::Vec<(PInteger, String)>> {
+        self.value_descriptions.map(|func| {
+            (self.range.0.0..self.range.1.0)
+                .map(|pi| (PInteger(pi), func(PInteger(pi))))
+                .collect()
+        })
     }
 }
 
 /// An inclusive range for the supported values of a parameter
 #[derive(Copy, Clone, Debug)]
 pub enum ParameterHint {
-    Float(FloatHint),
+    Float(PFloatHint),
     /// Triggers do not have a range
     Trigger,
-    Integer(PInteger, PInteger),
+    Integer(PIntegerHint),
 }
 impl ParameterHint {
-    pub fn float(with: impl FnOnce(FloatHint) -> FloatHint) -> Self {
-        let hint = with(FloatHint::new());
+    pub fn float(with: impl FnOnce(PFloatHint) -> PFloatHint) -> Self {
+        let hint = with(PFloatHint::new());
         Self::Float(hint)
     }
-    pub fn from_pinteger<T: PIntegerConvertible>() -> ParameterHint {
-        let range = T::pinteger_range();
-        ParameterHint::Integer(range.0, range.1)
+    /// Manually set the hints for an integer parameter
+    pub fn integer(
+        range: (PInteger, PInteger),
+        with: impl FnOnce(PIntegerHint) -> PIntegerHint,
+    ) -> Self {
+        let hint = with(PIntegerHint::new(range));
+        Self::Integer(hint)
+    }
+    /// Set hint values from a value that can be converted to a `PInteger`
+    pub fn from_pinteger_enum<T: PIntegerConvertible + Default>() -> ParameterHint {
+        ParameterHint::Integer(PIntegerHint {
+            default: Some(T::default().into()),
+            range: T::pinteger_range(),
+            value_descriptions: Some(T::pinteger_descriptions),
+        })
     }
     // TODO: deprecate these helpers and use the proper syntax
     pub fn nyquist() -> Self {
@@ -189,18 +254,18 @@ impl ParameterHint {
         Self::float(|h| h.minmax(0.0, 1.))
     }
     pub fn boolean() -> Self {
-        ParameterHint::Integer(PInteger(0), PInteger(1))
+        Self::from_pinteger_enum::<bool>()
     }
     pub fn ty(self) -> ParameterType {
         match self {
             ParameterHint::Float(_) => ParameterType::Float,
             ParameterHint::Trigger => ParameterType::Trigger,
-            ParameterHint::Integer(_, _) => ParameterType::Integer,
+            ParameterHint::Integer(_) => ParameterType::Integer,
         }
     }
 }
 impl Default for ParameterHint {
     fn default() -> Self {
-        Self::Float(FloatHint::new())
+        Self::Float(PFloatHint::new())
     }
 }

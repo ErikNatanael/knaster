@@ -2,7 +2,7 @@ use knaster_primitives::Float;
 
 use crate::{PInteger, PIntegerConvertible, Rate};
 
-use super::{PFloat, Trigger};
+use super::{PFloat, PTrigger};
 
 #[derive(Copy, Clone)]
 pub enum ParameterType {
@@ -35,8 +35,8 @@ impl From<f64> for ParameterValue {
         ParameterValue::Float(val as PFloat)
     }
 }
-impl From<Trigger> for ParameterValue {
-    fn from(_val: Trigger) -> Self {
+impl From<PTrigger> for ParameterValue {
+    fn from(_val: PTrigger) -> Self {
         ParameterValue::Trigger
     }
 }

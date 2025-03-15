@@ -27,6 +27,7 @@ use crate::numeric_array::NumericArray;
 use crate::{
     AudioCtx, PInteger, PIntegerConvertible, ParameterHint, ParameterValue, UGen, UGenFlags,
 };
+use knaster_macros::KnasterIntegerParameter;
 use knaster_primitives::{Float, Frame};
 use std::ops::Mul;
 
@@ -66,12 +67,23 @@ fn bitwise_or_zero<F: Float>(t: F) -> F {
 }
 use crate::typenum::{U0, U1, U3};
 use knaster_primitives::num_traits;
-use knaster_primitives::num_traits::FromPrimitive;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive, ToPrimitive)]
+#[derive(
+    Default,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    FromPrimitive,
+    ToPrimitive,
+    KnasterIntegerParameter,
+)]
 #[num_traits = "num_traits"]
 #[repr(u8)]
 pub enum Waveform {
+    #[default]
     Sawtooth = 0,
     Sine,
     Cosine,
@@ -86,21 +98,6 @@ pub enum Waveform {
     TriangularPulse,
     TrapezoidFixed,
     TrapezoidVariable,
-}
-impl From<PInteger> for Waveform {
-    fn from(value: PInteger) -> Self {
-        Self::from_usize(value.0).unwrap_or(Waveform::Sawtooth)
-    }
-}
-impl From<Waveform> for PInteger {
-    fn from(value: Waveform) -> Self {
-        PInteger(value as usize)
-    }
-}
-impl PIntegerConvertible for Waveform {
-    fn pinteger_range() -> (PInteger, PInteger) {
-        (PInteger(Waveform::Sawtooth as usize), PInteger(13))
-    }
 }
 
 #[derive(Debug)]
@@ -137,7 +134,7 @@ impl<F: Float> UGen for PolyBlep<F> {
         [
             ParameterHint::nyquist(),
             ParameterHint::one(),
-            ParameterHint::Integer(0.into(), 13.into()),
+            ParameterHint::from_pinteger_enum::<Waveform>(),
         ]
         .into()
     }
@@ -486,7 +483,7 @@ impl<F: Float> PolyBlep<F> {
         y += blep(self.t, self.freq_in_seconds_per_sample)
             - blep(t2, self.freq_in_seconds_per_sample);
 
-        return y;
+        y
     }
 
     fn saw(&mut self) -> F {

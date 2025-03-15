@@ -5,7 +5,7 @@ use alloc::vec;
 use knaster_core::envelopes::EnvAsr;
 use knaster_core::math::{Add, MathUGen, Mul};
 use knaster_core::typenum::{U0, U1, U2};
-use knaster_core::{typenum::U3, Block, Done, Trigger};
+use knaster_core::{Block, Done, PTrigger, typenum::U3};
 
 #[test]
 fn graph_inputs_to_outputs() {
@@ -131,8 +131,8 @@ fn free_node_when_done() {
     let asr = graph.push_with_done_action(EnvAsr::new(0.0, 0.0), Done::FreeSelf);
     asr.set(("attack_time", 0.0)).unwrap();
     asr.set(("release_time", 0.0)).unwrap();
-    asr.set(("t_restart", Trigger)).unwrap();
-    asr.set(("t_release", Trigger)).unwrap();
+    asr.set(("t_restart", PTrigger)).unwrap();
+    asr.set(("t_release", PTrigger)).unwrap();
     graph.commit_changes().unwrap();
     assert_eq!(graph.inspection().nodes.len(), 1);
     for _ in 0..10 {

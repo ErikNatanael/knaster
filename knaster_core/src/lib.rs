@@ -32,6 +32,8 @@ mod tests;
 mod ugen;
 pub mod wrappers_core;
 
+use knaster_macros::KnasterIntegerParameter;
+use knaster_primitives::num_derive::*;
 pub use knaster_primitives::*;
 pub use parameters::*;
 pub use ugen::*;
@@ -56,7 +58,10 @@ pub enum Rate {
 ///
 /// Some UGens have a "done" state. This enum represents a list of standardised actions to take
 /// when done.
-#[derive(Default, Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(
+    Default, Debug, PartialEq, Eq, Copy, Clone, FromPrimitive, ToPrimitive, KnasterIntegerParameter,
+)]
+#[num_traits = "num_traits"]
 #[repr(u8)]
 pub enum Done {
     #[default]
@@ -65,24 +70,4 @@ pub enum Done {
     FreeSelf,
     /// Free the structure that contains the node. In knaster_graph, that is the `Graph`.
     FreeParent,
-}
-impl From<PInteger> for Done {
-    fn from(value: PInteger) -> Self {
-        match value.0 {
-            0 => Done::None,
-            1 => Done::FreeSelf,
-            2 => Done::FreeParent,
-            _ => Done::None,
-        }
-    }
-}
-impl From<Done> for PInteger {
-    fn from(value: Done) -> Self {
-        PInteger(value as usize)
-    }
-}
-impl PIntegerConvertible for Done {
-    fn pinteger_range() -> (PInteger, PInteger) {
-        (PInteger(0), PInteger(2))
-    }
 }
