@@ -14,7 +14,7 @@ use crate::graph::{NodeKey, OwnedRawBuffer};
 
 pub struct Task<F> {
     pub(crate) ugen: *mut dyn DynUGen<F>,
-    // Sequential buffers of a certain channel count
+    // Pointers to buffers of block size, one for each input
     pub(crate) in_buffers: Vec<*const F>,
     pub(crate) out_buffer: *mut F,
     pub(crate) output_channels: usize,
@@ -89,11 +89,6 @@ pub(crate) struct TaskData<F: Float> {
     pub(crate) gens: Vec<(NodeKey, *mut dyn DynUGen<F>)>,
     /// (node_index_in_order, Vec<(graph_input_channel, node_input_channel))
     pub(crate) graph_input_channels_to_nodes: Vec<(usize, Vec<(usize, usize)>)>,
-    /// Feedback buffers need to be copied when changed since a node will read
-    /// from the new location expecting the previous block of data.
-    ///
-    /// (size, from_buf_ptr, to_buf_ptr)
-    pub(crate) buffer_data_to_copy_when_applied: Vec<AllocationCopy<F>>,
 }
 
 impl<F: Float> TaskData<F> {
@@ -104,18 +99,6 @@ impl<F: Float> TaskData<F> {
             unsafe {
                 (*self.gens[apc.node].1).set_ar_param_buffer(apc.parameter_index, apc.buffer)
             };
-        }
-        for copy in &self.buffer_data_to_copy_when_applied {
-            let AllocationCopy {
-                size,
-                from_buf_ptr,
-                to_buf_ptr,
-            } = copy;
-            unsafe {
-                for i in 0..*size {
-                    *to_buf_ptr.add(i) = *from_buf_ptr.add(i);
-                }
-            }
         }
         // Setting `applied` to true signals that the new
         // TaskData have been received and old data can be

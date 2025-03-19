@@ -171,7 +171,6 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
             applied: _,
             ar_parameter_changes: _,
             gens: _,
-            buffer_data_to_copy_when_applied,
         } = task_data;
 
         if let Some(buffer_allocation) = new_buffer_allocation.take() {

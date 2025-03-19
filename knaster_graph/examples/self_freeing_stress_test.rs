@@ -68,8 +68,8 @@ fn main() -> Result<()> {
             previous_asr = Some(asr.clone().into_any());
             let mult = graph.push(MathUGen::<_, U1, Mul>::new());
             // connect them together
-            graph.connect_nodes(&osc1, &mult, 0, 0, false)?;
-            graph.connect_nodes(&asr, &mult, 0, 1, false)?;
+            graph.connect(&osc1, 0, 0, &mult)?;
+            graph.connect(&asr, 0, 1, &mult)?;
             graph.connect_node_to_output(&mult, 0, 0, true)?;
             graph.commit_changes()?;
             std::thread::sleep(Duration::from_secs_f32(0.005));

@@ -11,14 +11,16 @@ use crate::{
 };
 use crate::{
     connectable::Connectable,
+    core::ptr::null_mut,
+    core::rc::Rc,
     core::{
         cell::UnsafeCell,
         dbg, format,
-        sync::atomic::{AtomicBool, Ordering},
+        sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
 use alloc::{borrow::ToOwned, boxed::Box, string::String, string::ToString, vec, vec::Vec};
-use core::ptr::null_mut;
+use core::cell::Cell;
 use std::collections::VecDeque;
 use std::{
     collections::HashSet,
@@ -110,6 +112,14 @@ impl<F: Float> OwnedRawBuffer<F> {
         } else {
             None
         }
+    }
+    /// # Safety:
+    /// Only call if you are certain that no other mutable reference to this buffer exists. Destroy
+    /// the mutable reference as soon as possible to allow other call sites to call this function
+    /// for the same OwnedRawBuffer.
+    #[allow(clippy::mut_from_ref)]
+    pub unsafe fn as_slice_mut(&self) -> &mut [F] {
+        unsafe { crate::core::slice::from_raw_parts_mut(self.ptr.cast::<F>(), self.ptr.len()) }
     }
 }
 impl<F: Float> Drop for OwnedRawBuffer<F> {
@@ -228,8 +238,7 @@ impl<F: Float> Graph<F> {
             self_node_id: node_id,
         };
         // graph_gen
-        let task_data =
-            graph.generate_task_data(Arc::new(AtomicBool::new(false)), Vec::new(), Vec::new());
+        let task_data = graph.generate_task_data(Arc::new(AtomicBool::new(false)), Vec::new());
 
         //         use paste::paste;
         //         macro_rules! graph_gen_channels {
@@ -381,6 +390,7 @@ impl<F: Float> Graph<F> {
         source_channel: usize,
         sink_channel: usize,
         additive: bool,
+        feedback: bool,
     ) -> Result<(), GraphError> {
         let source = source.into();
         let sink = sink.into();
@@ -410,6 +420,7 @@ impl<F: Float> Graph<F> {
             source_channel,
             sink_channel,
             additive,
+            feedback,
         );
         Ok(())
     }
@@ -613,6 +624,7 @@ impl<F: Float> Graph<F> {
             source_channel,
             sink_channel,
             additive,
+            false,
         );
         Ok(())
     }
@@ -624,13 +636,23 @@ impl<F: Float> Graph<F> {
     /// enables a statically checked API.
     fn connect_to_node_internal(
         &mut self,
-        source: NodeKeyOrGraph,
+        mut source: NodeKeyOrGraph,
         sink: NodeKey,
         so_channel: usize,
         si_channel: usize,
         additive: bool,
+        feedback: bool,
     ) {
         self.recalculation_required = true;
+        if feedback {
+            let (fb_source, fb_sink) = self.new_feedback_nodes();
+            self.node_input_edges[fb_sink][0] = Some(Edge {
+                source,
+                channel_in_source: so_channel,
+                is_feedback: true,
+            });
+            source = NodeKeyOrGraph::Node(fb_source);
+        }
         // Fast and common path
         if !additive {
             self.node_input_edges[sink][si_channel] = Some(Edge {
@@ -663,7 +685,7 @@ impl<F: Float> Graph<F> {
             self.node_input_edges[sink][si_channel] = Some(Edge {
                 source,
                 channel_in_source: so_channel,
-                is_feedback: false,
+                is_feedback: feedback,
             });
         }
     }
@@ -723,8 +745,33 @@ impl<F: Float> Graph<F> {
         // TODO: We don't need a full handle here
         let add_handle = self.push(add_gen);
         let add_node = add_handle.raw_handle.node.key;
-        self.get_nodes_mut()[add_node].auto_added = true;
+        self.get_nodes_mut()[add_node].auto_math_node = true;
         add_node
+    }
+    fn new_feedback_nodes(&mut self) -> (NodeKey, NodeKey) {
+        let buffers = Arc::new([
+            OwnedRawBuffer::new(self.block_size),
+            OwnedRawBuffer::new(self.block_size),
+        ]);
+        let bufnum = Arc::new(Cell::new(0));
+        let sink = FeedbackSink {
+            buffers: buffers.clone(),
+            bufnum: bufnum.clone(),
+        };
+        let source = FeedbackSink {
+            buffers: buffers.clone(),
+            bufnum: bufnum.clone(),
+        };
+        // TODO: We don't need a full handle here
+        let sink_handle = self.push(sink);
+        let sink_node = sink_handle.raw_handle.node.key;
+        let source_handle = self.push(source);
+        let source_node = source_handle.raw_handle.node.key;
+        self.get_nodes_mut()[source_node].auto_free_when_unconnected = true;
+        self.get_nodes_mut()[source_node].strong_dependent = Some(sink_node);
+        self.get_nodes_mut()[sink_node].auto_free_when_unconnected = true;
+        self.get_nodes_mut()[sink_node].strong_dependent = Some(source_node);
+        (source_node, sink_node)
     }
 
     /// Connect a source to a sink with the designated channels replacing any existing connections to the sink at those channels. If you want to add to any
@@ -759,7 +806,7 @@ impl<F: Float> Graph<F> {
                             self.connect_input_to_node(sink, so_chan, si_chan, false)?;
                         }
                         (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
-                            self.connect_nodes(source, sink, so_chan, si_chan, false)?;
+                            self.connect_nodes(source, sink, so_chan, si_chan, false, false)?;
                         }
                         (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
                             self.connect_node_to_output(source, so_chan, si_chan, false)?;
@@ -796,13 +843,53 @@ impl<F: Float> Graph<F> {
                             self.connect_input_to_node(sink, so_chan, si_chan, true)?;
                         }
                         (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
-                            self.connect_nodes(source, sink, so_chan, si_chan, true)?;
+                            self.connect_nodes(source, sink, so_chan, si_chan, true, false)?;
                         }
                         (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
                             self.connect_node_to_output(source, so_chan, si_chan, true)?;
                         }
                         (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
                             self.connect_input_to_output(so_chan, si_chan, true)?;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+    /// Connect a source to a sink via a feedback edge with the designated channels, adding it to any existing connections to the sink at those channels. If you want to replace
+    /// existing inputs to the sink, use [`Graph::connect_replace_feedback`]
+    ///
+    /// A feedback edge is used to break cycles in a graph and causes a one block delay of the
+    /// signal data.
+    pub fn connect_feedback<N: Size>(
+        &mut self,
+        source: impl Into<Connectable>,
+        source_channels: impl Into<Channels<N>>,
+        sink_channels: impl Into<Channels<N>>,
+        sink: impl Into<Connectable>,
+    ) -> Result<(), GraphError> {
+        let source = source.into();
+        let sink = sink.into();
+        for (so_chan, si_chan) in source_channels
+            .into()
+            .into_iter()
+            .zip(sink_channels.into().into_iter())
+        {
+            if let Some((source, so_chan)) = source.for_output_channel(so_chan) {
+                if let Some((sink, si_chan)) = sink.for_input_channel(si_chan) {
+                    match (source, sink) {
+                        (NodeOrGraph::Graph, NodeOrGraph::Node(_)) => {
+                            // TODO: Report error, feedback to or from outputs is non-sensical
+                        }
+                        (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
+                            self.connect_nodes(source, sink, so_chan, si_chan, true, true)?;
+                        }
+                        (NodeOrGraph::Node(_), NodeOrGraph::Graph) => {
+                            // TODO: Report error, feedback to or from outputs is non-sensical
+                        }
+                        (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
+                            // TODO: Report error, feedback to or from outputs is non-sensical
                         }
                     }
                 }
@@ -915,7 +1002,6 @@ impl<F: Float> Graph<F> {
         &mut self,
         applied_flag: Arc<AtomicBool>,
         graph_input_channels_to_nodes: Vec<(usize, Vec<(usize, usize)>)>,
-        allocation_buffer_copies: Vec<AllocationCopy<F>>,
     ) -> TaskData<F> {
         let tasks = self.generate_tasks().into_boxed_slice();
         let output_task = self.generate_output_tasks();
@@ -934,7 +1020,6 @@ impl<F: Float> Graph<F> {
             ar_parameter_changes,
             gens,
             graph_input_channels_to_nodes,
-            buffer_data_to_copy_when_applied: allocation_buffer_copies,
         }
     }
     /// Assign buffers to nodes maximizing buffer reuse and cache locality
@@ -942,25 +1027,7 @@ impl<F: Float> Graph<F> {
     ///
     /// Returns (node_index_in_order, Vec<(graph_input_channel, node_input_channel))
     #[must_use]
-    fn allocate_node_buffers(
-        &mut self,
-    ) -> (Vec<(usize, Vec<(usize, usize)>)>, Vec<AllocationCopy<F>>) {
-        let mut allocation_copies = Vec::new();
-        let mut allocation_copies_keys = Vec::new();
-        // Add existing buffers for nodes with feedback
-        for key in &self.node_order {
-            let node = &self.get_nodes()[*key];
-            if node.num_feedback_dependents > 0 {
-                if let Some(from_buf_ptr) = node.node_output_ptr() {
-                    allocation_copies.push(AllocationCopy {
-                        size: node.outputs * self.block_size,
-                        from_buf_ptr,
-                        to_buf_ptr: null_mut(),
-                    });
-                    allocation_copies_keys.push(*key);
-                }
-            }
-        }
+    fn allocate_node_buffers(&mut self) -> Vec<(usize, Vec<(usize, usize)>)> {
         // Recalculate the number of dependent channels of a node
         // TODO: This makes a lot of node lookups. Optimise?
         for (_key, node) in self.get_nodes_mut() {
@@ -1074,15 +1141,7 @@ impl<F: Float> Graph<F> {
             }
             unsafe { (&mut *self.nodes.get())[node_key].assign_inputs(inputs) };
         }
-        // Assign new buffers to allocation copies
-        for (key, copy) in allocation_copies_keys
-            .into_iter()
-            .zip(allocation_copies.iter_mut())
-        {
-            let node = &self.get_nodes()[key];
-            copy.to_buf_ptr = node.node_output_ptr().unwrap();
-        }
-        (graph_input_pointers_to_nodes, allocation_copies)
+        graph_input_pointers_to_nodes
     }
 
     /// Applies the latest changes to connections and added nodes in the graph on the audio thread and updates the scheduler.
@@ -1092,19 +1151,15 @@ impl<F: Float> Graph<F> {
         self.graph_gen_communicator.free_old_task_data();
         if self.recalculation_required {
             self.calculate_node_order();
-            let (graph_input_pointers_to_nodes, allocation_buffer_copies) =
-                self.allocate_node_buffers();
+            let graph_input_pointers_to_nodes = self.allocate_node_buffers();
 
             let ggc = &mut self.graph_gen_communicator;
             let current_change_flag = crate::core::mem::replace(
                 &mut ggc.next_change_flag,
                 Arc::new(AtomicBool::new(false)),
             );
-            let task_data = self.generate_task_data(
-                current_change_flag,
-                graph_input_pointers_to_nodes,
-                allocation_buffer_copies,
-            );
+            let task_data =
+                self.generate_task_data(current_change_flag, graph_input_pointers_to_nodes);
             self.graph_gen_communicator.send_updated_tasks(task_data)?;
             self.recalculation_required = false;
         }
@@ -1126,12 +1181,11 @@ impl<F: Float> Graph<F> {
         {
             return Ok(());
         }
-
+        //
         self.recalculation_required = true;
 
         // Remove all edges leading to the node
-        self.node_input_edges.remove(node_key);
-        // feedback from the freed node requires removing the feedback node and all edges from the feedback node
+        if let Some(_edges) = self.node_input_edges.remove(node_key) {}
         self.node_parameter_edges.remove(node_key);
         // Remove all edges leading from the node to other nodes
         for (_k, input_edges) in &mut self.node_input_edges {
@@ -1171,10 +1225,12 @@ impl<F: Float> Graph<F> {
                 }
             }
         }
-        self.clear_feedback_for_node(node_key)?;
         let ggc = &mut self.graph_gen_communicator;
         self.node_keys_to_free_when_safe
             .push((node_key, ggc.next_change_flag.clone()));
+        if let Some(dep) = self.get_nodes()[node_key].strong_dependent {
+            self.free_node_from_key(dep).ok();
+        }
         // self.node_keys_pending_removal.insert(node_key);
         Ok(())
     }
@@ -1249,50 +1305,6 @@ impl<F: Float> Graph<F> {
             shared_frame_clock: self.graph_gen_communicator.shared_frame_clock.clone(),
         }
     }
-    fn clear_feedback_for_node(&mut self, node_key: NodeKey) -> Result<(), FreeError> {
-        // TODO: Update for new feedback node system
-        // Remove all feedback edges leading from or to the node
-        // let mut nodes_to_free = HashSet::new();
-        // if let Some(&feedback_node) = self.node_feedback_node_key.get(node_key) {
-        //     // The node that is being freed has a feedback node attached to it. Free that as well.
-        //     nodes_to_free.insert(feedback_node);
-        //     self.node_feedback_node_key.remove(node_key);
-        // }
-        // for (feedback_key, feedback_edges) in &mut self.node_feedback_edges {
-        //     if !feedback_edges.is_empty() {
-        //         let mut i = 0;
-        //         while i < feedback_edges.len() {
-        //             if feedback_edges[i].source == node_key
-        //                 || feedback_edges[i].feedback_destination == node_key
-        //             {
-        //                 feedback_edges.remove(i);
-        //             } else {
-        //                 i += 1;
-        //             }
-        //         }
-        //         if feedback_edges.is_empty() {
-        //             // The feedback node has no more edges to it: free it
-        //             nodes_to_free.insert(feedback_key);
-        //             // TODO: Will this definitely remove all feedback node
-        //             // key references? Can a feedback node be manually freed
-        //             // in a different way?
-        //             let mut node_feedback_node_belongs_to = None;
-        //             for (source_node, &feedback_node) in &self.node_feedback_node_key {
-        //                 if feedback_node == feedback_key {
-        //                     node_feedback_node_belongs_to = Some(source_node);
-        //                 }
-        //             }
-        //             if let Some(key) = node_feedback_node_belongs_to {
-        //                 self.node_feedback_node_key.remove(key);
-        //             }
-        //         }
-        //     }
-        // }
-        // for na in nodes_to_free {
-        //     self.free_node_from_key(na)?;
-        // }
-        Ok(())
-    }
     pub fn num_nodes_pending_removal(&self) -> usize {
         self.node_keys_to_free_when_safe.len()
     }
@@ -1317,7 +1329,7 @@ impl<F: Float> Graph<F> {
         // This could be merged with the loop above, but then math nodes would be removed one step after its input(s)
         let nodes = unsafe { &mut *self.nodes.get() };
         for (key, node) in nodes.iter_mut() {
-            if node.auto_added {
+            if node.auto_math_node {
                 // We assume math nodes have two inputs and one output
                 assert_eq!(node.inputs, 2);
                 assert_eq!(node.outputs, 1);
@@ -1351,6 +1363,30 @@ impl<F: Float> Graph<F> {
                             self.free_node_from_key(key).ok();
                         }
                     }
+                }
+            }
+            if node.auto_free_when_unconnected {
+                let mut unconnected = true;
+                'unconnected_block: {
+                    if let Some(edges) = self.node_input_edges.get(key) {
+                        if edges.iter().flatten().peekable().peek().is_some() {
+                            unconnected = false;
+                            break 'unconnected_block;
+                        }
+                    }
+                    for (_k, input_edges) in &mut self.node_input_edges {
+                        for edge in input_edges.iter().flatten() {
+                            if let NodeKeyOrGraph::Node(source) = &edge.source {
+                                if *source == key {
+                                    unconnected = false;
+                                    break 'unconnected_block;
+                                }
+                            }
+                        }
+                    }
+                }
+                if unconnected {
+                    self.free_node_from_key(key).ok();
                 }
             }
         }
@@ -1398,12 +1434,14 @@ impl<F: Float> Graph<F> {
             // There is probably room for optimisation here by managing to
             // not iterate the edges multiple times.
             for edge in input_edges.iter().filter_map(|e| *e) {
-                if let NodeKeyOrGraph::Node(source) = edge.source {
-                    if !visited.contains(&source) {
-                        nodes_to_process.push(source);
-                        visited.insert(source);
-                        found_unvisited = true;
-                        break;
+                if !edge.is_feedback {
+                    if let NodeKeyOrGraph::Node(source) = edge.source {
+                        if !visited.contains(&source) {
+                            nodes_to_process.push(source);
+                            visited.insert(source);
+                            found_unvisited = true;
+                            break;
+                        }
                     }
                 }
             }
@@ -1488,52 +1526,6 @@ impl<F: Float> Graph<F> {
 
         let stack = self.depth_first_search(&mut visited, &mut nodes_to_process);
         self.node_order.extend(stack);
-
-        // Check if feedback nodes need to be added to the node order
-        // TODO: Update for new feedback edge system
-        // let mut feedback_node_order_addition = vec![];
-        // for (_key, feedback_edges) in self.node_feedback_edges.iter() {
-        //     for feedback_edge in feedback_edges {
-        //         if !visited.contains(&feedback_edge.source) {
-        //             // The source of this feedback_edge needs to be added to the
-        //             // node order at the end. Check if it's the input to any
-        //             // other node and start a depth first search from the last
-        //             // node.
-        //             let mut last_connected_node_index = feedback_edge.source;
-        //             let mut last_connected_not_visited_ni = feedback_edge.source;
-        //             loop {
-        //                 let mut found_later_node = false;
-        //                 for (key, input_edges) in self.node_input_edges.iter() {
-        //                     for input_edge in input_edges {
-        //                         if input_edge.source == last_connected_node_index {
-        //                             last_connected_node_index = key;
-
-        //                             if !visited.contains(&key) {
-        //                                 last_connected_not_visited_ni = key;
-        //                             }
-        //                             found_later_node = true;
-        //                             break;
-        //                         }
-        //                     }
-        //                     if found_later_node {
-        //                         break;
-        //                     }
-        //                 }
-        //                 if !found_later_node {
-        //                     break;
-        //                 }
-        //             }
-        //             // Do a depth first search from `last_connected_node_index`
-        //             nodes_to_process.clear();
-        //             visited.insert(last_connected_not_visited_ni);
-        //             nodes_to_process.push(last_connected_not_visited_ni);
-        //             let stack = self.depth_first_search(&mut visited, &mut nodes_to_process);
-        //             feedback_node_order_addition.extend(stack);
-        //         }
-        //     }
-        // }
-        // self.node_order
-        //     .extend(feedback_node_order_addition.into_iter());
 
         // Add all remaining nodes. These are not currently connected to anything.
         let mut remaining_nodes = vec![];
@@ -1771,5 +1763,106 @@ impl<F: Float> From<&Graph<F>> for Connectable {
 impl<F: Float> From<&mut Graph<F>> for NodeId {
     fn from(value: &mut Graph<F>) -> Self {
         value.self_node_id
+    }
+}
+
+/// The sink for a feedback connection, i.e. the UGen that stores data to be read by the other node
+///
+/// Highly unsafe. The allocation of buffers is done separately instead of using the init function.
+/// Should only be used from inside the Graph. Assumes that a single Graph is always run
+pub(crate) struct FeedbackSink<F: Float> {
+    buffers: Arc<[OwnedRawBuffer<F>; 2]>,
+    /// We promise that all nodes within a Graph will be processed sequentially and not
+    /// concurrently. If that changes, this has to be changed into something like Arc<AtomicUsize>
+    bufnum: Arc<Cell<usize>>,
+}
+impl<F: Float> UGen for FeedbackSink<F> {
+    type Sample = F;
+    type Inputs = U1;
+    type Outputs = U0;
+    type Parameters = U0;
+
+    fn process(
+        &mut self,
+        _ctx: AudioCtx,
+        _flags: &mut knaster_core::UGenFlags,
+        _input: knaster_core::Frame<Self::Sample, Self::Inputs>,
+    ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
+        // Only for use inside Graph which won't use `process` directly
+        unreachable!()
+    }
+    fn process_block<InBlock, OutBlock>(
+        &mut self,
+        _ctx: knaster_core::BlockAudioCtx,
+        _flags: &mut knaster_core::UGenFlags,
+        input: &InBlock,
+        _output: &mut OutBlock,
+    ) where
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_core::Block<Sample = Self::Sample>,
+    {
+        let bufnum = self.bufnum.get();
+        let input = input.channel_as_slice(0);
+        unsafe { self.buffers[bufnum].as_slice_mut().copy_from_slice(input) }
+    }
+
+    fn param_hints()
+    -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::Parameters>
+    {
+        [].into()
+    }
+
+    fn param_apply(&mut self, _ctx: AudioCtx, _index: usize, _value: knaster_core::ParameterValue) {
+    }
+}
+/// The source for a feedback connection
+///
+/// Highly unsafe. The allocation of buffers is done separately instead of using the init function.
+/// Should only be used from inside the Graph.
+pub(crate) struct FeedbackSource<F: Float> {
+    buffers: Arc<[OwnedRawBuffer<F>; 2]>,
+    /// We promise that all nodes within a Graph will be processed sequentially and not
+    /// concurrently. If that changes, this has to be changed into something like Arc<AtomicUsize>
+    bufnum: Arc<Cell<usize>>,
+}
+impl<F: Float> UGen for FeedbackSource<F> {
+    type Sample = F;
+    type Inputs = U0;
+    type Outputs = U1;
+    type Parameters = U0;
+
+    fn process(
+        &mut self,
+        _ctx: AudioCtx,
+        _flags: &mut knaster_core::UGenFlags,
+        _input: knaster_core::Frame<Self::Sample, Self::Inputs>,
+    ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
+        // Only for use inside Graph which won't use `process` directly
+        unreachable!()
+    }
+    fn process_block<InBlock, OutBlock>(
+        &mut self,
+        _ctx: knaster_core::BlockAudioCtx,
+        _flags: &mut knaster_core::UGenFlags,
+        _input: &InBlock,
+        output: &mut OutBlock,
+    ) where
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_core::Block<Sample = Self::Sample>,
+    {
+        let bufnum = self.bufnum.get();
+        let prev_buffer = 1 - bufnum;
+        self.bufnum.set(prev_buffer);
+        let output = output.channel_as_slice_mut(0);
+        unsafe { output.copy_from_slice(self.buffers[prev_buffer].as_slice_mut()) }
+    }
+
+    fn param_hints()
+    -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::Parameters>
+    {
+        [].into()
+    }
+
+    fn param_apply(&mut self, _ctx: AudioCtx, _index: usize, _value: knaster_core::ParameterValue) {
     }
 }

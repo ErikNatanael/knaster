@@ -1,3 +1,4 @@
+use crate::connectable::Connectable;
 use crate::runner::RunnerOptions;
 use crate::tests::utils::TestNumUGen;
 use crate::{handle::HandleTrait, runner::Runner, tests::utils::TestInPlusParamUGen};
@@ -84,10 +85,10 @@ fn multichannel_nodes() {
     // two channel output
     let m = graph.push(MathUGen::<f64, U2, Add>::new());
     // Connect input 1 to 0, 2, to 1
-    graph.connect_nodes(&v0_0, &m, 0, 0, false).unwrap();
-    graph.connect_nodes(&v0_1, &m, 0, 1, false).unwrap();
-    graph.connect_nodes(&v1_0, &m, 0, 2, false).unwrap();
-    graph.connect_nodes(&v1_1, &m, 0, 3, false).unwrap();
+    graph.connect_replace(&v0_0, 0, 0, &m).unwrap();
+    graph.connect_replace(&v0_1, 0, 1, &m).unwrap();
+    graph.connect_replace(&v1_0, 0, 2, &m).unwrap();
+    graph.connect_replace(&v1_1, 0, 3, &m).unwrap();
     graph.connect_node_to_output(&m, 0, 0, false).unwrap();
     graph.connect_node_to_output(&m, 1, 1, false).unwrap();
     graph.commit_changes().unwrap();
@@ -106,13 +107,13 @@ fn multichannel_nodes() {
     // Change the graph so that the output of m is multiplied by 0.5 and 0.125 respectively, but using two different nodes
     let m2 = graph.push(MathUGen::<f64, U1, Mul>::new());
     let m3 = graph.push(MathUGen::<f64, U1, Mul>::new());
-    graph.connect_nodes(&m, &m2, 0, 0, false).unwrap();
-    graph.connect_nodes(&m, &m3, 1, 0, false).unwrap();
-    graph.connect_nodes(&v1_0, &m2, 0, 1, false).unwrap();
-    graph.connect_nodes(&v0_0, &m3, 0, 1, false).unwrap();
+    graph.connect_replace(&m, 0, 0, &m2).unwrap();
+    graph.connect_replace(&m, 1, 0, &m3).unwrap();
+    graph.connect_replace(&v1_0, 0, 1, &m2).unwrap();
+    graph.connect_replace(&v0_0, 0, 1, &m3).unwrap();
     // These should replace the previous input edges to the graph outputs
-    graph.connect_node_to_output(&m2, 0, 0, false).unwrap();
-    graph.connect_node_to_output(&m3, 0, 1, false).unwrap();
+    graph.connect_replace(&m2, 0, 0, graph.as_graph()).unwrap();
+    graph.connect_replace(&m3, 0, 1, graph.as_graph()).unwrap();
     graph.commit_changes().unwrap();
     unsafe { runner.run(&input_pointers) };
     let output = runner.output_block();
@@ -152,4 +153,85 @@ fn free_node_when_done() {
     graph.commit_changes().unwrap();
     assert_eq!(graph.num_nodes_pending_removal(), 0);
     assert_eq!(graph.inspection().nodes.len(), 0);
+}
+#[test]
+fn feedback_nodes() {
+    let block_size = 16;
+    let (mut g, mut runner) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+        block_size,
+        sample_rate: 48000,
+        ring_buffer_size: 50,
+    });
+
+    // These are connected in the most common case where a feedback edge is required
+    let n0 = g.push(TestInPlusParamUGen::new());
+    n0.change(0).unwrap().value(1.25).send().unwrap();
+    let n1 = g.push(TestInPlusParamUGen::new());
+    n1.change(0).unwrap().value(0.125).send().unwrap();
+
+    g.connect(&n0, 0, 0, &n1).unwrap();
+    g.connect(&n1, 0, 0, g.as_graph()).unwrap();
+    g.connect_feedback(&n1, 0, 0, &n0).unwrap();
+
+    g.commit_changes().unwrap();
+
+    // Block 1
+    unsafe {
+        runner.run(&[]);
+    }
+    let output = runner.output_block();
+    assert_eq!(output.read(0, 0), 1.375);
+    // Block 2
+    unsafe {
+        runner.run(&[]);
+    }
+    let output = runner.output_block();
+    assert_eq!(output.read(0, 0), 1.375 * 2.);
+    // Block 3
+    unsafe {
+        runner.run(&[]);
+    }
+    let output = runner.output_block();
+    assert_eq!(output.read(0, 0), 1.375 * 3.);
+}
+
+#[test]
+fn feedback_nodes2() {
+    let block_size = 16;
+    let (mut g, mut runner) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+        block_size,
+        sample_rate: 48000,
+        ring_buffer_size: 50,
+    });
+
+    // These could just as well be connected without feedback edge, but the delay should still be
+    // applied
+    let n2 = g.push(TestInPlusParamUGen::new());
+    n2.change(0).unwrap().value(1.25).send().unwrap();
+    let n3 = g.push(TestInPlusParamUGen::new());
+    n3.change(0).unwrap().value(0.125).send().unwrap();
+
+    g.connect_feedback(&n2, 0, 0, &n3).unwrap();
+    g.connect(&n3, 0, 0, g.as_graph()).unwrap();
+
+    g.commit_changes().unwrap();
+
+    // Block 1
+    unsafe {
+        runner.run(&[]);
+    }
+    let output = runner.output_block();
+    assert_eq!(output.read(0, 0), 0.125);
+    // Block 2
+    unsafe {
+        runner.run(&[]);
+    }
+    let output = runner.output_block();
+    assert_eq!(output.read(0, 0), 0.125 + 1.25);
+    // Block 3
+    unsafe {
+        runner.run(&[]);
+    }
+    let output = runner.output_block();
+    assert_eq!(output.read(0, 0), 0.125 + 1.25);
 }

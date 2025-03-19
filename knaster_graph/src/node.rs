@@ -5,7 +5,7 @@ use alloc::{boxed::Box, string::String};
 
 use knaster_core::{AudioCtx, Float, ParameterHint};
 
-use crate::graph::GraphId;
+use crate::graph::{GraphId, NodeKey};
 use crate::{buffer_allocator::BufferAllocator, dyngen::DynUGen, task::Task};
 
 /// `Node` wraps a [`DynUGen`] in a graph. It is used to hold a pointer to the
@@ -30,10 +30,14 @@ pub(crate) struct Node<F> {
     pub(crate) outputs: usize,
     /// true if the node was not pushed manually to the Graph. Such nodes may
     /// also be removed automatically when no longer needed.
-    pub(crate) auto_added: bool,
+    pub(crate) auto_math_node: bool,
+    /// If the node is left unconnected to any other node, remove it
+    pub(crate) auto_free_when_unconnected: bool,
+    /// A node that is strongly connected to this one. When this one is removed, remove the other
+    /// one as well. Used for feedback nodes
+    pub(crate) strong_dependent: Option<NodeKey>,
 
     /// STATE FOR TASK GENERATION etc.
-    pub(crate) num_feedback_dependents: usize,
     pub(crate) node_inputs: Vec<*const F>,
     pub(crate) node_output: NodeOutput<F>,
     /// The number of channels in potentially different nodes that depend
@@ -64,10 +68,11 @@ impl<F: Float> Node<F> {
             node_inputs: vec![crate::core::ptr::null_mut(); inputs],
             node_output: NodeOutput::Offset(0),
             remove_me: None,
-            auto_added: false,
+            auto_math_node: false,
             is_graph: None,
             num_output_dependents: 0,
-            num_feedback_dependents: 0,
+            auto_free_when_unconnected: false,
+            strong_dependent: None,
         }
     }
     pub fn init(&mut self, ctx: &AudioCtx) {

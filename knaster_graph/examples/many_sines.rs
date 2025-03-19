@@ -12,13 +12,13 @@ use knaster_core::{
 use knaster_graph::runner::RunnerOptions;
 use knaster_graph::{
     audio_backend::{
-        cpal::{CpalBackend, CpalBackendOptions},
         AudioBackend,
+        cpal::{CpalBackend, CpalBackendOptions},
     },
     handle::HandleTrait,
     runner::Runner,
 };
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 
 fn main() -> Result<()> {
     let mut backend = CpalBackend::new(CpalBackendOptions::default())?;
@@ -42,9 +42,9 @@ fn main() -> Result<()> {
             g.push(SinWt::new(rng.gen_range(3000.0..10000.0)).wr_mul(rng.gen_range(0.01..0.015)));
         let mul = g.push(MathUGen::<_, U1, Mul>::new());
         let pan = g.push(Pan2::new(rng.gen_range(-1.0..1.0)));
-        g.connect_nodes(&env, &mul, 0, 0, false)?;
-        g.connect_nodes(&sine, &mul, 0, 1, false)?;
-        g.connect_nodes(&mul, &pan, 0, 0, false)?;
+        g.connect(&env, 0, 0, &mul)?;
+        g.connect(&sine, 0, 1, &mul)?;
+        g.connect(&mul, 0, 0, &pan)?;
         g.connect_node_to_output(&pan, 0, 0, true)?;
         g.connect_node_to_output(&pan, 1, 1, true)?;
         envs.push(env);
@@ -54,8 +54,8 @@ fn main() -> Result<()> {
         let env = g.push(env);
         let sine = g.push(SinWt::new(rng.gen_range(6000.0..6500.0)).wr_mul(0.01));
         let mul = g.push(MathUGen::<_, U1, Mul>::new());
-        g.connect_nodes(&env, &mul, 0, 0, false)?;
-        g.connect_nodes(&sine, &mul, 0, 1, false)?;
+        g.connect(&env, 0, 0, &mul)?;
+        g.connect(&sine, 0, 1, &mul)?;
         g.connect_node_to_output(&mul, 0, 0, true)?;
         g.connect_node_to_output(&mul, 0, 1, true)?;
         envs.push(env);
