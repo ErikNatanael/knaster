@@ -45,8 +45,8 @@ fn main() -> Result<()> {
         g.connect(&env, 0, 0, &mul)?;
         g.connect(&sine, 0, 1, &mul)?;
         g.connect(&mul, 0, 0, &pan)?;
-        g.connect_node_to_output(&pan, 0, 0, true)?;
-        g.connect_node_to_output(&pan, 1, 1, true)?;
+        g.connect(&pan, 0, 0, g.internal())?;
+        g.connect(&pan, 1, 1, g.internal())?;
         envs.push(env);
     }
     for _i in 0..300 {
@@ -56,8 +56,7 @@ fn main() -> Result<()> {
         let mul = g.push(MathUGen::<_, U1, Mul>::new());
         g.connect(&env, 0, 0, &mul)?;
         g.connect(&sine, 0, 1, &mul)?;
-        g.connect_node_to_output(&mul, 0, 0, true)?;
-        g.connect_node_to_output(&mul, 0, 1, true)?;
+        g.connect(&mul, [0, 0], [0, 1], g.internal())?;
         envs.push(env);
     }
     // let sine = g.push({

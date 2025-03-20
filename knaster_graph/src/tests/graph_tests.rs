@@ -18,8 +18,12 @@ fn graph_inputs_to_outputs() {
     });
 
     // Connect input 1 to 0, 2, to 1
-    graph.connect_input_to_output(1, 0, false).unwrap();
-    graph.connect_input_to_output(2, 1, false).unwrap();
+    graph
+        .connect(graph.internal(), 1, 0, graph.internal())
+        .unwrap();
+    graph
+        .connect(graph.internal(), 2, 1, graph.internal())
+        .unwrap();
     graph.commit_changes().unwrap();
 
     let input_allocation = vec![1.0; 16 * 3];
@@ -45,15 +49,19 @@ fn graph_inputs_to_nodes_to_outputs() {
     });
 
     // Connect input 1 to 0, 2, to 1
-    graph.connect_input_to_output(0, 1, false).unwrap();
-    graph.connect_input_to_output(0, 2, false).unwrap();
+    graph
+        .connect(graph.internal(), 0, 1, graph.internal())
+        .unwrap();
+    graph
+        .connect(graph.internal(), 0, 2, graph.internal())
+        .unwrap();
     let g0 = graph.push(TestInPlusParamUGen::new());
     let g1 = graph.push(TestInPlusParamUGen::new());
     g0.set(("number", 0.75)).unwrap();
     g1.set(("number", 0.5)).unwrap();
-    graph.connect_node_to_output(&g0, 0, 2, true).unwrap();
-    graph.connect_input_to_node(&g1, 2, 0, false).unwrap();
-    graph.connect_node_to_output(&g1, 0, 0, false).unwrap();
+    graph.connect(&g0, 0, 2, graph.internal()).unwrap();
+    graph.connect(graph.internal(), 2, 0, &g1).unwrap();
+    graph.connect(&g1, 0, 0, graph.internal()).unwrap();
     graph.commit_changes().unwrap();
 
     let input_allocation = vec![2.0; 16 * 3];
@@ -89,8 +97,8 @@ fn multichannel_nodes() {
     graph.connect_replace(&v0_1, 0, 1, &m).unwrap();
     graph.connect_replace(&v1_0, 0, 2, &m).unwrap();
     graph.connect_replace(&v1_1, 0, 3, &m).unwrap();
-    graph.connect_node_to_output(&m, 0, 0, false).unwrap();
-    graph.connect_node_to_output(&m, 1, 1, false).unwrap();
+    graph.connect(&m, 0, 0, graph.internal()).unwrap();
+    graph.connect(&m, 1, 1, graph.internal()).unwrap();
     graph.commit_changes().unwrap();
 
     let input_allocation = vec![1.0; 16 * 3];
@@ -112,8 +120,8 @@ fn multichannel_nodes() {
     graph.connect_replace(&v1_0, 0, 1, &m2).unwrap();
     graph.connect_replace(&v0_0, 0, 1, &m3).unwrap();
     // These should replace the previous input edges to the graph outputs
-    graph.connect_replace(&m2, 0, 0, graph.as_graph()).unwrap();
-    graph.connect_replace(&m3, 0, 1, graph.as_graph()).unwrap();
+    graph.connect_replace(&m2, 0, 0, graph.internal()).unwrap();
+    graph.connect_replace(&m3, 0, 1, graph.internal()).unwrap();
     graph.commit_changes().unwrap();
     unsafe { runner.run(&input_pointers) };
     let output = runner.output_block();
@@ -170,7 +178,7 @@ fn feedback_nodes() {
     n1.change(0).unwrap().value(0.125).send().unwrap();
 
     g.connect(&n0, 0, 0, &n1).unwrap();
-    g.connect(&n1, 0, 0, g.as_graph()).unwrap();
+    g.connect(&n1, 0, 0, g.internal()).unwrap();
     g.connect_feedback(&n1, 0, 0, &n0).unwrap();
 
     g.commit_changes().unwrap();
@@ -212,7 +220,7 @@ fn feedback_nodes2() {
     n3.change(0).unwrap().value(0.125).send().unwrap();
 
     g.connect_feedback(&n2, 0, 0, &n3).unwrap();
-    g.connect(&n3, 0, 0, g.as_graph()).unwrap();
+    g.connect(&n3, 0, 0, g.internal()).unwrap();
 
     g.commit_changes().unwrap();
 

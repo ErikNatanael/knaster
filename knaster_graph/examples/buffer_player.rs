@@ -6,13 +6,13 @@ use anyhow::Result;
 use knaster_core::buffer::BufferReader;
 use knaster_core::dsp::buffer::Buffer;
 use knaster_core::math::{MathUGen, Mul};
-use knaster_core::util::Constant;
 use knaster_core::typenum::{U0, U2};
+use knaster_core::util::Constant;
 use knaster_graph::runner::RunnerOptions;
 use knaster_graph::{
     audio_backend::{
-        cpal::{CpalBackend, CpalBackendOptions},
         AudioBackend,
+        cpal::{CpalBackend, CpalBackendOptions},
     },
     handle::HandleTrait,
     runner::Runner,
@@ -61,7 +61,7 @@ fn main() -> Result<()> {
     let amp = g.push(Constant::new(0.5));
     g.connect(&amp, [0, 0], [2, 3], &mult)?;
     g.connect(&play, [0, 1], [0, 1], &mult)?;
-    g.connect(&mult, [0, 1], [0, 1], g.as_graph())?;
+    g.connect(&mult, [0, 1], [0, 1], g.internal())?;
     g.commit_changes()?;
     std::thread::sleep(Duration::from_secs_f32(2.5));
     play.change("t_restart")?.trig().send()?;

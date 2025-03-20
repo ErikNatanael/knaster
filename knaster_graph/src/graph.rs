@@ -395,10 +395,16 @@ impl<F: Float> Graph<F> {
         let source = source.into();
         let sink = sink.into();
         if !source.graph == self.id {
-            return Err(GraphError::WrongGraph);
+            return Err(GraphError::WrongSourceNodeGraph {
+                expected_graph: self.id,
+                found_graph: source.graph,
+            });
         }
         if !sink.graph == self.id {
-            return Err(GraphError::WrongGraph);
+            return Err(GraphError::WrongSinkNodeGraph {
+                expected_graph: self.id,
+                found_graph: sink.graph,
+            });
         }
 
         let nodes = self.get_nodes();
@@ -425,7 +431,7 @@ impl<F: Float> Graph<F> {
         Ok(())
     }
     /// Connect a graph input directly to a graph output
-    pub fn connect_input_to_output(
+    fn connect_input_to_output(
         &mut self,
         source_channel: usize,
         sink_channel: usize,
@@ -445,7 +451,7 @@ impl<F: Float> Graph<F> {
         );
         Ok(())
     }
-    pub fn connect_node_to_output(
+    fn connect_node_to_output(
         &mut self,
         source: impl Into<NodeId>,
         source_channel: usize,
@@ -454,7 +460,10 @@ impl<F: Float> Graph<F> {
     ) -> Result<(), GraphError> {
         let source = source.into();
         if !source.graph == self.id {
-            return Err(GraphError::WrongGraph);
+            return Err(GraphError::WrongSourceNodeGraph {
+                expected_graph: self.id,
+                found_graph: source.graph,
+            });
         }
         if sink_channel >= self.num_outputs {
             return Err(GraphError::GraphOutputOutOfBounds(sink_channel));
@@ -514,11 +523,17 @@ impl<F: Float> Graph<F> {
     ) -> Result<(), GraphError> {
         let source = source.into();
         if !source.graph == self.id {
-            return Err(GraphError::WrongGraph);
+            return Err(GraphError::WrongSourceNodeGraph {
+                expected_graph: self.id,
+                found_graph: source.graph,
+            });
         }
         let sink = sink.into();
         if !sink.graph == self.id {
-            return Err(GraphError::WrongGraph);
+            return Err(GraphError::WrongSinkNodeGraph {
+                expected_graph: self.id,
+                found_graph: sink.graph,
+            });
         }
         let nodes = self.get_nodes();
         let sink_node = &nodes[sink.key()];
@@ -596,7 +611,7 @@ impl<F: Float> Graph<F> {
         }
         Ok(())
     }
-    pub fn connect_input_to_node(
+    fn connect_input_to_node(
         &mut self,
         sink: impl Into<NodeId>,
         source_channel: usize,
@@ -605,7 +620,10 @@ impl<F: Float> Graph<F> {
     ) -> Result<(), GraphError> {
         let sink = sink.into();
         if !sink.graph == self.id {
-            return Err(GraphError::WrongGraph);
+            return Err(GraphError::WrongSinkNodeGraph {
+                expected_graph: self.id,
+                found_graph: sink.graph,
+            });
         }
         if source_channel >= self.num_inputs {
             return Err(GraphError::GraphInputOutOfBounds(source_channel));
@@ -1604,7 +1622,7 @@ impl<F: Float> Graph<F> {
     }
     /// Connectable for connecting inside the graph. Note that inside the graph, the graph outputs
     /// are sinks/inputs and the graph outputs are sources/outputs.
-    pub fn as_graph(&self) -> Connectable {
+    pub fn internal(&self) -> Connectable {
         Connectable::from_node(
             NodeSubset {
                 node: NodeOrGraph::Graph,
@@ -1693,14 +1711,20 @@ impl<F: Float> GraphGenCommunicator<F> {
 
 #[derive(thiserror::Error, Debug)]
 pub enum GraphError {
-    #[error("Error pushing to a Graph")]
-    PushError(#[from] PushError),
     #[error("Error sending new data to GraphGen: `{0}`")]
     SendToGraphGen(String),
     #[error("Node cannot be found in current Graph.")]
     NodeNotFound,
-    #[error("An id was given to a node in a different Graph")]
-    WrongGraph,
+    #[error("Source node is in a different Graph `{found_graph}`, expecting `{expected_graph}`")]
+    WrongSourceNodeGraph {
+        expected_graph: GraphId,
+        found_graph: GraphId,
+    },
+    #[error("Sink node is in a different Graph `{found_graph}`, expecting `{expected_graph}`")]
+    WrongSinkNodeGraph {
+        expected_graph: GraphId,
+        found_graph: GraphId,
+    },
     #[error("Tried to connect a node input that doesn't exist: `{0}`")]
     InputOutOfBounds(usize),
     #[error("Tried to connect to a node output that doesn't exist: `{0}`")]
@@ -1718,8 +1742,6 @@ pub enum GraphError {
     #[error("There was an error sending the change: `{0}`")]
     PushChangeError(String),
 }
-#[derive(thiserror::Error, Debug)]
-pub enum PushError {}
 
 #[allow(missing_docs)]
 #[derive(thiserror::Error, Debug, PartialEq)]
@@ -1866,3 +1888,11 @@ impl<F: Float> UGen for FeedbackSource<F> {
     fn param_apply(&mut self, _ctx: AudioCtx, _index: usize, _value: knaster_core::ParameterValue) {
     }
 }
+/// Same API as [`Graph`], but all methods log errors instead of returning them.
+///
+/// This can lead to cleaner looking code when errors are very rare and need to be corrected
+/// manually anyway using an error message
+pub struct LoggingGraph<'a, F: Float> {
+    graph: &'a mut Graph<F>,
+}
+impl<'a, F: Float> LoggingGraph<'a, F> {}

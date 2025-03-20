@@ -37,8 +37,7 @@ fn main() -> Result<()> {
     // push some nodes
     loop {
         let mut graph = top_level_graph.subgraph::<U0, U1>(GraphOptions::default());
-        top_level_graph.connect_node_to_output(&graph, 0, 0, true)?;
-        top_level_graph.connect_node_to_output(&graph, 0, 1, true)?;
+        top_level_graph.connect(graph.as_node(), [0, 0], [0, 1], top_level_graph.internal())?;
 
         top_level_graph.commit_changes()?;
         let mut rng = thread_rng();
@@ -80,7 +79,7 @@ fn main() -> Result<()> {
         graph.connect(&noise, 0, 0, &lpf)?;
         graph.connect_replace(&lpf, 0, 0, &mult)?;
         graph.connect_replace(&env, 0, 1, &mult)?;
-        graph.connect_replace(&mult, [0, 0], [0, 1], graph.as_graph())?;
+        graph.connect_replace(&mult, [0, 0], [0, 1], graph.internal())?;
         graph.commit_changes()?;
 
         // let inspection = top_level_graph.inspection();

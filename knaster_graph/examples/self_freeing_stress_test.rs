@@ -34,8 +34,7 @@ fn main() -> Result<()> {
     backend.start_processing(runner)?;
     // let mut nodes = vec![];
     let mut second_graph = top_graph.subgraph::<U0, U1>(GraphOptions::default());
-    top_graph.connect_node_to_output(&second_graph, 0, 0, true)?;
-    top_graph.connect_node_to_output(&second_graph, 0, 1, true)?;
+    top_graph.connect(&second_graph, [0, 0], [0, 1], top_graph.internal())?;
     top_graph.commit_changes()?;
     std::thread::spawn(move || -> Result<()> {
         let mut i = 0;
@@ -49,7 +48,7 @@ fn main() -> Result<()> {
             }
             // push some nodes
             let mut graph = second_graph.subgraph::<U0, U1>(GraphOptions::default());
-            second_graph.connect_node_to_output(&graph, 0, 0, true)?;
+            second_graph.connect(&graph, 0, 0, second_graph.internal())?;
             second_graph.commit_changes()?;
             let osc1 = WrSmoothParams::new(SinNumeric::new(freq * (i + 1) as f32));
             let osc1 = graph.push(osc1.wr_mul(0.05));
@@ -70,7 +69,7 @@ fn main() -> Result<()> {
             // connect them together
             graph.connect(&osc1, 0, 0, &mult)?;
             graph.connect(&asr, 0, 1, &mult)?;
-            graph.connect_node_to_output(&mult, 0, 0, true)?;
+            graph.connect(&mult, 0, 0, graph.internal())?;
             graph.commit_changes()?;
             std::thread::sleep(Duration::from_secs_f32(0.005));
             // asr.set(("t_release", Trigger)).unwrap();

@@ -5,16 +5,16 @@ use std::time::Duration;
 
 use anyhow::Result;
 use knaster_core::{
+    ParameterSmoothing, UGen,
     osc::SinNumeric,
     typenum::{U0, U2},
     wrappers_core::{UGenWrapperCoreExt, WrSmoothParams},
-    ParameterSmoothing, UGen,
 };
 use knaster_graph::runner::RunnerOptions;
 use knaster_graph::{
     audio_backend::{
-        cpal::{CpalBackend, CpalBackendOptions},
         AudioBackend,
+        cpal::{CpalBackend, CpalBackendOptions},
     },
     handle::HandleTrait,
     runner::Runner,
@@ -41,10 +41,10 @@ fn main() -> Result<()> {
     let osc3 = graph.push(SinNumeric::new(200. * 4.).wr_mul(0.2));
     osc3.set(("freq", 200. * 4.))?;
     // connect them together
-    graph.connect_replace(&osc1, 0, 0, graph.as_graph())?;
-    graph.connect_node_to_output(&osc1, 0, 1, false)?;
-    graph.connect(&osc3, 0, 0, graph.as_graph())?;
-    graph.connect(&osc2, 0, 0, graph.as_graph())?;
+    graph.connect_replace(&osc1, 0, 0, graph.internal())?;
+    graph.connect(&osc1, 0, 1, graph.internal())?;
+    graph.connect(&osc3, 0, 0, graph.internal())?;
+    graph.connect(&osc2, 0, 0, graph.internal())?;
     graph.commit_changes()?;
 
     let inspection = graph.inspection();
