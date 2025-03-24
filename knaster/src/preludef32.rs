@@ -2,6 +2,7 @@ pub use crate::subprelude_fundamental_types::*;
 
 pub type OscWt = knaster_graph::osc::OscWt<f32>;
 pub type SinWt = knaster_graph::osc::SinWt<f32>;
+pub type Constant = knaster_graph::util::Constant<f32>;
 
 pub type MathUGen<N, Op> = knaster_graph::math::MathUGen<f32, N, Op>;
 
