@@ -57,6 +57,7 @@ where
         flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
+        flags.clear_node_flags();
         flags.mark_remove_self_supported();
         let out = self.ugen.process(ctx, flags, input);
         self.process_flags(flags);
@@ -73,6 +74,7 @@ where
         InBlock: BlockRead<Sample = Self::Sample>,
         OutBlock: Block<Sample = Self::Sample>,
     {
+        flags.clear_node_flags();
         flags.mark_remove_self_supported();
         self.ugen.process_block(ctx, flags, input, output);
         self.process_flags(flags);
