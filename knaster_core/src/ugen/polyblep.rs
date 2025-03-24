@@ -22,6 +22,7 @@ Permission has been granted to release this port under the WDL/IPlug license:
     3. This notice may not be removed or altered from any source distribution.
 */
 
+use crate::core::ops::Mul;
 use crate::num_derive::{FromPrimitive, ToPrimitive};
 use crate::numeric_array::NumericArray;
 use crate::{
@@ -29,7 +30,6 @@ use crate::{
 };
 use knaster_macros::KnasterIntegerParameter;
 use knaster_primitives::{Float, Frame};
-use std::ops::Mul;
 
 fn square_number<T: Mul + Copy>(num: T) -> <T as Mul>::Output {
     num * num

@@ -1,5 +1,8 @@
+#[cfg(any(feature = "std", feature = "alloc"))]
 pub mod buffer;
+#[cfg(any(feature = "std", feature = "alloc"))]
 pub mod delay;
+
 pub mod envelopes;
 pub mod math;
 pub mod noise;
@@ -15,7 +18,7 @@ use crate::core::eprintln;
 use crate::core::ops::Deref;
 use crate::numeric_array::NumericArray;
 use crate::{Param, ParameterError, ParameterHint, ParameterType, ParameterValue};
-use knaster_primitives::{typenum::*, Block, BlockRead, Float, Frame, Size};
+use knaster_primitives::{Block, BlockRead, Float, Frame, Size, typenum::*};
 
 /// Contains basic metadata about the context in which an audio process is
 /// running which is often necessary for correct calculation, initialisation etc.
@@ -347,7 +350,9 @@ pub trait UGen {
     unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const Self::Sample) {
         // TODO: Proper errors
         #[cfg(all(debug_assertions, feature = "std"))]
-        eprintln!("Warning: Audio rate parameter buffer set, but did not reach a WrArParams and will have no effect.");
+        eprintln!(
+            "Warning: Audio rate parameter buffer set, but did not reach a WrArParams and will have no effect."
+        );
     }
     /// Sets a delay to what frame within the next block the next parameter
     /// change should take effect.
@@ -361,7 +366,9 @@ pub trait UGen {
     fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
         // TODO: Proper errors
         #[cfg(all(debug_assertions, feature = "std"))]
-        eprintln!("Warning: Parameter delay set, but did not reach a WrHiResParams and will have no effect.");
+        eprintln!(
+            "Warning: Parameter delay set, but did not reach a WrHiResParams and will have no effect."
+        );
     }
     /// Apply a parameter change. Typechecks and bounds checks the arguments and
     /// provides sensible errors. Calls [`UGen::param_apply`] under the hood.

@@ -7,6 +7,7 @@ pub use types::*;
 
 use thiserror::Error;
 
+#[cfg(any(feature = "std", feature = "alloc"))]
 use crate::core::string::String;
 
 // The current type of parameter changes. It is set here to easily change it in the future.

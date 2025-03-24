@@ -9,9 +9,8 @@ default = ["std", "unstable", "sound_files"]
 alloc = ["knaster_primitives/alloc"]
 # Enables the standard library. `alloc` does nothing if `std` is enabled.
 std = ["knaster_primitives/std"]
-target-features = ["dep:target-features"]
 # Enables unstable Rust features that may speed up execution
-unstable = ["target-features"]
+unstable = ["dep:target-features"]
 # Requires std to be enabled
 symphonia = ["dep:symphonia"]
 # Requires std to be enabled
