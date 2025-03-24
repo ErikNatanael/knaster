@@ -38,6 +38,7 @@ pub mod audio_backend;
 pub mod block;
 mod buffer_allocator;
 pub mod connectable;
+pub mod connectable2;
 mod dyngen;
 mod edge;
 pub mod graph;

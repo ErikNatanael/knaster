@@ -875,6 +875,33 @@ impl<F: Float> Graph<F> {
         }
         Ok(())
     }
+    /// Connect a source to a sink with the designated channels, addin it to any existing connections to the sink at those channels. If you want to replace
+    /// existing inputs to the sink, use [`Graph::connect_replace`]
+    pub fn connect2(
+        &mut self,
+        source: NodeOrGraph,
+        source_channel: usize,
+        sink_channel: usize,
+        sink: NodeOrGraph,
+    ) -> Result<(), GraphError> {
+        let so_chan = source_channel;
+        let si_chan = sink_channel;
+        match (source, sink) {
+            (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
+                self.connect_input_to_node(sink, so_chan, si_chan, true)?;
+            }
+            (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
+                self.connect_nodes(source, sink, so_chan, si_chan, true, false)?;
+            }
+            (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
+                self.connect_node_to_output(source, so_chan, si_chan, true)?;
+            }
+            (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
+                self.connect_input_to_output(so_chan, si_chan, true)?;
+            }
+        }
+        Ok(())
+    }
     /// Connect a source to a sink via a feedback edge with the designated channels, adding it to any existing connections to the sink at those channels. If you want to replace
     /// existing inputs to the sink, use [`Graph::connect_replace_feedback`]
     ///

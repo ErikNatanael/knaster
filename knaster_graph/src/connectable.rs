@@ -1,7 +1,7 @@
 use crate::handle::HandleTrait;
 use knaster_core::typenum::U1;
-use knaster_core::{numeric_array::NumericArray, Size};
-use smallvec::{smallvec, SmallVec};
+use knaster_core::{Size, numeric_array::NumericArray};
+use smallvec::{SmallVec, smallvec};
 
 use crate::graph::NodeId;
 
@@ -103,8 +103,10 @@ impl<H: HandleTrait> From<&H> for Connectable {
         Connectable::from_node(h.subset(0, input_channels), h.subset(0, output_channels))
     }
 }
-#[derive(Debug, Copy, Clone)]
+// The impl of Default allows NumericArray::default() which is handy
+#[derive(Debug, Default, Copy, Clone)]
 pub enum NodeOrGraph {
+    #[default]
     Graph,
     Node(NodeId),
 }
@@ -187,11 +189,9 @@ mod tests {
     use knaster_core::typenum::{U0, U1};
 
     use crate::{
-        graph::{Graph, GraphOptions, NodeId},
         SharedFrameClock,
+        graph::{Graph, GraphOptions, NodeId},
     };
-
-    
 
     #[test]
     fn connect_connectables() {
