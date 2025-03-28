@@ -5,7 +5,7 @@ edition = "2024"
 
 [features]
 # Enables core::alloc for heap allocated datastructures
-alloc = []
+alloc = ["num-traits/libm"]
 # Use libm for floating point maths, incompatible with the std feature
 libm = ["num-traits/libm"]
 # Use std for floating point maths, incompatible with the libm feature

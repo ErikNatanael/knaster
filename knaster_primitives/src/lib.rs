@@ -42,7 +42,7 @@ pub use numeric_array::typenum;
 pub use num_derive;
 pub use num_traits;
 
-pub trait Size: ArrayLength + Clone + Sync + Send {}
+pub trait Size: ArrayLength + Clone + Copy + Sync + Send {}
 impl<T: ArrayLength + Clone + Sync + Send> Size for T {}
 
 use numeric_array::{ArrayLength, NumericArray};
