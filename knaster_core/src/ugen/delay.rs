@@ -286,6 +286,10 @@ impl<F: Float> UGen for AllpassFeedbackDelay<F> {
     type Outputs = U1;
     type Parameters = U2;
 
+    fn init(&mut self, ctx: &AudioCtx) {
+        self.allpass_delay.init(ctx.sample_rate() as u64);
+    }
+
     fn process(
         &mut self,
         _ctx: AudioCtx,
