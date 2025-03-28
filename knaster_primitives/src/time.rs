@@ -372,17 +372,68 @@ impl ops::Mul<Beats> for Beats {
     type Output = Self;
 
     fn mul(self, rhs: Beats) -> Self::Output {
-        let mut beats = self.beats * rhs.beats
-            + ((self.beats as u64 * rhs.beat_tesimals as u64) / SUBBEAT_TESIMALS_PER_BEAT as u64)
-                as u32;
-        let mut beat_tesimals = (self.beat_tesimals as u64 * rhs.beat_tesimals as u64)
-            / SUBBEAT_TESIMALS_PER_BEAT as u64
-            + self.beat_tesimals as u64 * rhs.beats as u64;
-        if beat_tesimals > SUBBEAT_TESIMALS_PER_BEAT as u64 {
-            beats += (beat_tesimals / SUBBEAT_TESIMALS_PER_BEAT as u64) as u32;
-            beat_tesimals %= SUBBEAT_TESIMALS_PER_BEAT as u64;
-        }
-        Beats::new(beats, beat_tesimals as u32)
+        let b0 = self.as_beats_f64();
+        let b1 = rhs.as_beats_f64();
+        Self::from_beats_f64(b0 * b1)
+        // let mut beats = self.beats * rhs.beats
+        //     + ((self.beats as u64 * rhs.beat_tesimals as u64) / SUBBEAT_TESIMALS_PER_BEAT as u64)
+        //         as u32;
+        // let mut beat_tesimals = (self.beat_tesimals as u64 * rhs.beat_tesimals as u64)
+        //     / SUBBEAT_TESIMALS_PER_BEAT as u64
+        //     + self.beat_tesimals as u64 * rhs.beats as u64;
+        // if beat_tesimals > SUBBEAT_TESIMALS_PER_BEAT as u64 {
+        //     beats += (beat_tesimals / SUBBEAT_TESIMALS_PER_BEAT as u64) as u32;
+        //     beat_tesimals %= SUBBEAT_TESIMALS_PER_BEAT as u64;
+        // }
+        // Beats::new(beats, beat_tesimals as u32)
+    }
+}
+impl ops::Mul<f32> for Beats {
+    type Output = Self;
+
+    fn mul(self, rhs: f32) -> Self::Output {
+        let b0 = self.as_beats_f32();
+        Self::from_beats_f32(b0 * rhs)
+    }
+}
+impl ops::Mul<f64> for Beats {
+    type Output = Self;
+
+    fn mul(self, rhs: f64) -> Self::Output {
+        let b0 = self.as_beats_f64();
+        Self::from_beats_f64(b0 * rhs)
+    }
+}
+impl ops::Mul<u64> for Beats {
+    type Output = Self;
+
+    fn mul(self, rhs: u64) -> Self::Output {
+        let b0 = self.as_beats_f64();
+        Self::from_beats_f64(b0 * rhs as f64)
+    }
+}
+impl ops::Mul<u32> for Beats {
+    type Output = Self;
+
+    fn mul(self, rhs: u32) -> Self::Output {
+        let b0 = self.as_beats_f64();
+        Self::from_beats_f64(b0 * rhs as f64)
+    }
+}
+impl ops::Mul<u16> for Beats {
+    type Output = Self;
+
+    fn mul(self, rhs: u16) -> Self::Output {
+        let b0 = self.as_beats_f64();
+        Self::from_beats_f64(b0 * rhs as f64)
+    }
+}
+impl ops::Mul<u8> for Beats {
+    type Output = Self;
+
+    fn mul(self, rhs: u8) -> Self::Output {
+        let b0 = self.as_beats_f64();
+        Self::from_beats_f64(b0 * rhs as f64)
     }
 }
 impl ops::MulAssign<Beats> for Beats {
@@ -390,11 +441,20 @@ impl ops::MulAssign<Beats> for Beats {
         *self = *self * rhs;
     }
 }
-
+impl ops::MulAssign<f64> for Beats {
+    fn mul_assign(&mut self, rhs: f64) {
+        *self = *self * rhs;
+    }
+}
+impl ops::MulAssign<f32> for Beats {
+    fn mul_assign(&mut self, rhs: f32) {
+        *self = *self * rhs;
+    }
+}
 #[cfg(test)]
 mod tests {
-    use super::{Seconds, SUBSECOND_TESIMALS_PER_SECOND};
-    use std::time::Duration;
+    use super::{SUBSECOND_TESIMALS_PER_SECOND, Seconds};
+    use crate::core::time::Duration;
 
     #[test]
     fn convert_to_u64_and_back() {
