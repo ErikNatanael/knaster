@@ -4,15 +4,15 @@
 //! - Typesafe Handle types
 
 use crate::{
+    SchedulingEvent, SchedulingTime, SchedulingToken, SharedFrameClock,
     connectable::{NodeOrGraph, NodeSubset},
     core::{eprintln, marker::PhantomData},
     graph::{GraphError, NodeId},
-    SchedulingEvent, SchedulingTime, SchedulingToken, SharedFrameClock,
 };
 use alloc::{string::ToString, vec::Vec};
 use knaster_core::{
-    typenum::Unsigned, Param, ParameterError, ParameterHint, ParameterSmoothing, ParameterValue,
-    Seconds, UGen,
+    Param, ParameterError, ParameterHint, ParameterSmoothing, ParameterValue, Seconds, UGen,
+    typenum::Unsigned,
 };
 
 #[cfg(not(feature = "std"))]
@@ -25,6 +25,7 @@ use crate::SchedulingChannelProducer;
 /// Same as [`Handle<T>`], but the type is removed and instead, all the relevant information is
 /// stored in the struct. This is somewhat less efficient, but often required or significantly more
 /// ergonomic.
+#[derive(Clone)]
 pub struct AnyHandle {
     pub(crate) raw_handle: RawHandle,
     pub(crate) parameters: Vec<&'static str>,
@@ -54,11 +55,10 @@ impl RawHandle {
         }
     }
     pub fn is_alive(&self) -> bool {
-        match self.sender.lock() { Ok(s) => {
-            !s.is_abandoned()
-        } _ => {
-            false
-        }}
+        match self.sender.lock() {
+            Ok(s) => !s.is_abandoned(),
+            _ => false,
+        }
     }
     pub fn send(&self, event: SchedulingEvent) -> Result<(), GraphError> {
         // Lock should never be poisoned, but if it is we don't care.
@@ -165,12 +165,13 @@ impl<T: UGen> HandleTrait for Handle<T> {
         let param_index = match c.param {
             knaster_core::Param::Index(param_i) => param_i,
             knaster_core::Param::Desc(desc) => {
-                match T::param_descriptions().iter().position(|d| *d == desc) { Some(param_i) => {
-                    param_i
-                } _ => {
-                    // Fail
-                    return Err(ParameterError::DescriptionNotFound(desc).into());
-                }}
+                match T::param_descriptions().iter().position(|d| *d == desc) {
+                    Some(param_i) => param_i,
+                    _ => {
+                        // Fail
+                        return Err(ParameterError::DescriptionNotFound(desc).into());
+                    }
+                }
             }
         };
         let event = SchedulingEvent {
@@ -194,12 +195,13 @@ impl<T: UGen> HandleTrait for Handle<T> {
                 }
             }
             knaster_core::Param::Desc(desc) => {
-                match T::param_descriptions().iter().position(|d| *d == desc) { Some(param_i) => {
-                    param_i
-                } _ => {
-                    // Fail
-                    return Err(ParameterError::DescriptionNotFound(desc));
-                }}
+                match T::param_descriptions().iter().position(|d| *d == desc) {
+                    Some(param_i) => param_i,
+                    _ => {
+                        // Fail
+                        return Err(ParameterError::DescriptionNotFound(desc));
+                    }
+                }
             }
         };
         Ok(ParameterChange2 {
