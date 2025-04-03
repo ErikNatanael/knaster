@@ -62,27 +62,24 @@ impl<F: Float> GraphEdit<F> {
         }
     }
     /// Create a new node in the graph and return a handle to it.
-    pub fn push<T: UGen<Sample = F> + 'static>(&self, ugen: T) -> Handle3<T> {
+    pub fn push<T: UGen<Sample = F> + 'static>(&self, ugen: T) -> SH<'_, F, Handle3<T>> {
         let handle = self.graph.write().unwrap().push(ugen);
         let node_id = handle.node_id();
-        Handle3 {
-            node_id,
-            ugen: PhantomData,
+        SH {
+            nodes: Handle3 {
+                node_id,
+                ugen: PhantomData,
+            },
             graph: &self.graph,
         }
     }
     /// Get a non typesafe handle to node with the given [`NodeId`] if it exists.
-    pub fn handle(&self, id: impl Into<NodeId>) -> Option<DynamicHandle3<'_, F>> {
+    pub fn handle(&self, id: impl Into<NodeId>) -> Option<DH<'_, F, DynamicHandle3>> {
         let id = id.into();
-        self.graph
-            .read()
-            .unwrap()
-            .node_data(id)
-            .map(|data| DynamicHandle3 {
-                node_id: id,
-                graph: &self.graph,
-                data,
-            })
+        self.graph.read().unwrap().node_data(id).map(|data| DH {
+            nodes: DynamicHandle3 { node_id: id, data },
+            graph: &self.graph,
+        })
     }
 
     pub fn set(
@@ -128,60 +125,149 @@ impl<F: Float> Drop for GraphEdit<F> {
         self.graph.write().unwrap().commit_changes().unwrap();
     }
 }
-// pub trait Connect: Sized {
-//     type Outputs: Size;
-//
-//     fn to<S: Sink3>(self, n: S) -> S
-//     where
-//         S::Inputs: Same<Self::Outputs>;
-//     /// Connect to the graph output(s) in the order the channels are produced.
-//     fn to_graph_out(self);
-//
-//     /// Connect to the graph output(s), selecting graph output channels from the channels provided
-//     fn to_graph_out_channels<N>(&self, sink_channels: impl Into<Channels<N>>)
-//     where
-//         N: Size + Same<Self::Outputs>;
-// }
-/// Handle to a node with a lifetime connected to Graph3
+
+/// Static Handle. Wrapper around static sources/sinks.
 #[derive(Clone, Copy)]
-pub struct DynamicHandle3<'a, F: Float> {
-    node_id: NodeId,
+pub struct SH<'a, F: Float, T> {
+    nodes: T,
     graph: &'a RwLock<Graph<F>>,
-    data: NodeData,
 }
-impl<'a, F: Float> DynamicHandle3<'a, F> {
+/// Dynamic Handle. Wrapper around dynamic source/sinks
+#[derive(Clone, Copy)]
+pub struct DH<'a, F: Float, T> {
+    nodes: T,
+    graph: &'a RwLock<Graph<F>>,
+}
+impl<'a, F: Float, S0: Static> SH<'a, F, S0> {
+    pub fn out<N: Size + Copy>(
+        &self,
+        source_channels: impl Into<Channels<N>>,
+    ) -> SH<'a, F, ChannelsHandle<N>> {
+        let mut channels = NumericArray::default();
+        for c in source_channels.into() {
+            channels[c as usize] = self.nodes.iter_outputs().nth(c as usize).unwrap();
+        }
+        SH {
+            nodes: ChannelsHandle { channels },
+            graph: &self.graph,
+        }
+    }
+    pub fn to<S1: Static>(self, n: SH<'a, F, S1>) -> SH<'a, F, S1>
+    where
+        S1::Inputs: Same<S0::Outputs>,
+    {
+        let mut g = self.graph.write().unwrap();
+        for ((source, source_channel), (sink, sink_channel)) in
+            Static::iter_outputs(&self.nodes).zip(Static::iter_inputs(&n.nodes))
+        {
+            g.connect2(source, source_channel, sink_channel, sink)
+                .expect("type safe interface should eliminate graph connection errors");
+        }
+        n
+    }
+
+    pub fn to_graph_out(self) {
+        let mut g = self.graph.write().unwrap();
+        for (i, (source, source_channel)) in Static::iter_outputs(&self.nodes).enumerate() {
+            g.connect2(source, source_channel, i as u16, NodeOrGraph::Graph)
+                .expect("Error connecting to graph output channel.");
+        }
+    }
+
+    pub fn to_graph_out_channels<N>(self, sink_channels: impl Into<Channels<N>>)
+    where
+        N: Size + Same<S0::Outputs>,
+    {
+        let mut g = self.graph.write().unwrap();
+        for ((source, source_channel), sink_channel) in
+            Static::iter_outputs(&self.nodes).zip(sink_channels.into())
+        {
+            g.connect2(source, source_channel, sink_channel, NodeOrGraph::Graph)
+                .expect("Error connecting to graph output channel.");
+        }
+    }
     /// Connect this handle to another handle, returning a [`Stack`] which can be used to connect
     /// to other handles.
     ///
     /// This is useful for connecting multiple outputs of a single node to multiple nodes or vice
     /// versa.
-    fn stack<S: DynamicSource3<'a> + DynamicSink3>(self, s: S) -> DynamicChannelsHandle<'a, F> {
-        let mut in_channels = SmallVec::with_capacity((self.inputs() + s.inputs()) as usize);
-        let mut out_channels = SmallVec::with_capacity((self.outputs() + s.outputs()) as usize);
-        for chan in DynamicSink3::iter(&self) {
-            in_channels.push(chan);
+    pub fn stack<S1: Static>(self, s: SH<'a, F, S1>) -> SH<'a, F, Stack<S0, S1>> {
+        SH {
+            nodes: Stack {
+                s0: self.nodes,
+                s1: s.nodes,
+            },
+            graph: &self.graph,
         }
-        for chan in DynamicSink3::iter(&s) {
-            in_channels.push(chan);
-        }
-        for chan in DynamicSource3::iter(&self) {
-            out_channels.push(chan);
-        }
-        for chan in DynamicSource3::iter(&s) {
-            out_channels.push(chan);
-        }
-        DynamicChannelsHandle {
-            graph: self.graph,
-            in_channels,
-            out_channels,
-            _float: PhantomData,
+    }
+    pub fn dynamic(self) -> DH<'a, F, S0::DynamicType> {
+        DH {
+            nodes: self.nodes.dynamic(self.graph),
+            graph: &self.graph,
         }
     }
 }
-impl<'a, F: Float> DynamicSource3<'a> for DynamicHandle3<'a, F> {
-    type Sample = F;
+impl<'a, F: Float, D: Dynamic> DH<'a, F, D> {
+    pub fn out<N: Size>(&self, source_channels: impl Into<Channels<N>>) -> ChannelsHandle<N> {
+        todo!()
+    }
+    // This gives a DynamicChannelsHandle because the API is more ergonomic if the output of
+    // an operation with a dynamic type always yields a dynamic type.
+    pub fn to<S: Dynamic>(self, n: DH<'a, F, S>) -> DH<'a, F, S> {
+        todo!()
+    }
+    /// Connect to the graph output(s) in the order the channels are produced.
+    pub fn to_graph_out(self) {
+        todo!()
+    }
 
-    fn iter(&self) -> DynamicChannelIter {
+    /// Connect to the graph output(s), selecting graph output channels from the channels provided
+    pub fn to_graph_out_channels<N: Size>(self, sink_channels: impl Into<Channels<N>>) {
+        todo!()
+    }
+    /// Connect this handle to another handle, returning a [`Stack`] which can be used to connect
+    /// to other handles.
+    ///
+    /// This is useful for connecting multiple outputs of a single node to multiple nodes or vice
+    /// versa.
+    pub fn stack<S: Dynamic>(self, s: DH<'a, F, S>) -> DH<'a, F, DynamicChannelsHandle> {
+        let mut in_channels =
+            SmallVec::with_capacity((self.nodes.inputs() + s.nodes.inputs()) as usize);
+        let mut out_channels =
+            SmallVec::with_capacity((self.nodes.outputs() + s.nodes.outputs()) as usize);
+        for chan in Dynamic::iter_inputs(&self.nodes) {
+            in_channels.push(chan);
+        }
+        for chan in Dynamic::iter_inputs(&s.nodes) {
+            in_channels.push(chan);
+        }
+        for chan in Dynamic::iter_outputs(&self.nodes) {
+            out_channels.push(chan);
+        }
+        for chan in Dynamic::iter_outputs(&s.nodes) {
+            out_channels.push(chan);
+        }
+        DH {
+            nodes: DynamicChannelsHandle {
+                in_channels,
+                out_channels,
+            },
+            graph: &self.graph,
+        }
+    }
+    pub fn dynamic(self) -> Self {
+        self
+    }
+}
+
+/// Handle to a node with a lifetime connected to Graph3
+#[derive(Clone, Copy)]
+pub struct DynamicHandle3 {
+    node_id: NodeId,
+    data: NodeData,
+}
+impl Dynamic for DynamicHandle3 {
+    fn iter_outputs(&self) -> DynamicChannelIter {
         let mut channels = SmallVec::with_capacity(self.outputs() as usize);
         for i in 0..self.outputs() {
             channels.push((NodeOrGraph::Node(self.node_id), i));
@@ -195,28 +281,7 @@ impl<'a, F: Float> DynamicSource3<'a> for DynamicHandle3<'a, F> {
     fn outputs(&self) -> u16 {
         self.data.outputs
     }
-
-    fn out<N: Size>(
-        &self,
-        source_channels: impl Into<Channels<N>>,
-    ) -> ChannelsHandle<'a, Self::Sample, N> {
-        todo!()
-    }
-
-    fn to_graph_out(self) {
-        todo!()
-    }
-
-    fn to_graph_out_channels<N: Size>(self, sink_channels: impl Into<Channels<N>>) {
-        todo!()
-    }
-
-    fn to<S: DynamicSink3>(self, n: S) -> DynamicChannelsHandle<'a, Self::Sample> {
-        todo!()
-    }
-}
-impl<'a, F: Float> DynamicSink3 for DynamicHandle3<'a, F> {
-    fn iter(&self) -> DynamicChannelIter {
+    fn iter_inputs(&self) -> DynamicChannelIter {
         let mut channels = SmallVec::with_capacity(self.inputs() as usize);
         for i in 0..self.inputs() {
             channels.push((NodeOrGraph::Node(self.node_id), i));
@@ -233,27 +298,27 @@ impl<'a, F: Float> DynamicSink3 for DynamicHandle3<'a, F> {
 }
 
 /// Handle to a node with a lifetime connected to Graph3
-pub struct Handle3<'a, U: UGen> {
+pub struct Handle3<U: UGen> {
     node_id: NodeId,
     ugen: PhantomData<U>,
-    graph: &'a RwLock<Graph<U::Sample>>,
 }
-impl<'a, U: UGen> Handle3<'a, U> {
+impl<'a, F: Float, U: UGen<Sample = F>> SH<'a, F, Handle3<U>> {
     /// Change the name of the node in the [`Graph`].
     pub fn name(self, n: impl Into<EcoString>) -> Self {
-        self.graph.write().unwrap().set_name(self.node_id, n.into());
+        self.graph
+            .write()
+            .unwrap()
+            .set_name(self.nodes.node_id, n.into());
         self
     }
     /// Link the parameter to a node output
-    pub fn link<S: Source3<'a, Sample = U::Sample, Outputs = U1>>(
-        self,
-        p: impl Into<Param>,
-        source: S,
-    ) -> Self {
-        let input = source.iter().next().unwrap();
+    pub fn link<S: Static<Outputs = U1>>(self, p: impl Into<Param>, source: SH<'a, F, S>) -> Self {
+        let input = source.nodes.iter_outputs().next().unwrap();
         let mut g = self.graph.write().unwrap();
         if let NodeOrGraph::Node(source_node) = input.0 {
-            if let Err(e) = g.connect_replace_to_parameter(source_node, input.1, p, self.node_id) {
+            if let Err(e) =
+                g.connect_replace_to_parameter(source_node, input.1, p, self.nodes.node_id)
+            {
                 log::error!("Failed to connect signal to parameter: {e}");
             }
         } else {
@@ -264,14 +329,9 @@ impl<'a, U: UGen> Handle3<'a, U> {
         self
     }
 
-    /// Converts the handle into less typed DynamicHandle3. Returns None if the node no longer exists in the
-    /// Graph and therefore cannot be converted.
-    pub fn dynamic(self) -> Option<DynamicHandle3<'a, U::Sample>> {
-        todo!()
-    }
     /// Returns the [`NodeId`] of the node this handle points to.
     pub fn node_id(self) -> NodeId {
-        self.node_id
+        self.nodes.node_id
     }
     /// Get a parameter from the node this handle points to if it exists.
     pub fn param(self, p: impl Into<Param>) -> Option<Parameter> {
@@ -280,7 +340,7 @@ impl<'a, U: UGen> Handle3<'a, U> {
             Param::Index(i) => {
                 if i < U::Parameters::USIZE {
                     Some(Parameter {
-                        node: self.node_id,
+                        node: self.nodes.node_id,
                         param_index: i as u16,
                         sender: self.graph.read().unwrap().scheduling_channel_sender(),
                     })
@@ -292,7 +352,7 @@ impl<'a, U: UGen> Handle3<'a, U> {
                 for (i, desc) in U::param_descriptions().into_iter().enumerate() {
                     if s == desc {
                         return Some(Parameter {
-                            node: self.node_id,
+                            node: self.nodes.node_id,
                             param_index: i as u16,
                             sender: self.graph.read().unwrap().scheduling_channel_sender(),
                         });
@@ -302,187 +362,68 @@ impl<'a, U: UGen> Handle3<'a, U> {
             }
         }
     }
-
-    /// Connect this handle to another handle, returning a [`Stack`] which can be used to connect
-    /// to other handles.
-    ///
-    /// This is useful for connecting multiple outputs of a single node to multiple nodes or vice
-    /// versa.
-    fn stack<S: Source3<'a> + Sink3>(self, s: S) -> Stack<'a, U::Sample, Handle3<'a, U>, S> {
-        Stack {
-            s0: self,
-            s1: s,
-            graph: self.graph,
-            _float: PhantomData,
-        }
-    }
 }
 // Manual Clone and Copy impls necessary because of PhantomData
-impl<U: UGen> Clone for Handle3<'_, U> {
+impl<U: UGen> Clone for Handle3<U> {
     fn clone(&self) -> Self {
         *self
     }
 }
-impl<U: UGen> Copy for Handle3<'_, U> {}
-impl<U: UGen> From<Handle3<'_, U>> for NodeId {
-    fn from(value: Handle3<'_, U>) -> Self {
+impl<U: UGen> Copy for Handle3<U> {}
+impl<U: UGen> From<Handle3<U>> for NodeId {
+    fn from(value: Handle3<U>) -> Self {
         value.node_id
     }
 }
-impl<'a, U: UGen> Source3<'a> for Handle3<'a, U> {
-    type Sample = U::Sample;
+impl<U: UGen> Static for Handle3<U> {
     type Outputs = U::Outputs;
 
-    fn iter(&self) -> ChannelIter<Self::Outputs> {
-        let mut channels = ChannelIterBuilder::new();
-        for i in 0..U::Outputs::U16 {
-            channels.push(NodeOrGraph::Node(self.node_id()), i);
-        }
-        channels
-            .into_channel_iter()
-            .expect("all the channels should be initialised")
-    }
-    fn out<N: Size>(
-        &self,
-        source_channels: impl Into<Channels<N>>,
-    ) -> ChannelsHandle<'a, Self::Sample, N> {
-        let mut channels = NumericArray::default();
-        for c in source_channels.into() {
-            channels[c as usize] = <Self as Source3<'a>>::iter(self).nth(c as usize).unwrap();
-        }
-        ChannelsHandle {
-            graph: self.graph,
-            channels,
-            _float: PhantomData,
-        }
-    }
-
-    fn to<S: Sink3>(self, sink: S) -> S
-    where
-        S::Inputs: Same<Self::Outputs>,
-    {
-        let mut g = self.graph.write().unwrap();
-        for ((source, source_channel), (sink, sink_channel)) in
-            Source3::iter(&self).zip(Sink3::iter(&sink))
-        {
-            g.connect2(source, source_channel, sink_channel, sink)
-                .expect("type safe interface should eliminate graph connection errors");
-        }
-        sink
-    }
-
-    fn to_graph_out(self) {
-        let mut g = self.graph.write().unwrap();
-        for (i, (source, source_channel)) in Source3::iter(&self).enumerate() {
-            g.connect2(source, source_channel, i as u16, NodeOrGraph::Graph)
-                .expect("Error connecting to graph output channel.");
-        }
-    }
-
-    fn to_graph_out_channels<N>(self, sink_channels: impl Into<Channels<N>>)
-    where
-        N: Size + Same<Self::Outputs>,
-    {
-        let mut g = self.graph.write().unwrap();
-        for ((source, source_channel), sink_channel) in
-            Source3::iter(&self).zip(sink_channels.into())
-        {
-            g.connect2(source, source_channel, sink_channel, NodeOrGraph::Graph)
-                .expect("Error connecting to graph output channel.");
-        }
-    }
-}
-impl<U: UGen> Sink3 for Handle3<'_, U> {
     type Inputs = U::Inputs;
 
-    fn iter(&self) -> ChannelIter<Self::Inputs> {
+    type DynamicType = DynamicHandle3;
+
+    fn iter_outputs(&self) -> ChannelIter<Self::Outputs> {
         let mut channels = ChannelIterBuilder::new();
-        for i in 0..U::Inputs::U16 {
-            channels.push(NodeOrGraph::Node(self.node_id()), i);
+        for i in 0..U::Outputs::U16 {
+            channels.push(NodeOrGraph::Node(self.node_id), i);
         }
         channels
             .into_channel_iter()
             .expect("all the channels should be initialised")
     }
-}
-// impl<U: UGen> DynamicSink3 for Handle3<'_, U> {
-//     fn inputs(&self) -> u16 {
-//         U::Inputs::U16
-//     }
-//
-//     fn iter(&self) -> DynamicChannelIter {
-//         let mut channels = SmallVec::with_capacity(self.inputs() as usize);
-//         for i in 0..self.inputs() {
-//             channels.push((NodeOrGraph::Node(self.node_id()), i));
-//         }
-//         DynamicChannelIter {
-//             channels,
-//             current_index: 0,
-//         }
-//     }
-// }
-// impl<'a, U: UGen> DynamicSource3<'a> for Handle3<'a, U> {
-//     type Sample = U::Sample;
-//
-//     fn iter(&self) -> DynamicChannelIter {
-//         let mut channels = SmallVec::with_capacity(self.inputs() as usize);
-//         for i in 0..self.outputs() {
-//             channels.push((NodeOrGraph::Node(self.node_id()), i));
-//         }
-//         DynamicChannelIter {
-//             channels,
-//             current_index: 0,
-//         }
-//     }
-//
-//     fn outputs(&self) -> u16 {
-//         U::Outputs::U16
-//     }
-//
-//     fn out<N: Size>(
-//         &self,
-//         source_channels: impl Into<Channels<N>>,
-//     ) -> ChannelsHandle<'a, Self::Sample, N> {
-//         let mut channels = NumericArray::default();
-//         for c in source_channels.into() {
-//             channels[c as usize] = <Self as DynamicSource3<'a>>::iter(self)
-//                 .nth(c as usize)
-//                 .unwrap();
-//         }
-//         ChannelsHandle {
-//             graph: self.graph,
-//             channels,
-//             _float: PhantomData,
-//         }
-//     }
-//
-//     fn to_graph_out(self) {
-//         todo!()
-//     }
-//
-//     fn to_graph_out_channels<N: Size>(self, sink_channels: impl Into<Channels<N>>) {
-//         todo!()
-//     }
-//
-//     fn to<S: DynamicSink3>(self, n: S) -> DynamicChannelsHandle<'a, Self::Sample> {
-//         todo!()
-//     }
-// }
 
+    fn iter_inputs(&self) -> ChannelIter<Self::Inputs> {
+        let mut channels = ChannelIterBuilder::new();
+        for i in 0..U::Inputs::U16 {
+            channels.push(NodeOrGraph::Node(self.node_id), i);
+        }
+        channels
+            .into_channel_iter()
+            .expect("all the channels should be initialised")
+    }
+
+    fn dynamic<'a, F: Float>(&self, graph: &'a RwLock<Graph<F>>) -> Self::DynamicType {
+        let data = graph.read().unwrap().node_data(self.node_id).unwrap();
+        DynamicHandle3 {
+            node_id: self.node_id,
+            data,
+        }
+    }
+}
 // Macros for implementing arithmetics on sources with statically known channel configurations
 macro_rules! math_gen_fn {
     ($fn_name:ident, $op:ty) => {
-        fn $fn_name<'a, S0: Source3<'a>, S1: Source3<'a>>(
+        fn $fn_name<F: Float, S0: Static, S1: Static>(
             s0: S0,
             s1: S1,
-            graph: &RwLock<Graph<S0::Sample>>,
-        ) -> ChannelsHandle<'_, S0::Sample, S1::Outputs>
+            graph: &RwLock<Graph<F>>,
+        ) -> ChannelsHandle<S1::Outputs>
         where
             S0::Outputs: Same<S1::Outputs>,
         {
             let mut out_channels = ChannelIterBuilder::new();
             let mut g = graph.write().unwrap();
-            for (i, (s0, s1)) in Source3::iter(&s0).zip(s1.iter()).enumerate() {
+            for (i, (s0, s1)) in Static::iter_outputs(&s0).zip(s1.iter_outputs()).enumerate() {
                 let mul = g.push(MathUGen::<_, U1, $op>::new());
                 if let Err(e) = g.connect2(s0.0, s0.1, 0, NodeOrGraph::Node(mul.node_id())) {
                     log::error!("Failed to connect node to arithmetics node: {e}");
@@ -496,9 +437,7 @@ macro_rules! math_gen_fn {
                 .into_channel_iter()
                 .expect("all the channels should be initialised");
             ChannelsHandle {
-                graph,
                 channels: channels.channels,
-                _float: PhantomData,
             }
         }
     };
@@ -511,17 +450,20 @@ math_gen_fn!(div_sources, knaster_core::math::Div);
 // Macros for implementing arithmetics on sources without statically known channel configurations
 macro_rules! math_gen_dynamic_fn {
     ($fn_name:ident, $op:ty) => {
-        fn $fn_name<'a, S0: DynamicSource3<'a>, S1: DynamicSource3<'a>>(
+        fn $fn_name<F: Float, S0: Dynamic, S1: Dynamic>(
             s0: S0,
             s1: S1,
-            graph: &'a RwLock<Graph<S0::Sample>>,
-        ) -> DynamicChannelsHandle<'a, S0::Sample> {
+            graph: &RwLock<Graph<F>>,
+        ) -> DynamicChannelsHandle {
             if s0.outputs() != s1.outputs() {
                 panic!("The number of outputs of the two sources must be the same");
             }
             let mut out_channels = SmallVec::with_capacity(s0.outputs() as usize);
             let mut g = graph.write().unwrap();
-            for (i, (s0, s1)) in DynamicSource3::iter(&s0).zip(s1.iter()).enumerate() {
+            for (i, (s0, s1)) in Dynamic::iter_outputs(&s0)
+                .zip(s1.iter_outputs())
+                .enumerate()
+            {
                 let mul = g.push(MathUGen::<_, U1, $op>::new());
                 if let Err(e) = g.connect2(s0.0, s0.1, 0, NodeOrGraph::Node(mul.node_id())) {
                     log::error!("Failed to connect node to arithmetics node: {e}");
@@ -532,10 +474,8 @@ macro_rules! math_gen_dynamic_fn {
                 out_channels.push((NodeOrGraph::Node(mul.node_id()), i as u16));
             }
             DynamicChannelsHandle {
-                graph,
                 in_channels: SmallVec::new(),
                 out_channels,
-                _float: PhantomData,
             }
         }
     };
@@ -546,80 +486,116 @@ math_gen_dynamic_fn!(mul_sources_dynamic, knaster_core::math::Mul);
 math_gen_dynamic_fn!(div_sources_dynamic, knaster_core::math::Div);
 
 // Arithmetics with Handle3 and static types
-macro_rules! math_impl_handle3 {
+macro_rules! math_impl_static_static {
     ($fn_name:ident, $op:ident, $op_lowercase:ident) => {
-        impl<'a, F: Float, U0: UGen<Sample = F>, S: Source3<'a>> $op<S> for Handle3<'a, U0>
+        impl<'a, F: Float, S0: Static, S1: Static> $op<SH<'a, F, S1>> for SH<'a, F, S0>
         where
-            U0::Outputs: Same<S::Outputs>,
+            S0::Outputs: Same<S1::Outputs>,
         {
-            type Output = ChannelsHandle<'a, F, S::Outputs>;
+            type Output = SH<'a, F, ChannelsHandle<S1::Outputs>>;
 
-            fn $op_lowercase(self, rhs: S) -> Self::Output {
+            fn $op_lowercase(self, rhs: SH<'a, F, S1>) -> Self::Output {
                 let graph = self.graph;
-                $fn_name(self, rhs, graph)
+                SH {
+                    nodes: $fn_name(self.nodes, rhs.nodes, graph),
+                    graph: &self.graph,
+                }
             }
         }
     };
 }
-math_impl_handle3!(mul_sources, Mul, mul);
-math_impl_handle3!(add_sources, Add, add);
-math_impl_handle3!(sub_sources, Sub, sub);
-math_impl_handle3!(div_sources, Div, div);
+math_impl_static_static!(mul_sources, Mul, mul);
+math_impl_static_static!(add_sources, Add, add);
+math_impl_static_static!(sub_sources, Sub, sub);
+math_impl_static_static!(div_sources, Div, div);
 
-impl<'a, F: Float, U0: UGen<Sample = F>, S: Sink3> Shr<S> for Handle3<'a, U0>
+impl<'a, F: Float, S0: Static, S1: Static> Shr<SH<'a, F, S1>> for SH<'a, F, S0>
 where
-    S::Inputs: Same<U0::Outputs>,
+    S1::Inputs: Same<S0::Outputs>,
 {
-    type Output = S;
+    type Output = SH<'a, F, S1>;
 
-    fn shr(self, rhs: S) -> Self::Output {
-        <Self as Source3<'a>>::to(self, rhs)
+    fn shr(self, rhs: SH<'a, F, S1>) -> Self::Output {
+        self.to(rhs)
     }
 }
-impl<'a, F: Float, U0: UGen<Sample = F>, S: Sink3 + Source3<'a>> BitOr<S> for Handle3<'a, U0> {
-    type Output = Stack<'a, F, Self, S>;
+impl<'a, F: Float, S0: Static, S1: Static> BitOr<SH<'a, F, S1>> for SH<'a, F, S0> {
+    type Output = SH<'a, F, Stack<S0, S1>>;
 
-    fn bitor(self, rhs: S) -> Self::Output {
+    fn bitor(self, rhs: SH<'a, F, S1>) -> Self::Output {
         self.stack(rhs)
+    }
+}
+
+impl<'a, F: Float, S0: Static, S1: Dynamic> Shr<DH<'a, F, S1>> for SH<'a, F, S0> {
+    type Output = DH<'a, F, S1>;
+
+    fn shr(self, rhs: DH<'a, F, S1>) -> Self::Output {
+        let s = self.dynamic();
+        s.to(rhs)
+    }
+}
+impl<'a, F: Float, S0: Static, S1: Dynamic> BitOr<DH<'a, F, S1>> for SH<'a, F, S0> {
+    type Output = DH<'a, F, DynamicChannelsHandle>;
+
+    fn bitor(self, rhs: DH<'a, F, S1>) -> Self::Output {
+        let s = self.dynamic();
+        s.stack(rhs)
+    }
+}
+impl<'a, F: Float, S0: Static + Clone, S1: Dynamic> Shr<SH<'a, F, S0>> for DH<'a, F, S1> {
+    type Output = SH<'a, F, S0>;
+
+    fn shr(self, rhs: SH<'a, F, S0>) -> Self::Output {
+        self.to(rhs.clone().dynamic());
+        rhs
+    }
+}
+impl<'a, F: Float, S0: Static, S1: Dynamic> BitOr<SH<'a, F, S0>> for DH<'a, F, S1> {
+    type Output = DH<'a, F, DynamicChannelsHandle>;
+
+    fn bitor(self, rhs: SH<'a, F, S0>) -> Self::Output {
+        self.stack(rhs.dynamic())
     }
 }
 // Static Handle3 and DynamicSource3 impls
 //
-macro_rules! math_impl_handle3_dynamic {
-    ($fn_name:ident, $op:ident, $op_lowercase:ident, $ty:ty) => {
-        impl<'a, F: Float, U0: UGen<Sample = F>> $op<$ty> for Handle3<'a, U0> {
-            type Output = DynamicChannelsHandle<'a, F>;
+macro_rules! math_impl_static_dynamic {
+    ($fn_name:ident, $op:ident, $op_lowercase:ident, $ty0:ty, $ty1:ty) => {
+        impl<'a, F: Float, S0: Static, S1: Dynamic> $op<$ty1> for $ty0 {
+            type Output = DH<'a, F, DynamicChannelsHandle>;
 
-            fn $op_lowercase(self, rhs: $ty) -> Self::Output {
-                let dynamic_handle = self
-                    .dynamic()
-                    .expect("Node handle should be valid for as long as the current edit cycle is in effect");
+            fn $op_lowercase(self, rhs: $ty1) -> Self::Output {
                 let graph = self.graph;
-                $fn_name(dynamic_handle, rhs, graph)
+                let dh0 = self.dynamic();
+                let dh1 = rhs.dynamic();
+                DH {
+                    nodes: $fn_name(dh0.nodes, dh1.nodes, graph),
+                    graph,
+                }
             }
         }
     };
 }
-math_impl_handle3_dynamic!(mul_sources_dynamic, Mul, mul, DynamicHandle3<'a, F>);
-math_impl_handle3_dynamic!(add_sources_dynamic, Add, add, DynamicHandle3<'a, F>);
-math_impl_handle3_dynamic!(sub_sources_dynamic, Sub, sub, DynamicHandle3<'a, F>);
-math_impl_handle3_dynamic!(div_sources_dynamic, Div, div, DynamicHandle3<'a, F>);
-
-math_impl_handle3_dynamic!(mul_sources_dynamic, Mul, mul, DynamicChannelsHandle<'a, F>);
-math_impl_handle3_dynamic!(add_sources_dynamic, Add, add, DynamicChannelsHandle<'a, F>);
-math_impl_handle3_dynamic!(sub_sources_dynamic, Sub, sub, DynamicChannelsHandle<'a, F>);
-math_impl_handle3_dynamic!(div_sources_dynamic, Div, div, DynamicChannelsHandle<'a, F>);
+math_impl_static_dynamic!(mul_sources_dynamic, Mul, mul, SH<'a, F, S0>, DH<'a, F, S1>);
+math_impl_static_dynamic!(mul_sources_dynamic, Mul, mul, DH<'a, F, S1>, SH<'a, F, S0>);
+math_impl_static_dynamic!(add_sources_dynamic, Add, add, SH<'a, F, S0>, DH<'a, F, S1>);
+math_impl_static_dynamic!(add_sources_dynamic, Add, add, DH<'a, F, S1>, SH<'a, F, S0>);
+math_impl_static_dynamic!(sub_sources_dynamic, Sub, sub, SH<'a, F, S0>, DH<'a, F, S1>);
+math_impl_static_dynamic!(sub_sources_dynamic, Sub, sub, DH<'a, F, S1>, SH<'a, F, S0>);
+math_impl_static_dynamic!(div_sources_dynamic, Div, div, SH<'a, F, S0>, DH<'a, F, S1>);
+math_impl_static_dynamic!(div_sources_dynamic, Div, div, DH<'a, F, S1>, SH<'a, F, S0>);
 
 // DynamicHandle3 and DynamicSource3 impls
 //
 macro_rules! math_impl_dynamic_handle3_dynamic {
     ($fn_name:ident, $op:ident, $op_lowercase:ident) => {
-        impl<'a, F: Float, S: DynamicSource3<'a>> $op<S> for DynamicHandle3<'a, F> {
-            type Output = DynamicChannelsHandle<'a, F>;
+        impl<'a, F: Float, S: Dynamic, S1: Dynamic> $op<DH<'a, F, S1>> for DH<'a, F, S> {
+            type Output = DynamicChannelsHandle;
 
-            fn $op_lowercase(self, rhs: S) -> Self::Output {
+            fn $op_lowercase(self, rhs: DH<'a, F, S1>) -> Self::Output {
                 let graph = self.graph;
-                $fn_name(self, rhs, graph)
+                $fn_name(self.nodes, rhs.nodes, graph)
             }
         }
     };
@@ -629,96 +605,49 @@ math_impl_dynamic_handle3_dynamic!(add_sources_dynamic, Add, add);
 math_impl_dynamic_handle3_dynamic!(sub_sources_dynamic, Sub, sub);
 math_impl_dynamic_handle3_dynamic!(div_sources_dynamic, Div, div);
 
-impl<'a, F: Float, S: DynamicSink3> Shr<S> for DynamicHandle3<'a, F> {
-    type Output = DynamicChannelsHandle<'a, F>;
+impl<'a, F: Float, D0: Dynamic, D1: Dynamic> Shr<DH<'a, F, D1>> for DH<'a, F, D0> {
+    type Output = DH<'a, F, D1>;
 
-    fn shr(self, rhs: S) -> Self::Output {
+    fn shr(self, rhs: DH<'a, F, D1>) -> Self::Output {
         self.to(rhs)
     }
 }
-impl<'a, F: Float, S: DynamicSink3 + DynamicSource3<'a>> BitOr<S> for DynamicHandle3<'a, F> {
-    type Output = DynamicChannelsHandle<'a, F>;
+impl<'a, F: Float, D0: Dynamic, D1: Dynamic> BitOr<DH<'a, F, D1>> for DH<'a, F, D0> {
+    type Output = DH<'a, F, DynamicChannelsHandle>;
 
-    fn bitor(self, rhs: S) -> Self::Output {
+    fn bitor(self, rhs: DH<'a, F, D1>) -> Self::Output {
         self.stack(rhs)
     }
 }
-// DynamicHandle3 and Handle3 arithmetics impls
-macro_rules! math_impl_dynamic_handle3_type {
-    ($fn_name:ident, $op:ident, $op_lowercase:ident) => {
-        impl<'a, F: Float, U0: UGen> $op<Handle3<'a, U0>> for DynamicHandle3<'a, F> {
-            type Output = DynamicChannelsHandle<'a, F>;
-
-            fn $op_lowercase(self, rhs: Handle3<'a, U0>) -> Self::Output {
-                let graph = self.graph;
-                let dynamic_handle = rhs.dynamic().unwrap();
-                $fn_name(self, dynamic_handle, graph)
-            }
-        }
-    };
-}
-math_impl_dynamic_handle3_type!(mul_sources_dynamic, Mul, mul);
-math_impl_dynamic_handle3_type!(add_sources_dynamic, Add, add);
-math_impl_dynamic_handle3_type!(sub_sources_dynamic, Sub, sub);
-math_impl_dynamic_handle3_type!(div_sources_dynamic, Div, div);
 
 #[derive(Copy, Clone)]
-pub struct Stack<'a, F: Float, S0, S1> {
+pub struct Stack<S0, S1> {
     s0: S0,
     s1: S1,
-    graph: &'a RwLock<Graph<F>>,
-    _float: PhantomData<F>,
-}
-// impl<F: Float, S0: Source3 + Sink3, S1: Source3 + Sink3> Connect for Stack<'_, F, S0, S1>
-// where
-//     <S0::Outputs as Add<S1::Outputs>>::Output: Size,
-//     <S0 as Source3>::Outputs: core::ops::Add<<S1 as Source3>::Outputs>,
-// {
-//     type Outputs = <Self as Source3>::Outputs;
-//
-// }
-//
-impl<'a, F: Float, S0: Sink3, S1: Sink3> Stack<'a, F, S0, S1> {
-    pub fn stack<S: Source3<'a> + Sink3>(self, s: S) -> Stack<'a, F, Self, S> {
-        let graph = self.graph;
-        Stack {
-            s0: self,
-            s1: s,
-            graph,
-            _float: PhantomData,
-        }
-    }
 }
 
-impl<'a, F: Float, S0: Sink3, S1: Sink3> Sink3 for Stack<'a, F, S0, S1>
+impl<S0: Static, S1: Static> Static for Stack<S0, S1>
 where
     <S0::Inputs as Add<S1::Inputs>>::Output: Size,
-    <S0 as Sink3>::Inputs: core::ops::Add<<S1 as Sink3>::Inputs>,
+    <S0 as Static>::Inputs: core::ops::Add<<S1 as Static>::Inputs>,
+    <S0::Outputs as Add<S1::Outputs>>::Output: Size,
+    <S0 as Static>::Outputs: core::ops::Add<<S1 as Static>::Outputs>,
 {
+    type Outputs = <S0::Outputs as Add<S1::Outputs>>::Output;
     type Inputs = <S0::Inputs as Add<S1::Inputs>>::Output;
 
-    fn iter(&self) -> ChannelIter<Self::Inputs> {
+    fn iter_inputs(&self) -> ChannelIter<Self::Inputs> {
         let mut channels = ChannelIterBuilder::new();
-        for (node, index) in Sink3::iter(&self.s0).chain(Sink3::iter(&self.s1)) {
+        for (node, index) in Static::iter_inputs(&self.s0).chain(Static::iter_inputs(&self.s1)) {
             channels.push(node, index);
         }
         channels
             .into_channel_iter()
             .expect("all the channels should be initialised")
     }
-}
-impl<'a, F: Float, S0: Source3<'a>, S1: Source3<'a>> Source3<'a> for Stack<'a, F, S0, S1>
-where
-    <S0::Outputs as Add<S1::Outputs>>::Output: Size,
-    <S0 as Source3<'a>>::Outputs: core::ops::Add<<S1 as Source3<'a>>::Outputs>,
-{
-    type Sample = F;
-
-    type Outputs = <S0::Outputs as Add<S1::Outputs>>::Output;
-
-    fn iter(&self) -> ChannelIter<Self::Outputs> {
+    fn iter_outputs(&self) -> ChannelIter<Self::Outputs> {
         let mut channels = ChannelIterBuilder::new();
-        for (node, index) in Source3::iter(&self.s0).chain(Source3::iter(&self.s1)) {
+        for (node, index) in Static::iter_outputs(&self.s0).chain(Static::iter_outputs(&self.s1)) {
             channels.push(node, index);
         }
         channels
@@ -726,281 +655,74 @@ where
             .expect("all the channels should be initialised")
     }
 
-    fn out<N: Size>(
-        &self,
-        source_channels: impl Into<Channels<N>>,
-    ) -> ChannelsHandle<'a, Self::Sample, N> {
-        let mut channels = ChannelIterBuilder::new();
-        for index in source_channels.into() {
-            let (node, i) = Source3::iter(self).nth(index as usize).expect("");
-            channels.push(node, i);
+    type DynamicType = DynamicChannelsHandle;
+
+    fn dynamic<'a, F: Float>(&self, _graph: &'a RwLock<Graph<F>>) -> Self::DynamicType {
+        let mut in_channels = SmallVec::with_capacity(S0::Inputs::USIZE + S1::Inputs::USIZE);
+        let mut out_channels =
+            SmallVec::with_capacity((S0::Outputs::USIZE + S1::Outputs::USIZE) as usize);
+        for chan in Static::iter_inputs(&self.s0) {
+            in_channels.push(chan);
         }
-        let channels = channels
-            .into_channel_iter()
-            .expect("all the channels should be initialised");
-        ChannelsHandle {
-            graph: self.graph,
-            channels: channels.channels,
-            _float: PhantomData,
+        for chan in Static::iter_inputs(&self.s1) {
+            in_channels.push(chan);
         }
-    }
-
-    fn to<S: Sink3>(self, sink: S) -> S
-    where
-        S::Inputs: Same<Self::Outputs>,
-    {
-        let mut g = self.graph.write().unwrap();
-        for ((source, source_channel), (sink, sink_channel)) in
-            Source3::iter(&self).zip(Sink3::iter(&sink))
-        {
-            g.connect2(source, source_channel, sink_channel, sink)
-                .expect("type safe interface should eliminate graph connection errors");
+        for chan in Static::iter_outputs(&self.s0) {
+            out_channels.push(chan);
         }
-        sink
-    }
-
-    fn to_graph_out(self) {
-        let mut g = self.graph.write().unwrap();
-        for (i, (source, source_channel)) in Source3::iter(&self).enumerate() {
-            g.connect2(source, source_channel, i as u16, NodeOrGraph::Graph)
-                .expect("Error connecting to graph output channel.");
+        for chan in Static::iter_outputs(&self.s1) {
+            out_channels.push(chan);
         }
-    }
-
-    fn to_graph_out_channels<N>(self, sink_channels: impl Into<Channels<N>>)
-    where
-        N: Size + Same<Self::Outputs>,
-    {
-        let mut g = self.graph.write().unwrap();
-        for ((source, source_channel), sink_channel) in
-            Source3::iter(&self).zip(sink_channels.into())
-        {
-            g.connect2(source, source_channel, sink_channel, NodeOrGraph::Graph)
-                .expect("Error connecting to graph output channel.");
+        DynamicChannelsHandle {
+            in_channels,
+            out_channels,
         }
-    }
-}
-
-// Stack arithmetics impls
-macro_rules! math_impl_stack {
-    ($fn_name:ident, $op:ident, $op_lowercase:ident) => {
-        impl<'a, F: Float, S0: Source3<'a> + Sink3, S1: Source3<'a> + Sink3, S: Source3<'a>> $op<S>
-            for Stack<'a, F, S0, S1>
-        where
-            <Self as Source3<'a>>::Outputs: Same<S::Outputs>,
-            <S0 as Source3<'a>>::Outputs: core::ops::Add<<S1 as Source3<'a>>::Outputs>,
-            <<S0 as Source3<'a>>::Outputs as core::ops::Add<<S1 as Source3<'a>>::Outputs>>::Output:
-                Size,
-        {
-            type Output = ChannelsHandle<'a, F, S::Outputs>;
-
-            fn $op_lowercase(self, rhs: S) -> Self::Output {
-                let graph = self.graph;
-                $fn_name(self, rhs, graph)
-            }
-        }
-    };
-}
-math_impl_stack!(mul_sources, Mul, mul);
-math_impl_stack!(add_sources, Add, add);
-math_impl_stack!(sub_sources, Sub, sub);
-math_impl_stack!(div_sources, Div, div);
-impl<'a, F: Float, S0: Source3<'a> + Sink3, S1: Source3<'a> + Sink3, S: Sink3> Shr<S>
-    for Stack<'a, F, S0, S1>
-where
-    <Self as Source3<'a>>::Outputs: Same<S::Inputs>,
-    <S0 as Source3<'a>>::Outputs: core::ops::Add<<S1 as Source3<'a>>::Outputs>,
-    <<S0 as Source3<'a>>::Outputs as core::ops::Add<<S1 as Source3<'a>>::Outputs>>::Output: Size,
-    <S as Sink3>::Inputs:
-        Same<<<S0 as Source3<'a>>::Outputs as Add<<S1 as Source3<'a>>::Outputs>>::Output>,
-{
-    type Output = S;
-
-    fn shr(self, rhs: S) -> Self::Output {
-        self.to(rhs)
-    }
-}
-impl<'a, F: Float, S0: Source3<'a> + Sink3, S1: Source3<'a> + Sink3, S: Sink3 + Source3<'a>>
-    BitOr<S> for Stack<'a, F, S0, S1>
-where
-    <Self as Source3<'a>>::Outputs: Same<S::Inputs>,
-    <S0 as Source3<'a>>::Outputs: core::ops::Add<<S1 as Source3<'a>>::Outputs>,
-    <<S0 as Source3<'a>>::Outputs as core::ops::Add<<S1 as Source3<'a>>::Outputs>>::Output: Size,
-    <S as Sink3>::Inputs:
-        Same<<<S0 as Source3<'a>>::Outputs as Add<<S1 as Source3<'a>>::Outputs>>::Output>,
-{
-    type Output = Stack<'a, F, Self, S>;
-
-    fn bitor(self, rhs: S) -> Self::Output {
-        self.stack(rhs)
     }
 }
 
 #[derive(Clone)]
-pub struct ChannelsHandle<'a, F: Float, O: Size> {
-    graph: &'a RwLock<Graph<F>>,
+pub struct ChannelsHandle<O: Size> {
     channels: NumericArray<(NodeOrGraph, u16), O>,
-    _float: PhantomData<F>,
 }
 // // Copy workaround, see the `ArrayLength` docs for more info.
-impl<F: Float, O: Size> Copy for ChannelsHandle<'_, F, O> where
+impl<O: Size> Copy for ChannelsHandle<O> where
     <O as knaster_core::numeric_array::ArrayLength>::ArrayType<(NodeOrGraph, u16)>:
         core::marker::Copy
 {
 }
-// impl<F: Float, O: Size> Connect for ChannelsHandle<'_, F, O> {
-//     type Outputs = O;
-//
-// }
-// Implementing for ChannelsHandle to enable them to stack, even though they have no inputs
-impl<'a, F: Float, O: Size> ChannelsHandle<'a, F, O> {
-    fn stack<S: Source3<'a> + Sink3>(self, s: S) -> Stack<'a, F, Self, S> {
-        let graph = self.graph;
-        Stack {
-            s0: self,
-            s1: s,
-            graph,
-            _float: PhantomData,
+impl<O: Size> From<ChannelIter<O>> for ChannelsHandle<O> {
+    fn from(value: ChannelIter<O>) -> Self {
+        ChannelsHandle {
+            channels: value.channels,
         }
     }
 }
-impl<F: Float, O: Size> Sink3 for ChannelsHandle<'_, F, O> {
+
+impl<O: Size> Static for ChannelsHandle<O> {
+    type Outputs = O;
     type Inputs = U0;
 
-    fn iter(&self) -> ChannelIter<Self::Inputs> {
-        ChannelIter::empty()
-    }
-}
-impl<'a, F: Float, O: Size> Source3<'a> for ChannelsHandle<'a, F, O> {
-    type Sample = F;
-    type Outputs = O;
-
-    fn iter(&self) -> ChannelIter<Self::Outputs> {
+    fn iter_outputs(&self) -> ChannelIter<Self::Outputs> {
         ChannelIter {
             channels: self.channels.clone(),
             current_index: 0,
         }
     }
-    fn out<N: Size>(&self, source_channels: impl Into<Channels<N>>) -> ChannelsHandle<'a, F, N> {
-        let mut channels = NumericArray::default();
-        for c in source_channels.into() {
-            channels[c as usize] = <Self as Source3<'a>>::iter(self).nth(c as usize).unwrap();
-        }
-        ChannelsHandle {
-            graph: self.graph,
-            channels,
-            _float: PhantomData,
-        }
-    }
-    fn to<S: Sink3>(self, sink: S) -> S
-    where
-        S::Inputs: Same<Self::Outputs>,
-    {
-        let mut g = self.graph.write().unwrap();
-        for ((source, source_channel), (sink, sink_channel)) in
-            Source3::iter(&self).zip(Sink3::iter(&sink))
-        {
-            g.connect2(source, source_channel, sink_channel, sink)
-                .expect("type safe interface should eliminate graph connection errors");
-        }
-        sink
+    fn iter_inputs(&self) -> ChannelIter<Self::Inputs> {
+        ChannelIter::empty()
     }
 
-    fn to_graph_out(self) {
-        let mut g = self.graph.write().unwrap();
-        for (i, (source, source_channel)) in Source3::iter(&self).enumerate() {
-            g.connect2(source, source_channel, i as u16, NodeOrGraph::Graph)
-                .expect("Error connecting to graph output channel.");
+    type DynamicType = DynamicChannelsHandle;
+
+    fn dynamic<'a, F: Float>(&self, _graph: &'a RwLock<Graph<F>>) -> Self::DynamicType {
+        let mut out_channels = SmallVec::with_capacity(self.channels.len());
+        for &chan in self.channels.iter() {
+            out_channels.push(chan);
         }
-    }
-
-    fn to_graph_out_channels<N>(self, sink_channels: impl Into<Channels<N>>)
-    where
-        N: Size + Same<Self::Outputs>,
-    {
-        let mut g = self.graph.write().unwrap();
-        for ((source, source_channel), sink_channel) in
-            Source3::iter(&self).zip(sink_channels.into())
-        {
-            g.connect2(source, source_channel, sink_channel, NodeOrGraph::Graph)
-                .expect("Error connecting to graph output channel.");
+        DynamicChannelsHandle {
+            in_channels: SmallVec::new(),
+            out_channels,
         }
-    }
-}
-// ChannelsHandle arithmetics impls
-macro_rules! math_impl_channels_handle {
-    ($fn_name:ident, $op:ident, $op_lowercase:ident) => {
-        impl<'a, F: Float, O: Size, S: Source3<'a, Outputs = O>> $op<S> for ChannelsHandle<'a, F, O>
-        where
-            S::Outputs: Same<O>,
-        {
-            type Output = ChannelsHandle<'a, F, O>;
-
-            fn $op_lowercase(self, rhs: S) -> Self::Output {
-                let graph = self.graph;
-                $fn_name(self, rhs, graph)
-            }
-        }
-    };
-}
-math_impl_channels_handle!(mul_sources, Mul, mul);
-math_impl_channels_handle!(add_sources, Add, add);
-math_impl_channels_handle!(sub_sources, Sub, sub);
-math_impl_channels_handle!(div_sources, Div, div);
-
-impl<'a, F: Float, O: Size, S: Sink3> Shr<S> for ChannelsHandle<'a, F, O>
-where
-    S::Inputs: Same<O>,
-{
-    type Output = S;
-
-    fn shr(self, rhs: S) -> Self::Output {
-        self.to(rhs)
-    }
-}
-
-impl<'a, F: Float, O: Size, S: Source3<'a> + Sink3> BitOr<S> for ChannelsHandle<'a, F, O>
-where
-    S::Outputs: Same<O>,
-{
-    type Output = Stack<'a, F, Self, S>;
-
-    fn bitor(self, rhs: S) -> Self::Output {
-        self.stack(rhs)
-    }
-}
-
-// DynamicChannelsHandle arithmetics impls
-macro_rules! math_impl_dynamic_channels_handle {
-    ($fn_name:ident, $op:ident, $op_lowercase:ident) => {
-        impl<'a, F: Float, S: DynamicSource3<'a>> $op<S> for DynamicChannelsHandle<'a, F> {
-            type Output = DynamicChannelsHandle<'a, F>;
-
-            fn $op_lowercase(self, rhs: S) -> Self::Output {
-                let graph = self.graph;
-                $fn_name(self, rhs, graph)
-            }
-        }
-    };
-}
-math_impl_dynamic_channels_handle!(mul_sources_dynamic, Mul, mul);
-math_impl_dynamic_channels_handle!(add_sources_dynamic, Add, add);
-math_impl_dynamic_channels_handle!(sub_sources_dynamic, Sub, sub);
-math_impl_dynamic_channels_handle!(div_sources_dynamic, Div, div);
-
-impl<'a, F: Float, S: DynamicSink3> Shr<S> for DynamicChannelsHandle<'a, F> {
-    type Output = DynamicChannelsHandle<'a, F>;
-
-    fn shr(self, rhs: S) -> Self::Output {
-        self.to(rhs)
-    }
-}
-
-impl<'a, F: Float, S: DynamicSource3<'a> + DynamicSink3> BitOr<S> for DynamicChannelsHandle<'a, F> {
-    type Output = DynamicChannelsHandle<'a, F>;
-
-    fn bitor(self, rhs: S) -> Self::Output {
-        self.stack(rhs)
     }
 }
 
@@ -1008,27 +730,12 @@ impl<'a, F: Float, S: DynamicSource3<'a> + DynamicSink3> BitOr<S> for DynamicCha
 /// type information. Unlike [`ChannelsHandle`], this type represents all kinds of
 /// collections of channels that aren't direct references to specific nodes.
 #[derive(Clone)]
-pub struct DynamicChannelsHandle<'a, F: Float> {
-    graph: &'a RwLock<Graph<F>>,
+pub struct DynamicChannelsHandle {
     in_channels: SmallVec<[(NodeOrGraph, u16); 1]>,
     out_channels: SmallVec<[(NodeOrGraph, u16); 1]>,
-    _float: PhantomData<F>,
 }
-impl<'a, F: Float> DynamicChannelsHandle<'a, F> {
-    fn stack<S: DynamicSource3<'a> + DynamicSink3>(mut self, s: S) -> DynamicChannelsHandle<'a, F> {
-        for chan in DynamicSink3::iter(&s) {
-            self.in_channels.push(chan);
-        }
-        for chan in DynamicSource3::iter(&s) {
-            self.out_channels.push(chan);
-        }
-        self
-    }
-}
-impl<'a, F: Float> DynamicSource3<'a> for DynamicChannelsHandle<'a, F> {
-    type Sample = F;
-
-    fn iter(&self) -> DynamicChannelIter {
+impl Dynamic for DynamicChannelsHandle {
+    fn iter_outputs(&self) -> DynamicChannelIter {
         DynamicChannelIter {
             channels: self.out_channels.clone(),
             current_index: 0,
@@ -1038,32 +745,11 @@ impl<'a, F: Float> DynamicSource3<'a> for DynamicChannelsHandle<'a, F> {
     fn outputs(&self) -> u16 {
         self.out_channels.len() as u16
     }
-
-    fn out<N: Size>(
-        &self,
-        source_channels: impl Into<Channels<N>>,
-    ) -> ChannelsHandle<'a, Self::Sample, N> {
-        todo!()
-    }
-
-    fn to<S: DynamicSink3>(self, n: S) -> DynamicChannelsHandle<'a, F> {
-        todo!()
-    }
-
-    fn to_graph_out(self) {
-        todo!()
-    }
-
-    fn to_graph_out_channels<N: Size>(self, sink_channels: impl Into<Channels<N>>) {
-        todo!()
-    }
-}
-impl<'a, F: Float> DynamicSink3 for DynamicChannelsHandle<'a, F> {
     fn inputs(&self) -> u16 {
         self.in_channels.len() as u16
     }
 
-    fn iter(&self) -> DynamicChannelIter {
+    fn iter_inputs(&self) -> DynamicChannelIter {
         DynamicChannelIter {
             channels: self.in_channels.clone(),
             current_index: 0,
@@ -1074,29 +760,13 @@ impl<'a, F: Float> DynamicSink3 for DynamicChannelsHandle<'a, F> {
 // We need Sink and Source because some things such as binary op connections can't reasonably be
 // have things connected to their inputs
 
-pub trait Sink3 {
-    type Inputs: Size;
-    fn iter(&self) -> ChannelIter<Self::Inputs>;
-}
-pub trait Source3<'a>: Sized {
-    type Sample: Float;
+pub trait Static {
     type Outputs: Size;
-    fn iter(&self) -> ChannelIter<Self::Outputs>;
-    fn out<N: Size>(
-        &self,
-        source_channels: impl Into<Channels<N>>,
-    ) -> ChannelsHandle<'a, Self::Sample, N>;
-
-    fn to<S: Sink3>(self, n: S) -> S
-    where
-        S::Inputs: Same<Self::Outputs>;
-    /// Connect to the graph output(s) in the order the channels are produced.
-    fn to_graph_out(self);
-
-    /// Connect to the graph output(s), selecting graph output channels from the channels provided
-    fn to_graph_out_channels<N>(self, sink_channels: impl Into<Channels<N>>)
-    where
-        N: Size + Same<Self::Outputs>;
+    type Inputs: Size;
+    type DynamicType: Dynamic;
+    fn iter_outputs(&self) -> ChannelIter<Self::Outputs>;
+    fn iter_inputs(&self) -> ChannelIter<Self::Inputs>;
+    fn dynamic<'a, F: Float>(&self, graph: &'a RwLock<Graph<F>>) -> Self::DynamicType;
 }
 pub struct ChannelIterBuilder<I: Size> {
     channels: knaster_core::numeric_array::generic_array::GenericArray<
@@ -1195,26 +865,14 @@ impl Iterator for DynamicChannelIter {
     }
 }
 
-pub trait DynamicSink3 {
-    fn iter(&self) -> DynamicChannelIter;
-    fn inputs(&self) -> u16;
-}
-pub trait DynamicSource3<'a> {
-    type Sample: Float;
-    fn iter(&self) -> DynamicChannelIter;
+pub trait Dynamic {
+    fn iter_outputs(&self) -> DynamicChannelIter;
     fn outputs(&self) -> u16;
-    fn out<N: Size>(
-        &self,
-        source_channels: impl Into<Channels<N>>,
-    ) -> ChannelsHandle<'a, Self::Sample, N>;
-    // This gives a DynamicChannelsHandle because the API is more ergonomic if the output of
-    // an operation with a dynamic type always yields a dynamic type.
-    fn to<S: DynamicSink3>(self, n: S) -> DynamicChannelsHandle<'a, Self::Sample>;
-    /// Connect to the graph output(s) in the order the channels are produced.
-    fn to_graph_out(self);
-
-    /// Connect to the graph output(s), selecting graph output channels from the channels provided
-    fn to_graph_out_channels<N: Size>(self, sink_channels: impl Into<Channels<N>>);
+    fn iter_inputs(&self) -> DynamicChannelIter;
+    fn inputs(&self) -> u16;
+    fn dynamic<'a, F: Float>(&self, _graph: &'a RwLock<Graph<F>>) -> &Self {
+        self
+    }
 }
 
 #[derive(Clone)]
@@ -1382,7 +1040,7 @@ mod tests {
         util::Constant, wrappers_core::UGenWrapperCoreExt,
     };
 
-    use super::{DynamicSource3, GraphEdit, Source3};
+    use super::{Dynamic, GraphEdit, Static};
     #[test]
     fn scope() {
         let block_size = 16;

@@ -40,7 +40,7 @@ mod buffer_allocator;
 pub mod connectable;
 pub mod connectable2;
 pub mod connectable3;
-mod connectable3_2;
+// mod connectable3_2;
 mod dyngen;
 mod edge;
 pub mod graph;
