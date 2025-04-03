@@ -18,7 +18,7 @@ Knaster is a real time sound synthesis framework focused on a balance between pe
 
 Note: As a user of the framework, you only need to depend on `knaster`
 
-Knaster is split into several crates so as to make parts of it reusable and facilitate experimentation.
+Knaster is split into several crates for modularity and to allow for more flexibility.
 The crates are defined in the following chain, where each crate imports and re-exports the previous to reduce the risk of dependency version mismatches.
 
 - `knaster_primitives`: Contains basic types that may be useful even to crates that otherwise have little to do with Knaster. Does not need `alloc`.
@@ -26,7 +26,7 @@ The crates are defined in the following chain, where each crate imports and re-e
 - `knaster_graph`: The `Graph` and everything that directly relates to it. Requires `alloc`.
 - `knaster`: Preludes, convenience functions and re-exports.
 
-Additionally, there are crates which only implement
+Additionally, there are crates which only implement new UGens, and are not required for the core functionality of Knaster. These typically only depend on `knaster_core`.
 
 ## Contributions
 
@@ -35,3 +35,5 @@ Any contributions will, unless otherwise explicitly stated, be submitted and lic
 ## License
 
 Mostly MIT + Apache 2.0, but some crates are GPL. See each crate for more info.
+
+The crates that are licensed under GPL are crates that port GPL DSP code as Knaster UGens.
