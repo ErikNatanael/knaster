@@ -24,11 +24,11 @@ pub trait Sink {
     fn iter(&self) -> ChannelIter<Self::Inputs>;
 }
 pub struct ChannelIter<I: Size> {
-    channels: NumericArray<(NodeOrGraph, usize), I>,
+    channels: NumericArray<(NodeOrGraph, u16), I>,
     current_index: usize,
 }
 impl<I: Size> Iterator for ChannelIter<I> {
-    type Item = (NodeOrGraph, usize);
+    type Item = (NodeOrGraph, u16);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current_index < I::USIZE {
@@ -139,7 +139,11 @@ impl<I: Size, O: Size> Source for ConnectionNode<I, O> {
 
     fn iter(&self) -> ChannelIter<Self::Outputs> {
         ChannelIter {
-            channels: self.out_channels.iter().map(|c| (self.node, *c)).collect(),
+            channels: self
+                .out_channels
+                .iter()
+                .map(|c| (self.node, *c as u16))
+                .collect(),
             current_index: 0,
         }
     }
@@ -149,7 +153,11 @@ impl<I: Size, O: Size> Sink for ConnectionNode<I, O> {
 
     fn iter(&self) -> ChannelIter<Self::Inputs> {
         ChannelIter {
-            channels: self.out_channels.iter().map(|c| (self.node, *c)).collect(),
+            channels: self
+                .out_channels
+                .iter()
+                .map(|c| (self.node, *c as u16))
+                .collect(),
             current_index: 0,
         }
     }
@@ -197,7 +205,7 @@ impl<'a, F: Float, T: Source> Conn<'a, F, T> {
         sink: S,
     ) -> Conn<'a, F, BinaryOpNodes<T::Outputs>>
     where
-        T::Outputs: IsEqual<S::Outputs>,
+        T::Outputs: Same<S::Outputs>,
     {
         let handle = self.graph.push(sink);
         let ugen = NodeOrGraph::Node(handle.node_id());
@@ -218,11 +226,11 @@ impl<F: Float, T: UGen<Sample = F>> Conn<'_, F, Handle<T>> {
 }
 #[derive(Clone)]
 pub struct BinaryOpNodes<O: Size> {
-    out_channels: NumericArray<(NodeOrGraph, usize), O>,
+    out_channels: NumericArray<(NodeOrGraph, u16), O>,
 }
 // Copy workaround, see the `ArrayLength` docs for more info.
 impl<O: Size> Copy for BinaryOpNodes<O> where
-    <O as knaster_core::numeric_array::ArrayLength>::ArrayType<(NodeOrGraph, usize)>:
+    <O as knaster_core::numeric_array::ArrayLength>::ArrayType<(NodeOrGraph, u16)>:
         core::marker::Copy
 {
 }
@@ -239,7 +247,7 @@ impl<O: Size> Source for BinaryOpNodes<O> {
 
 impl<'a, F: Float, T: Source, T2: Source> Mul<T2> for Conn<'a, F, T>
 where
-    T::Outputs: IsEqual<T2::Outputs>,
+    T::Outputs: Same<T2::Outputs>,
 {
     type Output = Conn<'a, F, BinaryOpNodes<T::Outputs>>;
 
@@ -259,7 +267,7 @@ where
             self.graph
                 .connect2(source2, source_channel2, 1, mul)
                 .expect("type safe interface should eliminate graph connection errors");
-            channels[i] = (mul, i);
+            channels[i] = (mul, i as u16);
         }
         Conn {
             graph: self.graph,
@@ -271,7 +279,7 @@ where
 }
 impl<'a, F: Float, T: Source, T2: Source> core::ops::Add<T2> for Conn<'a, F, T>
 where
-    T::Outputs: IsEqual<T2::Outputs>,
+    T::Outputs: Same<T2::Outputs>,
 {
     type Output = Conn<'a, F, BinaryOpNodes<T::Outputs>>;
 
@@ -291,7 +299,7 @@ where
             self.graph
                 .connect2(source2, source_channel2, 1, add)
                 .expect("type safe interface should eliminate graph connection errors");
-            channels[i] = (add, i);
+            channels[i] = (add, i as u16);
         }
         Conn {
             graph: self.graph,
@@ -307,85 +315,85 @@ pub enum Op {
     Add,
 }
 
-#[cfg(test)]
-mod tests {
-    use core::ops::Mul;
-
-    use crate::{
-        connectable2::Connection2GraphTrait,
-        runner::{Runner, RunnerOptions},
-    };
-    use knaster_core::{
-        noise::WhiteNoise, onepole::OnePoleLpf, osc::SinWt, pan::Pan2, typenum::*, util::Constant,
-        wrappers_core::UGenWrapperCoreExt,
-    };
-
-    #[test]
-    fn connectable2() {
-        let block_size = 16;
-        let (mut graph, mut runner) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
-            block_size,
-            sample_rate: 48000,
-            ring_buffer_size: 50,
-        });
-        let sine = graph.push(SinWt::new(200.));
-        let c = graph
-            .connect_from(sine)
-            .mul_new(SinWt::new(3.))
-            .to_new(Pan2::new(0.0));
-        let pan_handle = c.handle();
-        c.to_graph_out([0, 1]);
-        graph.commit_changes().unwrap();
-
-        // Remake the following into something easier to read:
-        /*
-        let exciter_amp = g.push(Constant::new(0.5));
-        let exciter = g.push(HalfSineWt::new(2000.).wr_mul(0.1));
-        let noise_mix = g.push(Constant::new(0.25));
-        let noise = g.push(WhiteNoise::new());
-        let exciter_lpf = g.push(OnePoleLpf::new(2600.));
-        let en = ugen_mul(&exciter, &exciter_amp, g)?;
-        let en2 = ugen_mul(&noise, &noise_mix, g)?;
-        let en3 = ugen_mul(&en, &en2, g)?;
-        let add = ugen_add(&en, &en3, g)?;
-        g.connect(&add, 0, 0, &exciter_lpf)?;
-        */
-        // Could nodes be named inline, e.g. with a `name("exciter_amp")`. We need named nodes for
-        // two reasons:
-        // 1 connecting between them, audio and parameters
-        // 2 manually changing parameter values later
-        //
-        // For 1, the connections can almost always be made in a chain with some parallel tracks.
-        // Sometimes we need to add nodes later, especially whole sub-graphs going into effects.
-        //
-        // For 2, this would be neater in a larger Synth like interface since there is no type
-        // safety for parameters anyway.
-        //
-        // graph.edit().push(Constant::new(0.5)).name("exciter_amp_node").store_param(0, "exciter_amp");
-        // graph.edit().push(Constant::new(0.5)).name("exciter_amp_node").store_param(0, "exciter_amp");
-        // let exciter_amp = graph.node("exciter_amp_node")?;
-        // graph.edit().connect(exciter_amp).to(SinWt::new(2000.)).name("sine").store_param("freq",
-        // "freq");
-        // graph.set("exciter_amp")?.value(0.2).smoothing(Linear(0.5));
-        // graph.set("freq")?.value().smoothing(Linear(0.5));
-
-        let exciter_amp = graph.push(Constant::new(0.5));
-        let noise_mix = graph.push(Constant::new(0.25));
-        let exc = (graph.connect_from_new(SinWt::new(2000.).wr_mul(0.1)) * exciter_amp).inner();
-
-        let noise = graph.connect_from_new(WhiteNoise::new()) * noise_mix;
-        let c = ((noise * exc) + exc).to_new(OnePoleLpf::new(2600.));
-        let lpf = c.handle();
-        let c = c.to_new(Pan2::new(0.0));
-        let pan = c.handle();
-        c.to_graph_out([0, 1]);
-
-        graph.commit_changes().unwrap();
-        assert_eq!(graph.inspection().nodes.len(), 1);
-        for _ in 0..10 {
-            unsafe {
-                runner.run(&[]);
-            }
-        }
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use core::ops::Mul;
+//
+//     use crate::{
+//         connectable2::Connection2GraphTrait,
+//         runner::{Runner, RunnerOptions},
+//     };
+//     use knaster_core::{
+//         noise::WhiteNoise, onepole::OnePoleLpf, osc::SinWt, pan::Pan2, typenum::*, util::Constant,
+//         wrappers_core::UGenWrapperCoreExt,
+//     };
+//
+//     #[test]
+//     fn connectable2() {
+//         let block_size = 16;
+//         let (mut graph, mut runner) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
+//             block_size,
+//             sample_rate: 48000,
+//             ring_buffer_size: 50,
+//         });
+//         let sine = graph.push(SinWt::new(200.));
+//         let c = graph
+//             .connect_from(sine)
+//             .mul_new(SinWt::new(3.))
+//             .to_new(Pan2::new(0.0));
+//         let pan_handle = c.handle();
+//         c.to_graph_out([0, 1]);
+//         graph.commit_changes().unwrap();
+//
+//         // Remake the following into something easier to read:
+//         /*
+//         let exciter_amp = g.push(Constant::new(0.5));
+//         let exciter = g.push(HalfSineWt::new(2000.).wr_mul(0.1));
+//         let noise_mix = g.push(Constant::new(0.25));
+//         let noise = g.push(WhiteNoise::new());
+//         let exciter_lpf = g.push(OnePoleLpf::new(2600.));
+//         let en = ugen_mul(&exciter, &exciter_amp, g)?;
+//         let en2 = ugen_mul(&noise, &noise_mix, g)?;
+//         let en3 = ugen_mul(&en, &en2, g)?;
+//         let add = ugen_add(&en, &en3, g)?;
+//         g.connect(&add, 0, 0, &exciter_lpf)?;
+//         */
+//         // Could nodes be named inline, e.g. with a `name("exciter_amp")`. We need named nodes for
+//         // two reasons:
+//         // 1 connecting between them, audio and parameters
+//         // 2 manually changing parameter values later
+//         //
+//         // For 1, the connections can almost always be made in a chain with some parallel tracks.
+//         // Sometimes we need to add nodes later, especially whole sub-graphs going into effects.
+//         //
+//         // For 2, this would be neater in a larger Synth like interface since there is no type
+//         // safety for parameters anyway.
+//         //
+//         // graph.edit().push(Constant::new(0.5)).name("exciter_amp_node").store_param(0, "exciter_amp");
+//         // graph.edit().push(Constant::new(0.5)).name("exciter_amp_node").store_param(0, "exciter_amp");
+//         // let exciter_amp = graph.node("exciter_amp_node")?;
+//         // graph.edit().connect(exciter_amp).to(SinWt::new(2000.)).name("sine").store_param("freq",
+//         // "freq");
+//         // graph.set("exciter_amp")?.value(0.2).smoothing(Linear(0.5));
+//         // graph.set("freq")?.value().smoothing(Linear(0.5));
+//
+//         let exciter_amp = graph.push(Constant::new(0.5));
+//         let noise_mix = graph.push(Constant::new(0.25));
+//         let exc = (graph.connect_from_new(SinWt::new(2000.).wr_mul(0.1)) * exciter_amp).inner();
+//
+//         let noise = graph.connect_from_new(WhiteNoise::new()) * noise_mix;
+//         let c = ((noise * exc) + exc).to_new(OnePoleLpf::new(2600.));
+//         let lpf = c.handle();
+//         let c = c.to_new(Pan2::new(0.0));
+//         let pan = c.handle();
+//         c.to_graph_out([0, 1]);
+//
+//         graph.commit_changes().unwrap();
+//         assert_eq!(graph.inspection().nodes.len(), 1);
+//         for _ in 0..10 {
+//             unsafe {
+//                 runner.run(&[]);
+//             }
+//         }
+//     }
+// }

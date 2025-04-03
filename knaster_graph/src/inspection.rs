@@ -7,9 +7,10 @@ use std::sync::{Arc, Mutex};
 
 use crate::core::eprintln;
 use crate::graph::{GraphId, NodeId, NodeKey};
-use crate::handle::{AnyHandle, RawHandle};
+use crate::handle::{AnyHandle, RawHandle, SchedulingChannelSender};
 use crate::{SchedulingChannelProducer, SharedFrameClock};
 use alloc::{format, string::String, string::ToString, vec::Vec};
+use ecow::EcoString;
 use knaster_core::ParameterHint;
 
 /// The metadata of a Graph
@@ -22,14 +23,14 @@ pub struct GraphInspection {
     /// The indices of nodes connected to the graph output(s)
     pub graph_output_edges: Vec<EdgeInspection>,
     /// Number of inputs to the graph
-    pub num_inputs: usize,
+    pub num_inputs: u16,
     /// Number of outputs from the graph
-    pub num_outputs: usize,
+    pub num_outputs: u16,
     /// The ID of the graph
     pub graph_id: crate::graph::GraphId,
-    pub graph_name: String,
+    pub graph_name: EcoString,
     /// The same kind of send that is used in a Handle
-    pub param_sender: Arc<Mutex<SchedulingChannelProducer>>,
+    pub param_sender: SchedulingChannelSender,
     /// The frame clock of the graph
     pub shared_frame_clock: SharedFrameClock,
 }
@@ -224,8 +225,8 @@ pub struct NodeInspection {
     pub name: String,
     /// The address of the n    ode, usable to schedule changes to the node or free it
     pub key: NodeKey,
-    pub inputs: usize,
-    pub outputs: usize,
+    pub inputs: u16,
+    pub outputs: u16,
     /// Edges going into this node
     pub input_edges: Vec<EdgeInspection>,
     pub parameter_descriptions: Vec<&'static str>,
@@ -239,8 +240,8 @@ pub struct NodeInspection {
 #[allow(missing_docs)]
 pub struct EdgeInspection {
     pub source: EdgeSource,
-    pub from_index: usize,
-    pub to_index: usize,
+    pub from_index: u16,
+    pub to_index: u16,
     pub is_feedback: bool,
 }
 

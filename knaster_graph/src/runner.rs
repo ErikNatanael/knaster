@@ -1,9 +1,9 @@
 use alloc::string::ToString;
 use knaster_core::Seconds;
-use knaster_core::{typenum::NonZero, AudioCtx, BlockAudioCtx, Float, Size, UGenFlags};
+use knaster_core::{AudioCtx, BlockAudioCtx, Float, Size, UGenFlags, typenum::NonZero};
 
-use crate::graph::NodeId;
 use crate::SharedFrameClock;
+use crate::graph::NodeId;
 use crate::{
     block::{AggregateBlockRead, RawBlock},
     graph::{Graph, GraphOptions, OwnedRawBuffer},
@@ -54,7 +54,7 @@ impl<F: Float> Runner<F> {
         let invalid_node_id = NodeId::top_level_graph_node_id();
         let shared_frame_clock = SharedFrameClock::new();
         let graph_options = GraphOptions {
-            name: "OuterGraph".to_string(),
+            name: "OuterGraph".into(),
             ring_buffer_size: options.ring_buffer_size,
         };
         let (graph, node) = Graph::new::<Inputs, Outputs>(
@@ -93,7 +93,7 @@ impl<F: Float> Runner<F> {
     /// mutable references to the allocations they point to until this function
     /// returns. The pointers will not be stored past this function call.
     pub unsafe fn run(&mut self, input_pointers: &[*const F]) {
-        assert!(input_pointers.len() == self.inputs());
+        assert!(input_pointers.len() == self.inputs() as usize);
         let mut ctx = BlockAudioCtx::new(AudioCtx::new(self.sample_rate, self.block_size));
         ctx.set_frame_clock(self.frame_clock);
         let mut flags = UGenFlags::new();
@@ -113,11 +113,11 @@ impl<F: Float> Runner<F> {
     pub fn block_size(&self) -> usize {
         self.block_size
     }
-    pub fn inputs(&self) -> usize {
-        self.graph_node.inputs
+    pub fn inputs(&self) -> u16 {
+        self.graph_node.data.inputs
     }
-    pub fn outputs(&self) -> usize {
-        self.graph_node.outputs
+    pub fn outputs(&self) -> u16 {
+        self.graph_node.data.outputs
     }
 }
 

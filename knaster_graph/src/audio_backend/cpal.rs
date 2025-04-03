@@ -83,8 +83,10 @@ impl<F: Float> AudioBackend for CpalBackend<F> {
         if self.stream.is_some() {
             return Err(AudioBackendError::BackendAlreadyRunning);
         }
-        if runner.outputs() != self.config.channels() as usize {
-            panic!("CpalBackend expects a graph with the same number of outputs as the device. Check CpalBackend::channels().")
+        if runner.outputs() != self.config.channels() {
+            panic!(
+                "CpalBackend expects a graph with the same number of outputs as the device. Check CpalBackend::channels()."
+            )
         }
         if runner.inputs() > 0 {
             eprintln!(

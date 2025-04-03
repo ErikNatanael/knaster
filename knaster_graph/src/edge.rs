@@ -4,7 +4,7 @@ use crate::graph::NodeKey;
 #[derive(Clone, Debug, Copy)]
 pub(crate) struct Edge {
     pub(crate) source: NodeKeyOrGraph,
-    pub(crate) channel_in_source: usize,
+    pub(crate) channel_in_source: u16,
     pub(crate) is_feedback: bool,
 }
 
@@ -15,7 +15,7 @@ pub(crate) enum NodeKeyOrGraph {
 }
 impl From<NodeKey> for NodeKeyOrGraph {
     fn from(value: NodeKey) -> Self {
-       Self::Node(value)
+        Self::Node(value)
     }
 }
 
@@ -42,8 +42,8 @@ impl From<NodeKey> for NodeKeyOrGraph {
 pub(crate) struct ParameterEdge {
     pub(crate) source: NodeKey,
     /// what the first channel to pipe is in the source
-    pub(crate) channel_in_source: usize,
-    pub(crate) parameter_index: usize,
+    pub(crate) channel_in_source: u16,
+    pub(crate) parameter_index: u16,
 }
 
 // /// Edge containing all metadata for a feedback connection since a feedback

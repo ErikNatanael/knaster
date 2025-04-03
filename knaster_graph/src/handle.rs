@@ -4,7 +4,7 @@
 //! - Typesafe Handle types
 
 use crate::{
-    SchedulingEvent, SchedulingTime, SchedulingToken, SharedFrameClock,
+    SchedulingEvent, SchedulingToken, SharedFrameClock, Time,
     connectable::{NodeOrGraph, NodeSubset},
     core::{eprintln, marker::PhantomData},
     graph::{GraphError, NodeId},
@@ -22,47 +22,12 @@ use std::sync::{Arc, Mutex};
 
 use crate::SchedulingChannelProducer;
 
-/// Same as [`Handle<T>`], but the type is removed and instead, all the relevant information is
-/// stored in the struct. This is somewhat less efficient, but often required or significantly more
-/// ergonomic.
-#[derive(Clone)]
-pub struct AnyHandle {
-    pub(crate) raw_handle: RawHandle,
-    pub(crate) parameters: Vec<&'static str>,
-    pub(crate) parameter_hints: Vec<ParameterHint>,
-    pub(crate) inputs: usize,
-    pub(crate) outputs: usize,
-}
-
-/// Handle to a node with its type erased. This allows a less safe interaction with the node, but the handle can easily be stored.
-#[derive(Clone)]
-pub(crate) struct RawHandle {
-    pub(crate) node: NodeId,
-    /// Allows us to send parameter changes straight to the audio thread
-    sender: Arc<Mutex<SchedulingChannelProducer>>,
-    shared_frame_clock: SharedFrameClock,
-}
-impl RawHandle {
-    pub fn new(
-        node: NodeId,
-        sender: Arc<Mutex<SchedulingChannelProducer>>,
-        shared_frame_clock: SharedFrameClock,
-    ) -> Self {
-        Self {
-            node,
-            sender,
-            shared_frame_clock,
-        }
-    }
-    pub fn is_alive(&self) -> bool {
-        match self.sender.lock() {
-            Ok(s) => !s.is_abandoned(),
-            _ => false,
-        }
-    }
+#[derive(Clone, Debug)]
+pub struct SchedulingChannelSender(pub(crate) Arc<Mutex<SchedulingChannelProducer>>);
+impl SchedulingChannelSender {
     pub fn send(&self, event: SchedulingEvent) -> Result<(), GraphError> {
         // Lock should never be poisoned, but if it is we don't care.
-        let mut sender = match self.sender.lock() {
+        let mut sender = match self.0.lock() {
             Ok(s) => s,
             Err(s) => s.into_inner(),
         };
@@ -75,6 +40,53 @@ impl RawHandle {
             .push(event)
             .map_err(|e| GraphError::PushChangeError(e.to_string()))?;
         Ok(())
+    }
+
+    pub fn is_alive(&self) -> bool {
+        match self.0.lock() {
+            Ok(s) => !s.is_abandoned(),
+            _ => false,
+        }
+    }
+}
+
+/// Same as [`Handle<T>`], but the type is removed and instead, all the relevant information is
+/// stored in the struct. This is somewhat less efficient, but often required or significantly more
+/// ergonomic.
+#[derive(Clone)]
+pub struct AnyHandle {
+    pub(crate) raw_handle: RawHandle,
+    pub(crate) parameters: Vec<&'static str>,
+    pub(crate) parameter_hints: Vec<ParameterHint>,
+    pub(crate) inputs: u16,
+    pub(crate) outputs: u16,
+}
+
+/// Handle to a node with its type erased. This allows a less safe interaction with the node, but the handle can easily be stored.
+#[derive(Clone)]
+pub(crate) struct RawHandle {
+    pub(crate) node: NodeId,
+    /// Allows us to send parameter changes straight to the audio thread
+    sender: SchedulingChannelSender,
+    shared_frame_clock: SharedFrameClock,
+}
+impl RawHandle {
+    pub fn new(
+        node: NodeId,
+        sender: SchedulingChannelSender,
+        shared_frame_clock: SharedFrameClock,
+    ) -> Self {
+        Self {
+            node,
+            sender,
+            shared_frame_clock,
+        }
+    }
+    pub fn is_alive(&self) -> bool {
+        self.sender.is_alive()
+    }
+    pub fn send(&self, event: SchedulingEvent) -> Result<(), GraphError> {
+        self.sender.send(event)
     }
     pub fn node_id(&self) -> NodeId {
         self.node
@@ -112,8 +124,8 @@ impl<T: UGen> Handle<T> {
             raw_handle: self.raw_handle,
             parameters: T::param_descriptions().into_iter().collect(),
             parameter_hints: T::param_hints().into_iter().collect(),
-            inputs: T::Inputs::USIZE,
-            outputs: T::Outputs::USIZE,
+            inputs: T::Inputs::U16,
+            outputs: T::Outputs::U16,
         }
     }
     pub fn inputs(&self) -> usize {
@@ -138,9 +150,9 @@ pub trait HandleTrait: Sized {
     fn change(&self, param: impl Into<Param>) -> Result<ParameterChange2<Self>, ParameterError>;
     fn schedule_event(&self, event: SchedulingEvent) -> Result<(), GraphError>;
     fn node_id(&self) -> NodeId;
-    fn inputs(&self) -> usize;
-    fn outputs(&self) -> usize;
-    fn subset(&self, start_channel: usize, channels: usize) -> NodeSubset {
+    fn inputs(&self) -> u16;
+    fn outputs(&self) -> u16;
+    fn subset(&self, start_channel: u16, channels: u16) -> NodeSubset {
         NodeSubset {
             node: NodeOrGraph::Node(self.node_id()),
             channels,
@@ -223,12 +235,12 @@ impl<T: UGen> HandleTrait for Handle<T> {
         self.raw_handle.node_id()
     }
 
-    fn inputs(&self) -> usize {
-        T::Inputs::USIZE
+    fn inputs(&self) -> u16 {
+        T::Inputs::U16
     }
 
-    fn outputs(&self) -> usize {
-        T::Outputs::USIZE
+    fn outputs(&self) -> u16 {
+        T::Outputs::U16
     }
 
     fn current_frame_time(&self) -> Seconds {
@@ -307,11 +319,11 @@ impl HandleTrait for AnyHandle {
         self.raw_handle.node_id()
     }
 
-    fn inputs(&self) -> usize {
+    fn inputs(&self) -> u16 {
         self.inputs
     }
 
-    fn outputs(&self) -> usize {
+    fn outputs(&self) -> u16 {
         self.outputs
     }
 
@@ -345,7 +357,7 @@ pub struct ParameterChange2<'a, H: HandleTrait> {
     value: Option<ParameterValue>,
     smoothing: Option<ParameterSmoothing>,
     token: Option<SchedulingToken>,
-    time: Option<SchedulingTime>,
+    time: Option<Time>,
     was_sent: bool,
 }
 impl<H: HandleTrait> ParameterChange2<'_, H> {
@@ -365,11 +377,11 @@ impl<H: HandleTrait> ParameterChange2<'_, H> {
         self.token = Some(v.into());
         self
     }
-    pub fn after(mut self, v: impl Into<SchedulingTime>) -> Self {
+    pub fn after(mut self, v: impl Into<Time>) -> Self {
         self.time = Some(v.into());
         self
     }
-    pub fn at(mut self, v: impl Into<SchedulingTime>) -> Self {
+    pub fn at(mut self, v: impl Into<Time>) -> Self {
         let t = v.into().to_absolute();
         self.time = Some(t);
         self
@@ -409,7 +421,7 @@ pub struct ParameterChange {
     value: Option<ParameterValue>,
     smoothing: Option<ParameterSmoothing>,
     token: Option<SchedulingToken>,
-    time: Option<SchedulingTime>,
+    time: Option<Time>,
 }
 impl<P: Into<Param>, V: Into<ParameterValue>> From<(P, V)> for ParameterChange {
     fn from((param, value): (P, V)) -> Self {

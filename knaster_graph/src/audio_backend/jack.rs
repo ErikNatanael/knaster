@@ -86,10 +86,10 @@ impl<F: Float> AudioBackend for JackBackend<F> {
                         client.register_port(&format!("out_{i}"), jack::AudioOut::default())?,
                     );
                 }
-                let input_block = VecBlock::new(num_inputs, self.block_size);
-                let mut input_block_pointers = Vec::with_capacity(num_inputs);
+                let input_block = VecBlock::new(num_inputs as usize, self.block_size);
+                let mut input_block_pointers = Vec::with_capacity(num_inputs as usize);
                 for i in 0..num_inputs {
-                    input_block_pointers.push(input_block.channel_as_slice(i).as_ptr());
+                    input_block_pointers.push(input_block.channel_as_slice(i as usize).as_ptr());
                 }
                 let jack_process = JackProcess {
                     runner,

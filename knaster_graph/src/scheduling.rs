@@ -33,7 +33,7 @@ pub struct SchedulingEvent {
     pub(crate) value: Option<ParameterValue>,
     pub(crate) smoothing: Option<ParameterSmoothing>,
     pub(crate) token: Option<SchedulingToken>,
-    pub(crate) time: Option<SchedulingTime>,
+    pub(crate) time: Option<Time>,
 }
 pub(crate) type SchedulingChannelProducer = rtrb::Producer<SchedulingEvent>;
 // Every GraphGen has one of these for receiving parameter changes.
@@ -65,11 +65,11 @@ impl SharedFrameClock {
 /// The time can be relative to when the event is received on the audio thread, or in absolute
 /// samples. When converting from primitives
 #[derive(Clone, Copy, Debug)]
-pub struct SchedulingTime {
+pub struct Time {
     seconds: Seconds,
     absolute: bool,
 }
-impl SchedulingTime {
+impl Time {
     /// Returns the number of samples until this event should be applied. If the timing is
     /// relative, the counter is also decremented.
     pub fn to_samples_until_due(
@@ -106,6 +106,13 @@ impl SchedulingTime {
             absolute: false,
         }
     }
+    /// Return a new `SchedulingTime` that will be applied as soon as possible.
+    pub fn asap() -> Self {
+        Self {
+            seconds: Seconds::ZERO,
+            absolute: false,
+        }
+    }
     pub fn to_absolute(mut self) -> Self {
         self.absolute = true;
         self
@@ -115,9 +122,9 @@ impl SchedulingTime {
         self
     }
 }
-impl From<Seconds> for SchedulingTime {
+impl From<Seconds> for Time {
     fn from(value: Seconds) -> Self {
-        SchedulingTime {
+        Time {
             seconds: value,
             absolute: false,
         }

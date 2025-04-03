@@ -1,14 +1,26 @@
+use core::iter::FromFn;
+
 use crate::core::sync::Arc;
 use crate::core::sync::atomic::AtomicBool;
 use crate::core::{eprintln, vec, vec::Vec};
 use alloc::{boxed::Box, string::String};
 
+use ecow::EcoString;
 use knaster_core::{AudioCtx, Float, ParameterHint};
 
 use crate::graph::{GraphId, NodeKey};
 use crate::{buffer_allocator::BufferAllocator, dyngen::DynUGen, task::Task};
 
-/// `Node` wraps a [`DynUGen`] in a graph. It is used to hold a pointer to the
+#[derive(Clone, Copy, Debug)]
+pub struct NodeData {
+    pub(crate) parameter_descriptions_fn: fn(usize) -> Option<&'static str>,
+    pub(crate) parameter_hints_fn: fn(usize) -> Option<ParameterHint>,
+    pub(crate) inputs: u16,
+    pub(crate) outputs: u16,
+    pub(crate) parameters: u16,
+}
+
+/// `Node` wraps a [`DynUGen`] for storage in a graph. It is used to hold a pointer to the
 /// UGen allocation and some metadata about it.
 ///
 /// Safety:
@@ -19,15 +31,12 @@ use crate::{buffer_allocator::BufferAllocator, dyngen::DynUGen, task::Task};
 pub(crate) struct Node<F> {
     /// ACCESSIBILITY AND QOL
     // TODO: option to disable this and other optional QOL features in shipped builds
-    pub(crate) name: String,
-    pub(crate) parameter_descriptions: Vec<&'static str>,
-    pub(crate) parameter_hints: Vec<ParameterHint>,
+    pub(crate) name: EcoString,
     pub(crate) is_graph: Option<GraphId>,
 
     /// STATIC DATA (won't change after the node has been created)
+    pub(crate) data: NodeData,
     pub(crate) ugen: *mut dyn DynUGen<F>,
-    pub(crate) inputs: usize,
-    pub(crate) outputs: usize,
     /// true if the node was not pushed manually to the Graph. Such nodes may
     /// also be removed automatically when no longer needed.
     pub(crate) auto_math_node: bool,
@@ -50,9 +59,10 @@ pub(crate) struct Node<F> {
     pub(crate) remove_me: Option<Arc<AtomicBool>>,
 }
 impl<F: Float> Node<F> {
-    pub fn new<T: DynUGen<F> + 'static>(name: String, ugen: T) -> Self {
-        let parameter_descriptions = ugen.param_descriptions().into_iter().collect();
-        let parameter_hints = ugen.param_hints().into_iter().collect();
+    pub fn new<T: DynUGen<F> + 'static>(name: EcoString, ugen: T) -> Self {
+        let parameter_descriptions_fn = ugen.param_description_fn();
+        let parameter_hints_fn = ugen.param_hints_fn();
+        let parameters = ugen.parameters();
         let inputs = ugen.inputs();
         let outputs = ugen.outputs();
         let boxed_gen = Box::new(ugen);
@@ -60,12 +70,15 @@ impl<F: Float> Node<F> {
 
         Self {
             name,
-            parameter_descriptions,
-            parameter_hints,
+            data: NodeData {
+                parameter_descriptions_fn,
+                parameter_hints_fn,
+                inputs,
+                outputs,
+                parameters,
+            },
             ugen: ptr,
-            inputs,
-            outputs,
-            node_inputs: vec![crate::core::ptr::null_mut(); inputs],
+            node_inputs: vec![crate::core::ptr::null_mut(); inputs as usize],
             node_output: NodeOutput::Offset(0),
             remove_me: None,
             auto_math_node: false,
@@ -88,7 +101,7 @@ impl<F: Float> Node<F> {
             in_buffers,
             out_buffer,
             ugen: self.ugen,
-            output_channels: self.outputs,
+            output_channels: self.data.outputs as usize,
         }
     }
     pub fn node_output_ptr(&self) -> Option<*mut F> {
@@ -114,6 +127,22 @@ impl<F: Float> Node<F> {
         } else {
             eprintln!("Error: Tried to convert node offset to ptr, but the node had no offset!");
         }
+    }
+    pub fn parameter_descriptions(&self) -> impl Iterator<Item = &'static str> {
+        let mut i = 0;
+        std::iter::from_fn(move || {
+            i += 1;
+
+            (self.data.parameter_descriptions_fn)(i)
+        })
+    }
+    pub fn parameter_hints(&self) -> impl Iterator<Item = ParameterHint> {
+        let mut i = 0;
+        std::iter::from_fn(move || {
+            i += 1;
+
+            (self.data.parameter_hints_fn)(i)
+        })
     }
 }
 

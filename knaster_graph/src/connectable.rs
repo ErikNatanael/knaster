@@ -43,7 +43,7 @@ impl Connectable {
     ///
     /// E.g. if the Connectable consists of `handle0[1..=3]` and `handle1[2..=4]`,
     /// `for_output_channel(5)` will return `(node1, 3)`
-    pub fn for_output_channel(&self, chan: usize) -> Option<(NodeOrGraph, usize)> {
+    pub fn for_output_channel(&self, chan: u16) -> Option<(NodeOrGraph, u16)> {
         let mut node_i = 0;
         let mut channels_in_previous_sources = 0;
         let sources = &self.sources;
@@ -59,7 +59,7 @@ impl Connectable {
             chan - channels_in_previous_sources + sources[node_i].start_channel,
         ))
     }
-    pub fn for_input_channel(&self, chan: usize) -> Option<(NodeOrGraph, usize)> {
+    pub fn for_input_channel(&self, chan: u16) -> Option<(NodeOrGraph, u16)> {
         let mut node_i = 0;
         let mut channels_in_previous_sources = 0;
         let sinks = &self.sinks;
@@ -76,11 +76,11 @@ impl Connectable {
         ))
     }
     /// number of output channels
-    pub fn outputs(&self) -> usize {
+    pub fn outputs(&self) -> u16 {
         self.sources.iter().map(|ns| ns.channels).sum()
     }
     /// number of input channels
-    pub fn inputs(&self) -> usize {
+    pub fn inputs(&self) -> u16 {
         self.sinks.iter().map(|ns| ns.channels).sum()
     }
     pub fn input_subsets(&self) -> &[NodeSubset] {
@@ -126,9 +126,9 @@ pub struct NodeSubset {
     pub(crate) node: NodeOrGraph,
     /// The number of channels to produce. `start_channel + ` is the
     /// last channel in the subset.
-    pub(crate) channels: usize,
+    pub(crate) channels: u16,
     /// The offset from the start of the channels of the node
-    pub(crate) start_channel: usize,
+    pub(crate) start_channel: u16,
 }
 impl<T: Into<NodeId>> From<T> for Source {
     fn from(value: T) -> Self {
@@ -140,36 +140,36 @@ impl<T: Into<NodeId>> From<T> for Source {
 /// The generic `Size` parameter lets us ensure that channel arrays as inputs for a connection
 /// function match in arity at compile time.
 pub struct Channels<N: Size> {
-    channels: NumericArray<usize, N>,
+    channels: NumericArray<u16, N>,
 }
 impl<N: Size> IntoIterator for Channels<N> {
-    type Item = usize;
+    type Item = u16;
 
-    type IntoIter = <NumericArray<usize, N> as IntoIterator>::IntoIter;
+    type IntoIter = <NumericArray<u16, N> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.channels.into_iter()
     }
 }
-impl<N: Size> From<NumericArray<usize, N>> for Channels<N> {
-    fn from(value: NumericArray<usize, N>) -> Self {
+impl<N: Size> From<NumericArray<u16, N>> for Channels<N> {
+    fn from(value: NumericArray<u16, N>) -> Self {
         Self { channels: value }
     }
 }
-impl<N: Size, const N2: usize> From<[usize; N2]> for Channels<N>
+impl<N: Size, const N2: usize> From<[u16; N2]> for Channels<N>
 where
     crate::typenum::Const<N2>: crate::typenum::ToUInt,
     crate::typenum::Const<N2>: knaster_core::numeric_array::generic_array::IntoArrayLength,
-    knaster_core::numeric_array::generic_array::GenericArray<usize, N>: From<[usize; N2]>,
+    knaster_core::numeric_array::generic_array::GenericArray<u16, N>: From<[u16; N2]>,
 {
-    fn from(value: [usize; N2]) -> Self {
+    fn from(value: [u16; N2]) -> Self {
         Self {
             channels: value.into(),
         }
     }
 }
-impl From<usize> for Channels<U1> {
-    fn from(value: usize) -> Self {
+impl From<u16> for Channels<U1> {
+    fn from(value: u16) -> Self {
         Self {
             channels: [value].into(),
         }

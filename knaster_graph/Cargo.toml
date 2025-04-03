@@ -5,7 +5,13 @@ edition = "2024"
 
 [features]
 default = ["std", "cpal", "jack"]
-std = ["knaster_core/std", "slotmap/std", "thiserror/std", "dep:open"]
+std = [
+  "knaster_core/std",
+  "slotmap/std",
+  "thiserror/std",
+  "dep:open",
+  "ecow/std",
+]
 # Enables potential optimisations that require nightly rust
 unstable = ["knaster_core/unstable"]
 jack = ["dep:jack"]
@@ -29,6 +35,7 @@ smallvec = { version = "1.14.0", features = [
   "const_new",
 ] }
 log = "0.4.26"
+ecow = { version = "0.2.3", default-features = false }
 
 [dev-dependencies]
 anyhow = "1.0.94"
