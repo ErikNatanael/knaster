@@ -1,4 +1,4 @@
-use crate::core::marker::PhantomData;
+use crate::{core::marker::PhantomData, rt_log};
 use crate::core::sync::Arc;
 
 use knaster_primitives::{
@@ -9,7 +9,7 @@ use knaster_primitives::{
 
 use crate::{dsp::buffer::Buffer, ParameterHint};
 
-use super::UGen;
+use super::{AudioCtx, UGen};
 
 /// Reads a sample from a buffer and outputs it. The generic `Channels` determines how many
 /// channels will be read from the buffer.
@@ -75,8 +75,8 @@ impl<F: Float, Channels: Size> BufferReader<F, Channels> {
     }
 }
 impl<F: Float, Channels: Size> UGen for BufferReader<F, Channels> {
-    fn init(&mut self, ctx: &super::AudioCtx) {
-        self.base_rate = self.buffer.buf_rate_scale(ctx.sample_rate());
+    fn init(&mut self, sample_rate: u32, _block_size: usize) {
+        self.base_rate = self.buffer.buf_rate_scale(sample_rate);
         self.start_frame =
             Seconds::from_secs_f64(self.start_frame).to_samples_f64(self.buffer.sample_rate());
         self.dur_frame =
@@ -95,7 +95,7 @@ impl<F: Float, Channels: Size> UGen for BufferReader<F, Channels> {
 
     fn process(
         &mut self,
-        _ctx: super::AudioCtx,
+        _ctx: &mut AudioCtx,
         flags: &mut super::UGenFlags,
         _input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
@@ -122,7 +122,7 @@ impl<F: Float, Channels: Size> UGen for BufferReader<F, Channels> {
 
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        ctx: super::BlockAudioCtx,
+        ctx: &mut AudioCtx,
         flags: &mut super::UGenFlags,
         _input: &InBlock,
         output: &mut OutBlock,
@@ -153,7 +153,7 @@ impl<F: Float, Channels: Size> UGen for BufferReader<F, Channels> {
             }
         } else {
             // Output zeroes if we're finished
-            // eprintln!("Error: BufferReader: buffer doesn't exist in Resources");
+            rt_log!(ctx.logger(); "Error: BufferReader: buffer doesn't exist in Resources");
             stop_sample = Some(0);
         }
         if let Some(stop_sample) = stop_sample {
@@ -181,7 +181,7 @@ impl<F: Float, Channels: Size> UGen for BufferReader<F, Channels> {
         .into()
     }
 
-    fn param_apply(&mut self, _ctx: super::AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, index: usize, value: crate::ParameterValue) {
         match index {
             Self::RATE => {
                 self.rate = value.f().unwrap();

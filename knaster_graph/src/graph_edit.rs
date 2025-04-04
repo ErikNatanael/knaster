@@ -176,8 +176,9 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
         for ((source, source_channel), (sink, sink_channel)) in
             Static::iter_outputs(&self.nodes).zip(Static::iter_inputs(&n.nodes))
         {
-            g.connect2(source, source_channel, sink_channel, sink)
-                .expect("type safe interface should eliminate graph connection errors");
+            if let Err(e) = g.connect2(source, source_channel, sink_channel, sink) {
+                log::error!("Failed to connect {source:?}:{source_channel} to {sink:?}:{sink_channel}: {e}");
+            }
         }
         n
     }
@@ -1233,7 +1234,7 @@ mod tests {
     #[test]
     fn scope() {
         let block_size = 16;
-        let (mut graph, mut runner) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
+        let (mut graph, mut runner, log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
             block_size,
             sample_rate: 48000,
             ring_buffer_size: 50,
@@ -1287,9 +1288,9 @@ mod tests {
                 // Use the handle to connect it to another node
                 let new_sine = graph.push(SinWt::new(200.));
                 let new_pan = graph.push(Pan2::new(0.));
-                let a = (handle * new_sine) >> new_pan >> (lpf | lpf | new_pan);
+                let a = (handle * new_sine) >> new_pan >> (lpf | lpf );
                 let a = (new_sine * handle) >> new_pan;
-                (new_pan + (handle2 | handle2)).to(lpf | lpf | new_pan);
+                (new_pan + (handle2 | handle2)).to(lpf | lpf );
                 a.to_graph_out();
                 (new_sine + handle) >> new_pan;
             }
@@ -1298,8 +1299,9 @@ mod tests {
 
     #[test]
     fn connectable3() {
+        env_logger::init();
         let block_size = 16;
-        let (mut graph, mut runner) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
+        let (mut graph, mut runner, log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
             block_size,
             sample_rate: 48000,
             ring_buffer_size: 50,

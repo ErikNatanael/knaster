@@ -1,6 +1,5 @@
 use crate::{
-    typenum::{U0, U1},
-    Float, ParameterHint, UGen, UGenFlags,
+    typenum::{U0, U1}, AudioCtx, Float, ParameterHint, UGen, UGenFlags
 };
 
 /// Outputs a static number every frame
@@ -21,7 +20,7 @@ impl<F: Float> UGen for TestNumUGen<F> {
 
     fn process(
         &mut self,
-        _ctx: crate::AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         _input: crate::Frame<Self::Sample, Self::Inputs>,
     ) -> crate::Frame<Self::Sample, Self::Outputs> {
@@ -37,7 +36,7 @@ impl<F: Float> UGen for TestNumUGen<F> {
         [].into()
     }
 
-    fn param_apply(&mut self, _ctx: crate::AudioCtx, _index: usize, _value: crate::ParameterValue) {
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: crate::ParameterValue) {
     }
 }
 
@@ -62,7 +61,7 @@ impl<F: Float> UGen for TestInPlusParamGen<F> {
 
     fn process(
         &mut self,
-        _ctx: crate::AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         input: crate::Frame<Self::Sample, Self::Inputs>,
     ) -> crate::Frame<Self::Sample, Self::Outputs> {
@@ -78,7 +77,7 @@ impl<F: Float> UGen for TestInPlusParamGen<F> {
         [ParameterHint::infinite_float()].into()
     }
 
-    fn param_apply(&mut self, _ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, index: usize, value: crate::ParameterValue) {
         if index == 0 {
             self.set_number(F::new(value.float().unwrap()));
         }

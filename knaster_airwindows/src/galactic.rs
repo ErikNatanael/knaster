@@ -8,10 +8,10 @@
 use std::iter::Sum;
 
 use knaster_core::{
+    AudioCtx, Float, ParameterHint, UGen,
     delay::StaticSampleDelay,
     noise::next_randomness_seed,
     typenum::{U2, U5},
-    AudioCtx, Float, ParameterHint, UGen,
 };
 
 pub struct Galactic<F> {
@@ -52,13 +52,13 @@ impl<F: Float> UGen for Galactic<F> {
 
     type Parameters = U5;
 
-    fn init(&mut self, ctx: &AudioCtx) {
+    fn init(&mut self, sample_rate: u32, block_size: usize) {
         for (delay, time) in self.delays_left.iter_mut().zip(GALACTIC_DELAY_TIMES) {
-            let time = ((time as f64 / 44100.) * ctx.sample_rate() as f64) as usize;
+            let time = ((time as f64 / 44100.) * sample_rate as f64) as usize;
             *delay = StaticSampleDelay::new(time);
         }
         for (delay, time) in self.delays_right.iter_mut().zip(GALACTIC_DELAY_TIMES) {
-            let time = ((time as f64 / 44100.) * ctx.sample_rate() as f64) as usize;
+            let time = ((time as f64 / 44100.) * sample_rate as f64) as usize;
             *delay = StaticSampleDelay::new(time);
         }
         // self.detune_delay_left =
@@ -72,13 +72,13 @@ impl<F: Float> UGen for Galactic<F> {
 
         let mut overallscale = 1.0;
         overallscale /= 44100.0;
-        overallscale *= ctx.sample_rate() as f64;
+        overallscale *= sample_rate as f64;
         self.overallscale = F::new(overallscale);
     }
 
     fn process(
         &mut self,
-        _ctx: knaster_core::AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut knaster_core::UGenFlags,
         input: knaster_core::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
@@ -91,7 +91,7 @@ impl<F: Float> UGen for Galactic<F> {
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        _ctx: knaster_core::BlockAudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut knaster_core::UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
@@ -105,8 +105,8 @@ impl<F: Float> UGen for Galactic<F> {
         self.process(input.channel_as_slice(0), input.channel_as_slice(1), o0, o1);
     }
 
-    fn param_hints(
-    ) -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::Parameters>
+    fn param_hints()
+    -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::Parameters>
     {
         [
             ParameterHint::one(),
@@ -117,14 +117,14 @@ impl<F: Float> UGen for Galactic<F> {
         ]
         .into()
     }
-    fn param_descriptions(
-    ) -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions()
+    -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
         ["replace", "detune", "brightness", "bigness", "wet"].into()
     }
 
     fn param_apply(
         &mut self,
-        _ctx: knaster_core::AudioCtx,
+        _ctx: &mut AudioCtx,
         index: usize,
         value: knaster_core::ParameterValue,
     ) {

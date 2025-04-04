@@ -8,7 +8,7 @@ use knaster_primitives::{
 
 use crate::UGen;
 
-use super::UGenFlags;
+use super::{AudioCtx, UGenFlags};
 
 pub trait Operation<T> {
     #[cfg(feature = "unstable")]
@@ -106,7 +106,7 @@ where
 
     fn process(
         &mut self,
-        _ctx: crate::AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
@@ -129,7 +129,7 @@ where
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        _ctx: crate::BlockAudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
@@ -153,7 +153,7 @@ where
     fn param_hints() -> NumericArray<crate::ParameterHint, Self::Parameters> {
         NumericArray::from([])
     }
-    fn param_apply(&mut self, _ctx: crate::AudioCtx, _index: usize, _value: crate::ParameterValue) {
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: crate::ParameterValue) {
     }
 }
 
@@ -260,7 +260,7 @@ impl<F: Float, Op: Operation1<F>> UGen for Math1UGen<F, Op> {
 
     fn process(
         &mut self,
-        _ctx: crate::AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
@@ -277,7 +277,7 @@ impl<F: Float, Op: Operation1<F>> UGen for Math1UGen<F, Op> {
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        _ctx: crate::BlockAudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
@@ -294,6 +294,6 @@ impl<F: Float, Op: Operation1<F>> UGen for Math1UGen<F, Op> {
     fn param_hints() -> NumericArray<crate::ParameterHint, Self::Parameters> {
         NumericArray::from([])
     }
-    fn param_apply(&mut self, _ctx: crate::AudioCtx, _index: usize, _value: crate::ParameterValue) {
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: crate::ParameterValue) {
     }
 }

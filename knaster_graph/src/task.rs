@@ -5,8 +5,9 @@ use crate::core::sync::atomic::AtomicBool;
 use crate::core::sync::atomic::Ordering;
 use alloc::{boxed::Box, vec::Vec};
 
+use knaster_core::AudioCtx;
 use knaster_core::UGenFlags;
-use knaster_core::{BlockAudioCtx, Float};
+use knaster_core::{Float};
 
 use crate::block::RawBlock;
 use crate::dyngen::DynUGen;
@@ -20,7 +21,7 @@ pub struct Task<F> {
     pub(crate) output_channels: usize,
 }
 impl<F: Float> Task<F> {
-    pub fn run(&mut self, ctx: BlockAudioCtx, flags: &mut UGenFlags) {
+    pub fn run(&mut self, ctx: &mut AudioCtx, flags: &mut UGenFlags) {
         let input = unsafe { AggregateBlockRead::new(&self.in_buffers, ctx.block_size()) };
         let mut output =
             unsafe { RawBlock::new(self.out_buffer, self.output_channels, ctx.block_size()) };
@@ -94,10 +95,10 @@ pub(crate) struct TaskData<F: Float> {
 impl<F: Float> TaskData<F> {
     /// Run this when the TaskData is received on the audio thread and is
     /// applied to be the new current TaskData.
-    pub fn apply_self_on_audio_thread(&mut self) {
+    pub fn apply_self_on_audio_thread(&mut self, ctx: &mut AudioCtx) {
         for apc in &self.ar_parameter_changes {
             unsafe {
-                (*self.gens[apc.node].1).set_ar_param_buffer(apc.parameter_index, apc.buffer)
+                (*self.gens[apc.node].1).set_ar_param_buffer(ctx, apc.parameter_index, apc.buffer)
             };
         }
         // Setting `applied` to true signals that the new

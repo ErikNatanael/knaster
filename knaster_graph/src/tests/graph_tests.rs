@@ -11,7 +11,7 @@ use knaster_core::{Block, Done, PTrigger, typenum::U3};
 #[test]
 fn graph_inputs_to_outputs() {
     let block_size = 16;
-    let (mut graph, mut runner) = Runner::new::<U3, U3>(RunnerOptions {
+    let (mut graph, mut runner, log_receiver) = Runner::new::<U3, U3>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -42,7 +42,7 @@ fn graph_inputs_to_outputs() {
 #[test]
 fn graph_inputs_to_nodes_to_outputs() {
     let block_size = 16;
-    let (mut graph, mut runner) = Runner::new::<U3, U3>(RunnerOptions {
+    let (mut graph, mut runner, log_receiver) = Runner::new::<U3, U3>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -80,7 +80,7 @@ fn graph_inputs_to_nodes_to_outputs() {
 #[test]
 fn multichannel_nodes() {
     let block_size = 16;
-    let (mut graph, mut runner) = Runner::new::<U3, U2>(RunnerOptions {
+    let (mut graph, mut runner, log_receiver) = Runner::new::<U3, U2>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -132,7 +132,7 @@ fn multichannel_nodes() {
 #[test]
 fn free_node_when_done() {
     let block_size = 16;
-    let (mut graph, mut runner) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
+    let (mut graph, mut runner, log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -165,7 +165,7 @@ fn free_node_when_done() {
 #[test]
 fn feedback_nodes() {
     let block_size = 16;
-    let (mut g, mut runner) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+    let (mut g, mut runner, log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -206,7 +206,7 @@ fn feedback_nodes() {
 #[test]
 fn feedback_nodes2() {
     let block_size = 16;
-    let (mut g, mut runner) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+    let (mut g, mut runner, log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,

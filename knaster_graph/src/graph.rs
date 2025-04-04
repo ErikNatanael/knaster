@@ -438,9 +438,8 @@ impl<F: Float> Graph<F> {
     /// correct block size for this Graph.
     fn push_node(&mut self, mut node: Node<F>) -> NodeKey {
         self.recalculation_required = true;
-        let ctx = AudioCtx::new(self.sample_rate, self.block_size);
 
-        node.init(&ctx);
+        node.init(self.sample_rate, self.block_size);
         let node_inputs = node.data.inputs;
         let key = self.get_nodes_mut().insert(node);
         self.node_input_edges
@@ -490,7 +489,7 @@ impl<F: Float> Graph<F> {
         if sink_channel >= nodes[sink.key()].data.inputs {
             return Err(GraphError::InputOutOfBounds(sink_channel));
         }
-        if self.has_path(sink, source) {
+        if !feedback && self.has_path(sink, source) {
             return Err(GraphError::CircularConnection);
         }
         self.connect_to_node_internal(
@@ -617,6 +616,7 @@ impl<F: Float> Graph<F> {
                 if let Some(index) = sink_node.parameter_descriptions().position(|s| s == desc) {
                     index as u16
                 } else {
+                    log::error!("Parameter description not found: {desc}, found instead {}", sink_node.parameter_descriptions().collect::<Vec<_>>().join(", "));
                     return Err(GraphError::ParameterDescriptionNotFound(desc.to_string()));
                 }
             }
@@ -1176,11 +1176,11 @@ impl<F: Float> Graph<F> {
     /// Returns true if there is a path from `from` to `to` in the graph.
     fn has_path(&self, from: NodeId, to: NodeId) -> bool {
         let mut visited = HashSet::new();
-        let mut stack = vec![from.key];
-        let to = to.key;
+        let mut stack = vec![to.key];
+        let from = from.key;
 
         while let Some(node) = stack.pop() {
-            if node == to {
+            if node == from {
                 return true;
             }
             if visited.insert(node) {
@@ -1856,9 +1856,6 @@ impl<F: Float> Graph<F> {
             Err(GraphError::NodeNotFound)
         }
     }
-    pub fn ctx(&self) -> AudioCtx {
-        AudioCtx::new(self.sample_rate, self.block_size)
-    }
     /// Number of input channels going into this graph.
     pub fn inputs(&self) -> u16 {
         self.num_inputs
@@ -1866,6 +1863,12 @@ impl<F: Float> Graph<F> {
     /// Number of output channels going out from this graph.
     pub fn outputs(&self) -> u16 {
         self.num_outputs
+    }
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+    pub fn block_size(&self) -> usize {
+        self.block_size
     }
     /// Connectable for connecting the Graph to other nodes within its parent graph.
     pub fn as_node(&self) -> Connectable {
@@ -2072,7 +2075,7 @@ impl<F: Float> UGen for FeedbackSink<F> {
 
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut knaster_core::UGenFlags,
         _input: knaster_core::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
@@ -2081,7 +2084,7 @@ impl<F: Float> UGen for FeedbackSink<F> {
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        _ctx: knaster_core::BlockAudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut knaster_core::UGenFlags,
         input: &InBlock,
         _output: &mut OutBlock,
@@ -2100,7 +2103,7 @@ impl<F: Float> UGen for FeedbackSink<F> {
         [].into()
     }
 
-    fn param_apply(&mut self, _ctx: AudioCtx, _index: usize, _value: knaster_core::ParameterValue) {
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: knaster_core::ParameterValue) {
     }
 }
 /// The source for a feedback connection
@@ -2121,7 +2124,7 @@ impl<F: Float> UGen for FeedbackSource<F> {
 
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut knaster_core::UGenFlags,
         _input: knaster_core::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
@@ -2130,7 +2133,7 @@ impl<F: Float> UGen for FeedbackSource<F> {
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        _ctx: knaster_core::BlockAudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut knaster_core::UGenFlags,
         _input: &InBlock,
         output: &mut OutBlock,
@@ -2151,7 +2154,7 @@ impl<F: Float> UGen for FeedbackSource<F> {
         [].into()
     }
 
-    fn param_apply(&mut self, _ctx: AudioCtx, _index: usize, _value: knaster_core::ParameterValue) {
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: knaster_core::ParameterValue) {
     }
 }
 

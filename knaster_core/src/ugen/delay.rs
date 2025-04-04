@@ -34,7 +34,7 @@ impl<F: Float> UGen for SampleDelay<F> {
     type Parameters = U1;
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -44,9 +44,9 @@ impl<F: Float> UGen for SampleDelay<F> {
         self.write_position = (self.write_position + 1) % self.buffer.len();
         [out].into()
     }
-    fn init(&mut self, ctx: &AudioCtx) {
+    fn init(&mut self, sample_rate: u32, block_size: usize) {
         self.buffer =
-            vec![F::ZERO; (self.max_delay_length.to_secs_f64() * ctx.sample_rate as f64) as usize];
+            vec![F::ZERO; (self.max_delay_length.to_secs_f64() * sample_rate as f64) as usize];
         self.write_position = 0;
     }
 
@@ -57,7 +57,7 @@ impl<F: Float> UGen for SampleDelay<F> {
         [ParameterHint::positive_infinite_float()].into()
     }
 
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         #[allow(clippy::single_match)]
         match index {
             0 => {
@@ -208,7 +208,7 @@ impl<F: Float> UGen for AllpassDelay<F> {
 
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -221,7 +221,7 @@ impl<F: Float> UGen for AllpassDelay<F> {
         [ParameterHint::positive_infinite_float()].into()
     }
 
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         #[allow(clippy::single_match)]
         match index {
             Self::DELAY_TIME => {
@@ -286,13 +286,13 @@ impl<F: Float> UGen for AllpassFeedbackDelay<F> {
     type Outputs = U1;
     type Parameters = U2;
 
-    fn init(&mut self, ctx: &AudioCtx) {
-        self.allpass_delay.init(ctx.sample_rate() as u64);
+    fn init(&mut self, sample_rate: u32, block_size: usize) {
+        self.allpass_delay.init(sample_rate as u64);
     }
 
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -307,7 +307,7 @@ impl<F: Float> UGen for AllpassFeedbackDelay<F> {
         .into()
     }
 
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         match index {
             0 => {
                 self.set_delay_in_frames(F::new(value.float().unwrap() * ctx.sample_rate as f64));

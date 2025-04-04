@@ -2,30 +2,28 @@
 
 use anyhow::Result;
 use knaster_core::{
-    empty_block,
-    numeric_array::NumericArray,
-    typenum::{Unsigned, U0, U1, U3},
-    AudioCtx, Block, BlockAudioCtx, Float, Frame, Param, ParameterError, ParameterHint,
-    ParameterType, ParameterValue, UGen, UGenFlags, VecBlock,
+    empty_block, log::ArLogReceiver, numeric_array::NumericArray, typenum::{Unsigned, U0, U1, U3}, AudioCtx, Block, Float, Frame, Param, ParameterError, ParameterHint, ParameterType, ParameterValue, UGen, UGenFlags, VecBlock
 };
 fn main() -> Result<()> {
     // Let's pretend we're running an audio backend at 48kHz with a block size of 64.
-    let ctx = BlockAudioCtx::new(AudioCtx::new(48000, 64));
+    let mut log_receiver = ArLogReceiver::new();
+    let logger = log_receiver.sender();
+    let mut ctx = AudioCtx::new(48000, 64, logger);
     let mut flags = UGenFlags::new();
     let mut osc = Osc::new();
     // Since we own the Osc directly, and it isn't wrapped in anything, we can
     // set the frequency directly:
     osc.freq(200., ctx.sample_rate() as f32);
     // We can also use the Parameterable trait interface
-    osc.param(ctx.into(), "freq", 200.)?;
+    osc.param(&mut ctx, "freq", 200.)?;
 
     // # Generating audio
     // We can generate frames one by one:
-    let output = osc.process(ctx.into(), &mut flags, [].into());
+    let output = osc.process(&mut ctx, &mut flags, [].into());
     assert_eq!(output[0], 0.0);
     // Or in blocks
     let mut output_block = VecBlock::new(1, 64);
-    osc.process_block(ctx, &mut flags, &&empty_block(), &mut output_block);
+    osc.process_block(&mut ctx, &mut flags, &&empty_block(), &mut output_block);
     assert!(
         (output_block.read(0, 63)
             - ((200.0 / ctx.sample_rate() as f32) * std::f32::consts::TAU * 64.).sin())
@@ -67,11 +65,11 @@ impl<F: Float> UGen for Osc<F> {
     type Inputs = U0;
     type Outputs = U1;
 
-    fn init(&mut self, _ctx: &AudioCtx) {}
+    fn init(&mut self, sample_rate: u32, block_size: usize) {}
 
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -100,7 +98,7 @@ impl<F: Float> UGen for Osc<F> {
         todo!()
     }
 
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         match index {
             0 => self.freq(
                 F::from(value.float().unwrap()).unwrap(),
@@ -114,7 +112,7 @@ impl<F: Float> UGen for Osc<F> {
 
     fn param(
         &mut self,
-        ctx: AudioCtx,
+        ctx: &mut AudioCtx,
         param: impl Into<Param>,
         value: impl Into<ParameterValue>,
     ) -> Result<(), ParameterError> {

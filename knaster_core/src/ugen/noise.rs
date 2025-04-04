@@ -53,7 +53,7 @@ impl<F: Float> UGen for WhiteNoise<F> {
 
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -64,7 +64,7 @@ impl<F: Float> UGen for WhiteNoise<F> {
         [].into()
     }
 
-    fn param_apply(&mut self, _ctx: AudioCtx, _index: usize, _value: ParameterValue) {}
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: ParameterValue) {}
 }
 const PINK_NOISE_OCTAVES: u32 = 9;
 /// Pink noise
@@ -142,7 +142,7 @@ impl<F: Float> UGen for PinkNoise<F> {
 
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -152,7 +152,7 @@ impl<F: Float> UGen for PinkNoise<F> {
     fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         [].into()
     }
-    fn param_apply(&mut self, _ctx: AudioCtx, _index: usize, _value: ParameterValue) {}
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: ParameterValue) {}
 }
 
 /// Brown noise (also known as red noise)
@@ -189,7 +189,7 @@ impl<F: Float> UGen for BrownNoise<F> {
     type Parameters = U0;
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -205,7 +205,7 @@ impl<F: Float> UGen for BrownNoise<F> {
         [].into()
     }
 
-    fn param_apply(&mut self, _ctx: AudioCtx, _index: usize, _value: ParameterValue) {}
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: ParameterValue) {}
 }
 /// Random numbers 0..1 with linear interpolation with new values at some frequency. Freq is sampled at control rate only.
 pub struct RandomLin<F: Copy = f32> {
@@ -248,15 +248,15 @@ impl<F: Float> UGen for RandomLin<F> {
     type Outputs = U1;
     type Parameters = U1;
 
-    fn init(&mut self, ctx: &AudioCtx) {
-        self.freq_to_phase_inc = F::ONE / F::from(ctx.sample_rate).unwrap();
+    fn init(&mut self, sample_rate: u32, block_size: usize) {
+        self.freq_to_phase_inc = F::ONE / F::from(sample_rate).unwrap();
         // freq is stored in phase_step until init
         self.phase_step *= self.freq_to_phase_inc;
         self.new_value();
     }
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -276,7 +276,7 @@ impl<F: Float> UGen for RandomLin<F> {
         ["freq"].into()
     }
 
-    fn param_apply(&mut self, _ctx: AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         match index {
             0 => {
                 if self.freq_to_phase_inc == F::ZERO {

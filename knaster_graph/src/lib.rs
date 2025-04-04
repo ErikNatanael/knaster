@@ -69,7 +69,7 @@ pub use scheduling::*;
 /// # use knaster_graph::set_many;
 /// # use knaster_core::{Param, UGen, typenum::U0, typenum::U2};
 /// # use knaster_graph::Time;
-/// let (mut graph, mut runner) = Runner::<f32>::new::<U0, U2>(RunnerOptions::default());
+/// let (mut graph, mut runner, log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions::default());
 /// let osc0 = graph.push(SinNumeric::new(440.));
 /// let osc1 = graph.push(SinNumeric::new(440.));
 /// set_many!(graph, Time::asap(); &osc0, "freq", 440., &osc1, "freq", 880.);

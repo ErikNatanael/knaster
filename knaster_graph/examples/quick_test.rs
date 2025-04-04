@@ -5,7 +5,7 @@ use knaster_core::envelopes::EnvAsr;
 use knaster_core::math::{MathUGen, Mul};
 use knaster_core::noise::{RandomLin, WhiteNoise};
 use knaster_core::onepole::OnePoleHpf;
-use knaster_core::{Done, Seconds};
+use knaster_core::{AudioCtx, Done, Seconds};
 use knaster_core::{
     UGen,
     osc::SinNumeric,
@@ -28,7 +28,7 @@ fn main() -> Result<()> {
     let mut backend = CpalBackend::new(CpalBackendOptions::default())?;
 
     // Create a graph
-    let (mut top_level_graph, runner) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
+    let (mut top_level_graph, runner, mut log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
         block_size: backend.block_size().unwrap_or(64),
         sample_rate: backend.sample_rate(),
         ring_buffer_size: 200,
@@ -40,15 +40,18 @@ fn main() -> Result<()> {
         top_level_graph.connect(graph.as_node(), [0, 0], [0, 1], top_level_graph.internal())?;
 
         top_level_graph.commit_changes()?;
+
+    let mut ctx = AudioCtx::new(graph.sample_rate(), graph.block_size(), log_receiver.sender());
+    let ctx = &mut ctx;
         let mut rng = thread_rng();
         let freq = rng.gen_range(200.0..800.);
         dbg!(freq);
         let mut osc1 = WrSmoothParams::new(SinNumeric::new(freq));
-        osc1.param(graph.ctx(), "freq", freq)?;
+        osc1.param(ctx, "freq", freq)?;
         let osc1 = graph.push(osc1.wr_mul(0.2));
         osc1.set(("freq", freq))?;
         let mut osc2 = SinNumeric::new(freq * 1.5);
-        osc2.param(graph.ctx(), "freq", freq * 1.5)?;
+        osc2.param(ctx, "freq", freq * 1.5)?;
         let osc2 = graph.push(osc2.wr_mul(0.2));
         let osc3 = graph.push(SinNumeric::new(freq * 4.).wr_mul(0.2));
         osc3.set(("freq", freq * 4.))?;

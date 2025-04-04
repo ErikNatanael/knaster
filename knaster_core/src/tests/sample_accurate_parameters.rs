@@ -1,26 +1,29 @@
 use knaster_primitives::{Block, VecBlock};
 
 use crate::{
-    tests::utils::TestInPlusParamGen,
-    wrappers_core::{UGenWrapperCoreExt, WrPreciseTiming},
-    AudioCtx, BlockAudioCtx, UGen, UGenFlags,
+    log::ArLogReceiver, tests::utils::TestInPlusParamGen, wrappers_core::{UGenWrapperCoreExt, WrPreciseTiming}, AudioCtx,  UGen, UGenFlags
 };
 
 #[test]
 fn sample_accurate_parameters_test() {
     const BLOCK_SIZE: usize = 16;
-    let ctx = BlockAudioCtx::new(AudioCtx::new(48000, BLOCK_SIZE));
+    const SR: u32 = 48000;
+
+    let mut log_receiver = ArLogReceiver::new();
+    let logger = log_receiver.sender();
+    let mut ctx = AudioCtx::new(SR, BLOCK_SIZE, logger);
+    let ctx = &mut ctx;
     let mut flags = UGenFlags::new();
     let mut g = WrPreciseTiming::<10, _>::new(TestInPlusParamGen::new());
-    g.set_delay_within_block_for_param(0, 5);
+    g.set_delay_within_block_for_param(ctx, 0, 5);
     g.param(ctx.into(), 0, 5.).unwrap();
-    g.set_delay_within_block_for_param(0, 6);
+    g.set_delay_within_block_for_param(ctx, 0, 6);
     g.param((ctx).into(), 0, 6.).unwrap();
-    g.set_delay_within_block_for_param(0, 8);
+    g.set_delay_within_block_for_param(ctx, 0, 8);
     g.param((ctx).into(), 0, 8.).unwrap();
-    g.set_delay_within_block_for_param(0, 9);
+    g.set_delay_within_block_for_param(ctx, 0, 9);
     g.param((ctx).into(), 0, 9.).unwrap();
-    g.set_delay_within_block_for_param(0, 10);
+    g.set_delay_within_block_for_param(ctx, 0, 10);
     g.param((ctx).into(), 0, 10.).unwrap();
 
     let in_block = VecBlock::<f32>::new(2, 16);
@@ -37,7 +40,11 @@ fn sample_accurate_parameters_test() {
 #[test]
 fn sample_accurate_parameters_with_wrappers_test() {
     const BLOCK_SIZE: usize = 16;
-    let ctx = BlockAudioCtx::new(AudioCtx::new(48000, BLOCK_SIZE));
+    const SR: u32 = 48000;
+    let mut log_receiver = ArLogReceiver::new();
+    let logger = log_receiver.sender();
+    let mut ctx = AudioCtx::new(SR, BLOCK_SIZE, logger);
+    let ctx = &mut ctx;
 
     let mut flags = UGenFlags::new();
     let g = WrPreciseTiming::<10, _>::new(TestInPlusParamGen::new());
@@ -50,15 +57,15 @@ fn sample_accurate_parameters_with_wrappers_test() {
         .wr_powf(1.0)
         .wr_powi(1)
         .wr(|v| v);
-    g.set_delay_within_block_for_param(0, 5);
-    g.param((ctx).into(), 0, 5.).unwrap();
-    g.set_delay_within_block_for_param(0, 6);
+    g.set_delay_within_block_for_param(ctx, 0, 5);
+    g.param(ctx.into(), 0, 5.).unwrap();
+    g.set_delay_within_block_for_param(ctx, 0, 6);
     g.param((ctx).into(), 0, 6.).unwrap();
-    g.set_delay_within_block_for_param(0, 8);
+    g.set_delay_within_block_for_param(ctx, 0, 8);
     g.param((ctx).into(), 0, 8.).unwrap();
-    g.set_delay_within_block_for_param(0, 9);
+    g.set_delay_within_block_for_param(ctx, 0, 9);
     g.param((ctx).into(), 0, 9.).unwrap();
-    g.set_delay_within_block_for_param(0, 10);
+    g.set_delay_within_block_for_param(ctx, 0, 10);
     g.param((ctx).into(), 0, 10.).unwrap();
 
     let in_block = VecBlock::<f32>::new(2, 16);

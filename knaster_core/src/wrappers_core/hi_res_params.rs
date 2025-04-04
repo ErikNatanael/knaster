@@ -1,7 +1,6 @@
-use knaster_primitives::{numeric_array::NumericArray, Frame};
+use knaster_primitives::{Frame, numeric_array::NumericArray};
 
-use crate::core::eprintln;
-use crate::{AudioCtx, ParameterValue, UGen, UGenFlags};
+use crate::{rt_log, AudioCtx, ParameterValue, UGen, UGenFlags};
 
 /// Enables sample accurate parameter changes within a block. Changes must be
 /// scheduled in the order they are to be applied.
@@ -42,13 +41,13 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
 
     type Outputs = T::Outputs;
 
-    fn init(&mut self, ctx: &AudioCtx) {
-        self.ugen.init(ctx);
+    fn init(&mut self, sample_rate: u32, block_size: usize) {
+        self.ugen.init(sample_rate, block_size);
     }
 
     fn process(
         &mut self,
-        ctx: AudioCtx,
+        ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -62,7 +61,7 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        ctx: crate::BlockAudioCtx,
+        ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
@@ -72,6 +71,7 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
     {
         let mut block_i = 0;
         let mut change_i = 0;
+        let org_block = ctx.block.clone();
         let num_changes_scheduled = self.next_delay_i;
         loop {
             let mut local_frames_to_process = ctx.frames_to_process() - block_i;
@@ -97,12 +97,14 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
             } else {
                 let input = input.partial(block_i, local_frames_to_process);
                 let mut output = output.partial_mut(block_i, local_frames_to_process);
-                let partial_ctx = ctx.make_partial(block_i, local_frames_to_process);
-                self.ugen
-                    .process_block(partial_ctx, flags, &input, &mut output);
+                let partial_block = org_block.make_partial(block_i, local_frames_to_process);
+                ctx.block = partial_block;
+                self.ugen.process_block(ctx, flags, &input, &mut output);
+                ctx.block = org_block;
             }
             block_i += local_frames_to_process;
         }
+        ctx.block = org_block;
         //
         self.next_delay_i = 0;
     }
@@ -117,23 +119,27 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
         T::param_hints()
     }
 
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         if self.next_delay[index] == 0 {
             self.ugen.param_apply(ctx, index, value);
         } else if self.next_delay_i < DELAYED_CHANGES_PER_BLOCK {
             self.waiting_changes[self.next_delay_i] = Some((self.next_delay[index], index, value));
             self.next_delay_i += 1;
         } else {
-            // TODO: Proper error reporting
-            eprintln!("Warning: Not enough space for echeduled changes in WrHiResParams, change ignored. Allocate more space for saving scheduled changes by setting the generic DelayedChangesPerBlock to a higher number.");
+            rt_log!(ctx.logger(); "Warning: Not enough space for echeduled changes in WrHiResParams, change ignored. Allocate more space for saving scheduled changes by setting the generic DelayedChangesPerBlock to a higher number than the current", DELAYED_CHANGES_PER_BLOCK);
         }
     }
 
-    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
-        unsafe { self.ugen.set_ar_param_buffer(index, buffer) }
+    unsafe fn set_ar_param_buffer(
+        &mut self,
+        ctx: &mut AudioCtx,
+        index: usize,
+        buffer: *const T::Sample,
+    ) {
+        unsafe { self.ugen.set_ar_param_buffer(ctx, index, buffer) }
     }
 
-    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
+    fn set_delay_within_block_for_param(&mut self, ctx: &mut AudioCtx, index: usize, delay: u16) {
         self.next_delay[index] = delay;
     }
 }

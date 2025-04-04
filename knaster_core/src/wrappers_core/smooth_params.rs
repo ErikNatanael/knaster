@@ -1,6 +1,6 @@
 use knaster_primitives::{numeric_array::NumericArray, typenum::*, Block, BlockRead, Frame};
 
-use crate::{parameters::*, AudioCtx, BlockAudioCtx, Rate, UGen, UGenFlags};
+use crate::{parameters::*, AudioCtx, Rate, UGen, UGenFlags};
 
 /// Wrapper that enables input parameter smoothing for a [`UGen`]. Smoothing only
 /// works with `Float` type parameters.
@@ -105,13 +105,13 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
 
     type Outputs = T::Outputs;
 
-    fn init(&mut self, ctx: &AudioCtx) {
-        self.ugen.init(ctx)
+    fn init(&mut self, sample_rate: u32, block_size: usize) {
+        self.ugen.init(sample_rate, block_size)
     }
 
     fn process(
         &mut self,
-        ctx: AudioCtx,
+        ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -126,7 +126,7 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        ctx: BlockAudioCtx,
+        ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
@@ -135,6 +135,7 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
         OutBlock: Block<Sample = Self::Sample>,
     {
         let mut there_is_an_ar_parameter = false;
+        let org_block = ctx.block;
         // TODO: set the Rate  of a parameter
         for p in &self.parameters {
             there_is_an_ar_parameter =
@@ -159,17 +160,19 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
                     }
                     let input = input.partial(i, 1);
                     let mut output = output.partial_mut(i, 1);
-                    let partial_ctx = ctx.make_partial(i, 1);
+                    let partial_ctx = org_block.make_partial(i, 1);
+                    ctx.block = partial_ctx;
                     self.ugen
-                        .process_block(partial_ctx, flags, &input, &mut output);
+                        .process_block(ctx, flags, &input, &mut output);
                     i += 1;
                 } else {
                     // Process the full block
                     let input = input.partial(i, input.block_size() - i);
                     let mut output = output.partial_mut(i, output.block_size() - i);
-                    let partial_ctx = ctx.make_partial(i, ctx.block_size() - i);
+                    let partial_ctx = org_block.make_partial(i, ctx.block_size() - i);
+                    ctx.block = partial_ctx;
                     self.ugen
-                        .process_block(partial_ctx, flags, &input, &mut output);
+                        .process_block(ctx, flags, &input, &mut output);
                     break;
                 }
             }
@@ -194,7 +197,7 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
         T::param_hints()
     }
 
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         if index >= T::Parameters::USIZE {
             return;
         }

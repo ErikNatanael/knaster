@@ -83,7 +83,7 @@ impl Time {
             // TODO: Real logging
             #[cfg(debug_assertions)]
             if t < frame_clock {
-                std::eprintln!("Event was scheduled late {}, {}", t, frame_clock);
+                log::warn!("Event was scheduled late {}, {}", t, frame_clock);
             }
             t.saturating_sub(frame_clock)
         } else {

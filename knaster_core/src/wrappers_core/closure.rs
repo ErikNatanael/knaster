@@ -1,4 +1,4 @@
-use crate::{BlockAudioCtx, UGen, UGenFlags};
+use crate::{ AudioCtx, UGen, UGenFlags};
 use knaster_primitives::{Block, BlockRead};
 
 /// Applies the closure to every sample of every channel in the [`UGen`] output
@@ -19,13 +19,13 @@ impl<T: UGen, C: FnMut(T::Sample) -> T::Sample + 'static> UGen for WrClosure<T, 
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
 
-    fn init(&mut self, ctx: &crate::AudioCtx) {
-        self.ugen.init(ctx);
+    fn init(&mut self, sample_rate: u32, block_size: usize) {
+        self.ugen.init(sample_rate, block_size);
     }
 
     fn process(
         &mut self,
-        ctx: crate::AudioCtx,
+        ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
         input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
@@ -37,7 +37,7 @@ impl<T: UGen, C: FnMut(T::Sample) -> T::Sample + 'static> UGen for WrClosure<T, 
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        ctx: BlockAudioCtx,
+        ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
@@ -65,15 +65,15 @@ impl<T: UGen, C: FnMut(T::Sample) -> T::Sample + 'static> UGen for WrClosure<T, 
         T::param_hints()
     }
 
-    fn param_apply(&mut self, ctx: crate::AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: crate::ParameterValue) {
         T::param_apply(&mut self.ugen, ctx, index, value)
     }
-    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
+    unsafe fn set_ar_param_buffer(&mut self, ctx: &mut AudioCtx, index: usize, buffer: *const T::Sample) {
         unsafe {
-            self.ugen.set_ar_param_buffer(index, buffer);
+            self.ugen.set_ar_param_buffer(ctx, index, buffer);
         }
     }
-    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
-        self.ugen.set_delay_within_block_for_param(index, delay);
+    fn set_delay_within_block_for_param(&mut self, ctx: &mut AudioCtx, index: usize, delay: u16) {
+        self.ugen.set_delay_within_block_for_param(ctx, index, delay);
     }
 }

@@ -2,7 +2,6 @@ use crate::{
     SchedulingEvent,
     core::{
         cell::UnsafeCell,
-        eprintln,
         marker::PhantomData,
         slice,
         sync::atomic::{AtomicBool, Ordering},
@@ -13,7 +12,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use knaster_core::{
-    BlockAudioCtx, Float, Size, UGen, UGenFlags, numeric_array::NumericArray, typenum::U0,
+    numeric_array::NumericArray, rt_log, typenum::U0, AudioCtx, Float, Size, UGen, UGenFlags
 };
 use slotmap::SlotMap;
 
@@ -70,13 +69,13 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
     type Inputs = Inputs;
     type Outputs = Outputs;
 
-    fn init(&mut self, _ctx: &knaster_core::AudioCtx) {
+    fn init(&mut self, sample_rate: u32, block_size: usize) {
         self.blocks_to_keep_scheduled_changes = self.sample_rate / self.block_size as u32;
     }
 
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        ctx: knaster_core::BlockAudioCtx,
+        ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
@@ -94,13 +93,13 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
         if num_new_task_data > 0 {
             if let Ok(td_chunk) = self.new_task_data_consumer.read_chunk(num_new_task_data) {
                 for mut td in td_chunk {
-                    td.apply_self_on_audio_thread();
+                    td.apply_self_on_audio_thread(ctx);
                     let old_td = std::mem::replace(&mut self.current_task_data, td);
                     match self.task_data_to_be_dropped_producer.push(old_td) {
                         Ok(_) => (),
-                        Err(e) => eprintln!(
-                            "RingBuffer for TaskData to be dropped was full. Please increase the size of the RingBuffer. The GraphGen will drop the TaskData here instead. e: {e}"
-                        ),
+                        Err(e) => {
+                        rt_log!(ctx.logger(); "RingBuffer for TaskData to be dropped was full. Please increase the size of the RingBuffer. The GraphGen will drop the TaskData here instead. e: {e}");
+                        }
                     }
                 }
             }
@@ -234,7 +233,7 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
 
     fn process(
         &mut self,
-        _ctx: knaster_core::AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         _input: knaster_core::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
@@ -252,7 +251,7 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
 
     fn param_apply(
         &mut self,
-        _ctx: knaster_core::AudioCtx,
+        _ctx: &mut AudioCtx,
         _index: usize,
         _value: knaster_core::ParameterValue,
     ) {
@@ -264,7 +263,7 @@ fn apply_parameter_change<'a, 'b, F: Float>(
     mut event: SchedulingEvent,
     block_size: u64,
     sample_rate: u64,
-    ctx: BlockAudioCtx,
+    ctx: &mut AudioCtx,
     // replace implicit 'static with 'b
     gens: &'a mut [(NodeKey, *mut (dyn DynUGen<F> + 'b))],
 ) -> Option<SchedulingEvent> {
@@ -281,7 +280,7 @@ fn apply_parameter_change<'a, 'b, F: Float>(
             if *key == node_key {
                 let g = unsafe { &mut (**ugen) };
                 if delay_in_block > 0 {
-                    g.set_delay_within_block_for_param(event.parameter, delay_in_block as u16);
+                    g.set_delay_within_block_for_param(ctx, event.parameter, delay_in_block as u16);
                 }
                 if let Some(smoothing) = event.smoothing {
                     g.param_apply(ctx.into(), event.parameter, smoothing.into());

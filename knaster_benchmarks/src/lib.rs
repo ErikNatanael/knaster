@@ -37,7 +37,7 @@ impl<F: Float> UGen for TestNumUGen<F> {
 
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -53,5 +53,5 @@ impl<F: Float> UGen for TestNumUGen<F> {
         [].into()
     }
 
-    fn param_apply(&mut self, _ctx: AudioCtx, _index: usize, _value: ParameterValue) {}
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: ParameterValue) {}
 }

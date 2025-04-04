@@ -1,6 +1,6 @@
-use alloc::string::ToString;
+use knaster_core::log::{ArLogReceiver, ArLogSender};
 use knaster_core::Seconds;
-use knaster_core::{AudioCtx, BlockAudioCtx, Float, Size, UGenFlags, typenum::NonZero};
+use knaster_core::{AudioCtx, Float, Size, UGenFlags, typenum::NonZero};
 
 use crate::SharedFrameClock;
 use crate::graph::NodeId;
@@ -42,11 +42,12 @@ pub struct Runner<F: Float> {
     frame_clock: u64,
     // The frame clock available on other threads
     shared_frame_clock: SharedFrameClock,
+    ctx: AudioCtx,
 }
 impl<F: Float> Runner<F> {
     pub fn new<Inputs: Size, Outputs: Size + NonZero>(
         options: RunnerOptions,
-    ) -> (Graph<F>, Runner<F>) {
+    ) -> (Graph<F>, Runner<F>, ArLogReceiver) {
         let block_size = options.block_size;
         let sample_rate = options.sample_rate;
         assert!(block_size != 0, "The block size must not be 0");
@@ -64,6 +65,9 @@ impl<F: Float> Runner<F> {
             block_size,
             sample_rate,
         );
+        let mut log_receiver = ArLogReceiver::new();
+        let log_sender = log_receiver.sender();
+        let ctx = AudioCtx::new(sample_rate, block_size, log_sender);
         let runner = Runner {
             graph_node: node,
             output_block: unsafe {
@@ -78,8 +82,9 @@ impl<F: Float> Runner<F> {
             block_size,
             frame_clock: 0,
             shared_frame_clock,
+            ctx,
         };
-        (graph, runner)
+        (graph, runner, log_receiver)
     }
 
     /// Produce one block of audio
@@ -94,12 +99,11 @@ impl<F: Float> Runner<F> {
     /// returns. The pointers will not be stored past this function call.
     pub unsafe fn run(&mut self, input_pointers: &[*const F]) {
         assert!(input_pointers.len() == self.inputs() as usize);
-        let mut ctx = BlockAudioCtx::new(AudioCtx::new(self.sample_rate, self.block_size));
-        ctx.set_frame_clock(self.frame_clock);
+        self.ctx.block.set_frame_clock(self.frame_clock);
         let mut flags = UGenFlags::new();
         let ugen = self.graph_node.ugen;
         let input = unsafe { AggregateBlockRead::new(input_pointers, self.block_size) };
-        unsafe { &mut (*ugen) }.process_block(ctx, &mut flags, &input, &mut self.output_block);
+        unsafe { &mut (*ugen) }.process_block(&mut self.ctx, &mut flags, &input, &mut self.output_block);
         self.frame_clock += self.block_size as u64;
         self.shared_frame_clock
             .store_new_time(Seconds::from_samples(

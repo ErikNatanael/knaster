@@ -15,23 +15,26 @@ pub mod util;
 
 #[cfg(feature = "std")]
 use crate::core::eprintln;
-use crate::core::ops::Deref;
+use crate::log::ArLogSender;
 use crate::numeric_array::NumericArray;
-use crate::{Param, ParameterError, ParameterHint, ParameterType, ParameterValue};
+use crate::{rt_log, Param, ParameterError, ParameterHint, ParameterType, ParameterValue};
 use knaster_primitives::{Block, BlockRead, Float, Frame, Size, typenum::*};
 
 /// Contains basic metadata about the context in which an audio process is
 /// running which is often necessary for correct calculation, initialisation etc.
-#[derive(Clone, Copy, Debug)]
 pub struct AudioCtx {
     sample_rate: u32,
     block_size: usize,
+    logger: ArLogSender,
+    pub block: BlockMetadata,
 }
 impl AudioCtx {
-    pub fn new(sample_rate: u32, block_size: usize) -> Self {
+    pub fn new(sample_rate: u32, block_size: usize, logger: ArLogSender) -> Self {
         Self {
             sample_rate,
             block_size,
+            logger,
+            block: BlockMetadata::new(block_size),
         }
     }
     pub fn block_size(&self) -> usize {
@@ -39,6 +42,18 @@ impl AudioCtx {
     }
     pub fn sample_rate(&self) -> u32 {
         self.sample_rate
+    }
+    pub fn logger(&mut self) -> &mut ArLogSender {
+        &mut self.logger
+    }
+    pub fn frames_to_process(&self) -> usize {
+        self.block.frames_to_process
+    }
+    pub fn block_start_offset(&self) -> usize {
+        self.block.block_start_offset
+    }
+    pub fn frame_clock(&self) -> u64 {
+        self.block.frame_clock
     }
 }
 /// [`AudioCtx`] + metadata about the current context of block processing.
@@ -51,8 +66,7 @@ impl AudioCtx {
 // more efficient. This would avoid having to copy flags and parameters that
 // don't change when a partial block is created.
 #[derive(Clone, Copy, Debug)]
-pub struct BlockAudioCtx {
-    audio_ctx: AudioCtx,
+pub struct BlockMetadata {
     /// The offset of the current processing block from the start of any
     /// buffers. Does not need to be applied to a [`Block`] since they have
     /// already been adapted to the new block size. However, if you maintain
@@ -69,18 +83,16 @@ pub struct BlockAudioCtx {
     /// Can be used to schedule changes such as when a node should start processing.
     frame_clock: u64,
 }
-impl BlockAudioCtx {
-    pub fn new(ctx: AudioCtx) -> Self {
+impl BlockMetadata {
+    pub fn new(block_size: usize) -> Self {
         Self {
-            frames_to_process: ctx.block_size,
-            audio_ctx: ctx,
+            frames_to_process: block_size,
             block_start_offset: 0,
             frame_clock: 0,
         }
     }
-    pub fn make_partial(&self, start_offset: usize, length: usize) -> BlockAudioCtx {
+    pub fn make_partial(&self, start_offset: usize, length: usize) -> BlockMetadata {
         Self {
-            audio_ctx: self.audio_ctx,
             block_start_offset: self.block_start_offset + start_offset,
             frames_to_process: length,
             frame_clock: self.frame_clock + start_offset as u64,
@@ -99,50 +111,6 @@ impl BlockAudioCtx {
     }
     pub fn block_start_offset(&self) -> usize {
         self.block_start_offset
-    }
-    pub fn block_size(&self) -> usize {
-        self.audio_ctx.block_size
-    }
-    pub fn sample_rate(&self) -> u32 {
-        self.audio_ctx.sample_rate
-    }
-}
-impl Deref for BlockAudioCtx {
-    type Target = AudioCtx;
-
-    fn deref(&self) -> &Self::Target {
-        &self.audio_ctx
-    }
-}
-impl<'a> From<&'a mut BlockAudioCtx> for &'a mut AudioCtx {
-    fn from(val: &'a mut BlockAudioCtx) -> Self {
-        &mut val.audio_ctx
-    }
-}
-impl From<AudioCtx> for BlockAudioCtx {
-    fn from(val: AudioCtx) -> Self {
-        BlockAudioCtx::new(val)
-    }
-}
-impl From<BlockAudioCtx> for AudioCtx {
-    fn from(val: BlockAudioCtx) -> Self {
-        val.audio_ctx
-    }
-}
-impl<'a> From<&'a BlockAudioCtx> for &'a AudioCtx {
-    fn from(val: &'a BlockAudioCtx) -> Self {
-        &val.audio_ctx
-    }
-}
-// Why do we need this? But it works.
-impl<'a> From<&'a mut AudioCtx> for &'a AudioCtx {
-    fn from(val: &'a mut AudioCtx) -> Self {
-        val
-    }
-}
-impl<'a> From<&'a mut BlockAudioCtx> for &'a AudioCtx {
-    fn from(val: &'a mut BlockAudioCtx) -> Self {
-        &val.audio_ctx
     }
 }
 /// Output state used for carrying some basic state up through the tree of Gens and wrappers_graph.
@@ -207,12 +175,11 @@ impl UGenFlags {
     /// Set the flag to remove this node. Returns true if freeing self is
     /// supported by the node tree and false if it isn't. If this returns false,
     /// the node will not be removed.
-    pub fn mark_remove_self(&mut self) {
+    pub fn mark_remove_self(&mut self, ctx: &mut AudioCtx) {
         if self.remove_self_supported {
             self.remove_self = true;
         } else {
-            // TODO: report error
-            eprintln!("Warning: Remove self flag set, but not supported.");
+            rt_log!(ctx.logger(); "Warning: Remove self flag set, but not supported.");
         }
     }
     /// Set the flag to remove the graph that owns this node and from which frame.
@@ -272,10 +239,10 @@ pub trait UGen {
     /// internal state with knowledge of the sample rate and the block size. It
     /// is safe to allocate here.
     #[allow(unused)]
-    fn init(&mut self, ctx: &AudioCtx) {}
+    fn init(&mut self, sample_rate: u32, block_size: usize) {}
     fn process(
         &mut self,
-        ctx: AudioCtx,
+        ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs>;
@@ -290,7 +257,7 @@ pub trait UGen {
     /// The information about partial blocks is available in [`BlockAudioCtx`]
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        ctx: BlockAudioCtx,
+        ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
@@ -298,13 +265,13 @@ pub trait UGen {
         InBlock: BlockRead<Sample = Self::Sample>,
         OutBlock: Block<Sample = Self::Sample>,
     {
-        for frame in 0..ctx.frames_to_process {
+        for frame in 0..ctx.block.frames_to_process {
             // This is potentially a tiny bit inefficient because it initialises the memory before overwriting it.
             let mut in_frame = Frame::default();
             for i in 0..Self::Inputs::USIZE {
                 in_frame[i] = input.read(i, frame);
             }
-            let out_frame = self.process(ctx.into(), flags, in_frame);
+            let out_frame = self.process(ctx, flags, in_frame);
             for i in 0..Self::Outputs::USIZE {
                 output.write(out_frame[i], i, frame);
             }
@@ -333,7 +300,7 @@ pub trait UGen {
     ///
     /// Tries to apply the parameter change without checking the validity of the
     /// values. May panic or do nothing given unexpected values.
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue);
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue);
     /// Set an audio buffer to control a parameter. Does nothing unless an
     /// `ArParams` wrapper or alternative wrapper making use of this value wraps the Gen.
     ///
@@ -347,12 +314,13 @@ pub trait UGen {
     /// contiguous allocation of at least block size until it is replaced,
     /// disabled, or the inner struct is dropped.
     #[allow(unused)]
-    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const Self::Sample) {
-        // TODO: Proper errors
-        #[cfg(all(debug_assertions, feature = "std"))]
-        eprintln!(
-            "Warning: Audio rate parameter buffer set, but did not reach a WrArParams and will have no effect."
-        );
+    unsafe fn set_ar_param_buffer(
+        &mut self,
+        ctx: &mut AudioCtx,
+        index: usize,
+        buffer: *const Self::Sample,
+    ) {
+        rt_log!(ctx.logger(); "Warning: Audio rate parameter buffer set, but did not reach a WrArParams and will have no effect.");
     }
     /// Sets a delay to what frame within the next block the next parameter
     /// change should take effect.
@@ -363,18 +331,14 @@ pub trait UGen {
     ///
     /// Wrappers must propagagte this call.
     #[allow(unused)]
-    fn set_delay_within_block_for_param(&mut self, index: usize, delay: u16) {
-        // TODO: Proper errors
-        #[cfg(all(debug_assertions, feature = "std"))]
-        eprintln!(
-            "Warning: Parameter delay set, but did not reach a WrHiResParams and will have no effect."
-        );
+    fn set_delay_within_block_for_param(&mut self,ctx: &mut AudioCtx, index: usize, delay: u16) {
+        rt_log!(ctx.logger(); "Warning: Parameter delay set, but did not reach a WrHiResParams and will have no effect.");
     }
     /// Apply a parameter change. Typechecks and bounds checks the arguments and
     /// provides sensible errors. Calls [`UGen::param_apply`] under the hood.
     fn param(
         &mut self,
-        ctx: AudioCtx,
+        ctx: &mut AudioCtx,
         param: impl Into<Param>,
         value: impl Into<ParameterValue>,
     ) -> Result<(), ParameterError> {

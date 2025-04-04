@@ -216,17 +216,17 @@ impl<F: Float> UGen for SvfFilter<F> {
     type Outputs = U1;
     type Parameters = U5;
 
-    fn init(&mut self, ctx: &AudioCtx) {
+    fn init(&mut self, sample_rate: u32, block_size: usize) {
         self.set_coeffs(
             self.cutoff_freq,
             self.q,
             self.gain_db,
-            F::from(ctx.sample_rate).unwrap(),
+            F::from(sample_rate).unwrap(),
         );
     }
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -253,7 +253,7 @@ impl<F: Float> UGen for SvfFilter<F> {
         .into()
     }
 
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         match index {
             Self::CUTOFF_FREQ => {
                 self.cutoff_freq = F::new(value.float().unwrap());

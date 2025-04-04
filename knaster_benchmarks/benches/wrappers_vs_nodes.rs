@@ -8,7 +8,7 @@ use knaster_graph::wrappers_core::UGenWrapperCoreExt;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let block_size = 32;
-    let (mut graph, mut runner) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+    let (mut graph, mut runner, log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -26,7 +26,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             );
         })
     });
-    let (mut graph, mut runner) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+    let (mut graph, mut runner, log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -52,7 +52,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         })
     });
     // 100 nodes
-    let (mut graph, mut runner) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+    let (mut graph, mut runner, log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -77,7 +77,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             );
         })
     });
-    let (mut graph, mut runner) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+    let (mut graph, mut runner, log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,

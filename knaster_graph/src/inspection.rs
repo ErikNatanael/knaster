@@ -5,7 +5,6 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::core::eprintln;
 use crate::graph::{GraphId, NodeId, NodeKey};
 use crate::handle::{AnyHandle, RawHandle, SchedulingChannelSender};
 use crate::{SchedulingChannelProducer, SharedFrameClock};
@@ -159,7 +158,7 @@ impl GraphInspection {
                         if let Some(i) = self.nodes.iter().position(|n| n.key == *node_key) {
                             format!("\"{i}_{}\"", self.nodes[i].name)
                         } else {
-                            eprintln!("Node in edge not found: {:?}", node_key);
+                            log::error!("Node in edge not found: {:?}", node_key);
                             continue;
                         }
                     }
@@ -184,7 +183,7 @@ impl GraphInspection {
                     if let Some(j) = self.nodes.iter().position(|n| n.key == *node_key) {
                         format!("{j}_{}", self.nodes[j].name)
                     } else {
-                        eprintln!("Node in edge not found: {:?}", node_key);
+                        log::error!("Node in edge not found: {:?}", node_key);
                         continue;
                     }
                 }

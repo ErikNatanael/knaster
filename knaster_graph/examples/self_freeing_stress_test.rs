@@ -26,7 +26,7 @@ fn main() -> Result<()> {
     let mut backend = CpalBackend::new(CpalBackendOptions::default())?;
 
     // Create a graph
-    let (mut top_graph, runner) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
+    let (mut top_graph, runner, log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
         block_size: backend.block_size().unwrap_or(64),
         sample_rate: backend.sample_rate(),
         ring_buffer_size: 200,

@@ -1,6 +1,4 @@
-#[cfg(feature = "std")]
-use crate::core::eprintln;
-use crate::core::marker::PhantomData;
+use crate::{core::marker::PhantomData, rt_log};
 
 use knaster_primitives::{
     Float, Frame,
@@ -15,7 +13,7 @@ use crate::{Param, ParameterError, ParameterHint, ParameterValue};
 use super::{AudioCtx, UGen, UGenFlags};
 #[cfg(any(feature = "alloc", feature = "std"))]
 mod wavetable_vec {
-    use crate::core::marker::PhantomData;
+    use crate::{core::marker::PhantomData, rt_log};
     use crate::core::sync::LazyLock;
 
     use knaster_primitives::{
@@ -74,15 +72,15 @@ mod wavetable_vec {
         type Sample = F;
         type Inputs = U0;
         type Outputs = U1;
-        fn init(&mut self, ctx: &crate::AudioCtx) {
+        fn init(&mut self, sample_rate: u32, block_size: usize) {
             self.reset_phase();
             self.freq_to_phase_inc =
-                TABLE_SIZE as f64 * FRACTIONAL_PART as f64 * (1.0 / ctx.sample_rate() as f64);
+                TABLE_SIZE as f64 * FRACTIONAL_PART as f64 * (1.0 / sample_rate as f64);
         }
 
         fn process(
             &mut self,
-            _ctx: crate::AudioCtx,
+            _ctx: &mut AudioCtx,
             _flags: &mut UGenFlags,
             _input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
         ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
@@ -90,7 +88,7 @@ mod wavetable_vec {
         }
         fn process_block<InBlock, OutBlock>(
             &mut self,
-            _ctx: crate::BlockAudioCtx,
+            _ctx: &mut AudioCtx,
             _flags: &mut UGenFlags,
             _input: &InBlock,
             output: &mut OutBlock,
@@ -125,9 +123,9 @@ mod wavetable_vec {
             ])
         }
 
-        fn param_apply(&mut self, _ctx: AudioCtx, index: usize, value: ParameterValue) {
+        fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
             if matches!(value, ParameterValue::Smoothing(..)) {
-                // eprintln!("Tried to set parameter smoothing with out a wrapper");
+                rt_log!(ctx.logger(); "Tried to set parameter smoothing to parameter", Self::param_descriptions()[index] ," without a WrSmoothParams wrapper");
                 return;
             }
             match index {
@@ -198,16 +196,16 @@ mod wavetable_vec {
         type Inputs = U0;
         type Outputs = U1;
 
-        fn init(&mut self, ctx: &crate::AudioCtx) {
+        fn init(&mut self, sample_rate: u32, block_size: usize) {
             self.reset_phase();
             self.freq_to_phase_inc =
-                TABLE_SIZE as f64 * FRACTIONAL_PART as f64 * (1.0 / ctx.sample_rate() as f64);
+                TABLE_SIZE as f64 * FRACTIONAL_PART as f64 * (1.0 / sample_rate as f64);
             self.set_freq(self.freq); // init any frequency set before init was called
         }
 
         fn process(
             &mut self,
-            _ctx: AudioCtx,
+            _ctx: &mut AudioCtx,
             _flags: &mut UGenFlags,
             _input: Frame<Self::Sample, Self::Inputs>,
         ) -> Frame<Self::Sample, Self::Outputs> {
@@ -235,9 +233,9 @@ mod wavetable_vec {
             ])
         }
 
-        fn param_apply(&mut self, _ctx: AudioCtx, index: usize, value: ParameterValue) {
+        fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
             if matches!(value, ParameterValue::Smoothing(..)) {
-                // eprintln!("Tried to set parameter smoothing with out a wrapper");
+                rt_log!(ctx.logger(); "Tried to set parameter smoothing to parameter", Self::param_descriptions()[index] ," without a WrSmoothParams wrapper");
                 return;
             }
             match index {
@@ -281,14 +279,14 @@ impl<F: Float> UGen for Phasor<F> {
     type Inputs = U0;
     type Outputs = U1;
     #[allow(missing_docs)]
-    fn init(&mut self, ctx: &AudioCtx) {
-        self.freq_to_phase_step_mult = 1.0_f64 / (ctx.sample_rate() as f64);
+    fn init(&mut self, sample_rate: u32, block_size: usize) {
+        self.freq_to_phase_step_mult = 1.0_f64 / (sample_rate as f64);
         self.set_freq(self.step);
     }
 
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -313,7 +311,7 @@ impl<F: Float> UGen for Phasor<F> {
         [ParameterHint::infinite_float()].into()
     }
 
-    fn param_apply(&mut self, _ctx: AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, index: usize, value: crate::ParameterValue) {
         if index == 0 {
             self.set_freq(value.float().unwrap())
         }
@@ -354,18 +352,18 @@ impl<F: Float> UGen for SinNumeric<F> {
     type Inputs = U0;
     type Outputs = U1;
 
-    fn init(&mut self, ctx: &AudioCtx) {
+    fn init(&mut self, sample_rate: u32, block_size: usize) {
         // self.phase holds the freq set in the constructor, but only use it if the freq hasn't
         // been set any other way
         if self.phase_increment == F::ZERO {
-            self.freq(self.phase, F::from(ctx.sample_rate).unwrap());
+            self.freq(self.phase, F::from(sample_rate).unwrap());
         }
         self.phase = F::ZERO;
     }
 
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -390,9 +388,9 @@ impl<F: Float> UGen for SinNumeric<F> {
         ])
     }
 
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         if matches!(value, ParameterValue::Smoothing(..)) {
-            eprintln!("Tried to set parameter smoothing with out a wrapper");
+            rt_log!(ctx.logger(); "Tried to set parameter smoothing with out a wrapper");
             return;
         }
         match index {
@@ -408,7 +406,7 @@ impl<F: Float> UGen for SinNumeric<F> {
 
     fn param(
         &mut self,
-        ctx: AudioCtx,
+        ctx: &mut AudioCtx,
         param: impl Into<Param>,
         value: impl Into<ParameterValue>,
     ) -> Result<(), ParameterError> {

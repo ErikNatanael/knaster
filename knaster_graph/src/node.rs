@@ -2,7 +2,7 @@ use core::iter::FromFn;
 
 use crate::core::sync::Arc;
 use crate::core::sync::atomic::AtomicBool;
-use crate::core::{eprintln, vec, vec::Vec};
+use crate::core::{vec, vec::Vec};
 use alloc::{boxed::Box, string::String};
 
 use ecow::EcoString;
@@ -23,17 +23,17 @@ impl NodeData {
     pub fn parameter_descriptions(&self) -> impl Iterator<Item = &'static str> {
         let mut i = 0;
         std::iter::from_fn(move || {
+            let s = (self.parameter_descriptions_fn)(i);
             i += 1;
-
-            (self.parameter_descriptions_fn)(i)
+            s
         })
     }
     pub fn parameter_hints(&self) -> impl Iterator<Item = ParameterHint> {
         let mut i = 0;
         std::iter::from_fn(move || {
+            let s = (self.parameter_hints_fn)(i);
             i += 1;
-
-            (self.parameter_hints_fn)(i)
+            s
         })
     }
 }
@@ -106,8 +106,8 @@ impl<F: Float> Node<F> {
             strong_dependent: None,
         }
     }
-    pub fn init(&mut self, ctx: &AudioCtx) {
-        unsafe { &mut *(self.ugen) }.init(ctx);
+    pub fn init(&mut self, sample_rate: u32, block_size: usize) {
+        unsafe { &mut *(self.ugen) }.init(sample_rate, block_size);
     }
     pub(super) fn to_task(&self) -> Task<F> {
         let in_buffers = self.node_inputs.clone();
@@ -140,10 +140,10 @@ impl<F: Float> Node<F> {
             if let Some(ptr) = b.offset_to_ptr(offset) {
                 self.node_output = NodeOutput::Pointer(ptr);
             } else {
-                eprintln!("Error: Unable to convert offset to pointer!");
+                log::error!("Error: Unable to convert offset to pointer!");
             }
         } else {
-            eprintln!("Error: Tried to convert node offset to ptr, but the node had no offset!");
+            log::error!("Error: Tried to convert node offset to ptr, but the node had no offset!");
         }
     }
     pub fn parameter_descriptions(&self) -> impl Iterator<Item = &'static str> {

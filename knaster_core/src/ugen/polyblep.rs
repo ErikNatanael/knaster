@@ -114,8 +114,8 @@ impl<F: Float> UGen for PolyBlep<F> {
     type Inputs = U0;
     type Outputs = U1;
     type Parameters = U3;
-    fn init(&mut self, ctx: &AudioCtx) {
-        self.sample_rate = F::from(ctx.sample_rate()).unwrap();
+    fn init(&mut self, sample_rate: u32, block_size: usize) {
+        self.sample_rate = F::from(sample_rate).unwrap();
         if self.freq_in_seconds_per_sample == F::ZERO && self.freq_in_hz != F::ZERO {
             self.set_frequency(self.freq_in_hz);
         }
@@ -123,7 +123,7 @@ impl<F: Float> UGen for PolyBlep<F> {
 
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -142,7 +142,7 @@ impl<F: Float> UGen for PolyBlep<F> {
         ["freq", "pulse_width", "waveform"].into()
     }
 
-    fn param_apply(&mut self, _ctx: AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         match index {
             Self::FREQ => self.set_frequency(F::new(value.float().unwrap())),
             Self::PULSE_WIDTH => {

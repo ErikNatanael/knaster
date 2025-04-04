@@ -6,7 +6,7 @@
 use crate::{
     SchedulingEvent, SchedulingToken, SharedFrameClock, Time,
     connectable::{NodeOrGraph, NodeSubset},
-    core::{eprintln, marker::PhantomData},
+    core::{marker::PhantomData},
     graph::{GraphError, NodeId},
 };
 use alloc::{string::ToString, vec::Vec};
@@ -410,7 +410,7 @@ impl<H: HandleTrait> Drop for ParameterChange2<'_, H> {
                 token: self.token.take(),
                 time: self.time.take(),
             }) {
-                eprintln!("Error sending parameter change: {e}");
+                log::error!("Error sending parameter change: {e}");
             }
         }
     }

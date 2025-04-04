@@ -33,7 +33,7 @@ impl<F: Float> UGen for DoneOnTrig<F> {
 
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -44,7 +44,7 @@ impl<F: Float> UGen for DoneOnTrig<F> {
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        ctx: super::BlockAudioCtx,
+        ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
         _input: &InBlock,
         _output: &mut OutBlock,
@@ -64,7 +64,7 @@ impl<F: Float> UGen for DoneOnTrig<F> {
         ["t_done"].into()
     }
 
-    fn param_apply(&mut self, _ctx: AudioCtx, index: usize, _value: ParameterValue) {
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, index: usize, _value: ParameterValue) {
         if index == 0 {
             self.triggered = true
         }
@@ -90,7 +90,7 @@ impl<F: Float> UGen for Constant<F> {
 
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -98,7 +98,7 @@ impl<F: Float> UGen for Constant<F> {
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        _ctx: super::BlockAudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         _input: &InBlock,
         output: &mut OutBlock,
@@ -116,7 +116,7 @@ impl<F: Float> UGen for Constant<F> {
         ["value"].into()
     }
 
-    fn param_apply(&mut self, _ctx: AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         if index == 0 {
             self.value = value.f().unwrap();
         }

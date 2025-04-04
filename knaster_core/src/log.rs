@@ -29,6 +29,11 @@ impl From<f32> for ArLogMessage {
         ArLogMessage::Float(value as f64)
     }
 }
+impl From<usize> for ArLogMessage {
+    fn from(value: usize) -> Self {
+        ArLogMessage::Unsigned(value as u64)
+    }
+}
 impl From<u64> for ArLogMessage {
     fn from(value: u64) -> Self {
         ArLogMessage::Unsigned(value)
@@ -129,16 +134,18 @@ impl ArLogSender {
 #[macro_export]
 macro_rules! rt_log {
     ($logger:expr; $($msg:expr),* $(,)?) => {{
+    {
+    use $crate::log::ArLogMessage;
         $(
             $logger.send(ArLogMessage::from($msg));
         )*
         $logger.send(ArLogMessage::End);
+    }
     }};
 }
 #[cfg(test)]
 mod tests {
     use super::ArLogReceiver;
-    use crate::log::ArLogMessage;
 
     #[test]
     fn log_rt() {

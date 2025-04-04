@@ -1,6 +1,5 @@
 use knaster_core::{
-    typenum::{U0, U1},
-    Float, ParameterHint, UGen, UGenFlags,
+    typenum::{U0, U1}, AudioCtx, Float, ParameterHint, UGen, UGenFlags
 };
 
 /// Outputs a static number every frame
@@ -21,7 +20,7 @@ impl<F: Float> UGen for TestNumUGen<F> {
 
     fn process(
         &mut self,
-        _ctx: knaster_core::AudioCtx,
+        _ctx: &mut knaster_core::AudioCtx,
         _flags: &mut UGenFlags,
         _input: knaster_core::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
@@ -42,7 +41,7 @@ impl<F: Float> UGen for TestNumUGen<F> {
 
     fn param_apply(
         &mut self,
-        _ctx: knaster_core::AudioCtx,
+        _ctx: &mut knaster_core::AudioCtx,
         _index: usize,
         _value: knaster_core::ParameterValue,
     ) {
@@ -70,7 +69,7 @@ impl<F: Float> UGen for TestInPlusParamUGen<F> {
 
     fn process(
         &mut self,
-        _ctx: knaster_core::AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         input: knaster_core::Frame<Self::Sample, Self::Inputs>,
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
@@ -91,7 +90,7 @@ impl<F: Float> UGen for TestInPlusParamUGen<F> {
 
     fn param_apply(
         &mut self,
-        _ctx: knaster_core::AudioCtx,
+        _ctx: &mut AudioCtx,
         index: usize,
         value: knaster_core::ParameterValue,
     ) {

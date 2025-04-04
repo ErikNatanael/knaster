@@ -1,7 +1,6 @@
 use core::marker::PhantomData;
 
 use crate::audio_backend::{AudioBackend, AudioBackendError};
-use crate::core::{eprintln, println};
 use crate::runner::Runner;
 use alloc::{boxed::Box, string::String};
 #[cfg(all(debug_assertions, feature = "assert_no_alloc"))]
@@ -89,9 +88,7 @@ impl<F: Float> AudioBackend for CpalBackend<F> {
             )
         }
         if runner.inputs() > 0 {
-            eprintln!(
-                "Warning: CpalBackend currently does not support inputs into the top level Graph."
-            )
+            log::error!("Warning: CpalBackend currently does not support inputs into the top level Graph. Top level graph inputs will have no data.");
         }
         let config = self.config.clone();
         let stream = match self.config.sample_format() {
@@ -146,8 +143,8 @@ where
 {
     let channels = config.channels as usize;
 
-    // TODO: Send error back from the audio thread in a unified way.
-    let err_fn = |err| eprintln!("CPAL error: an error occurred on stream: {}", err);
+    // TODO: Send error via ArLogSender instead.
+    let err_fn = |err| log::error!("CPAL error: an error occurred on stream: {}", err);
 
     let graph_block_size = runner.block_size();
     let mut sample_counter = graph_block_size; // Immediately process a block

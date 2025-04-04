@@ -11,7 +11,7 @@ use knaster_primitives::{
 
 use crate::{
     parameters::{PFloat, ParameterValue},
-    AudioCtx, BlockAudioCtx, UGen,
+    AudioCtx,  UGen,
 };
 
 /// Wrapper that enables setting a parameter to an audio rate signal. This must
@@ -42,13 +42,13 @@ impl<T: UGen> UGen for WrArParams<T> {
 
     type Outputs = T::Outputs;
 
-    fn init(&mut self, ctx: &AudioCtx) {
-        self.ugen.init(ctx);
+    fn init(&mut self, sample_rate: u32, block_size: usize) {
+        self.ugen.init(sample_rate, block_size);
     }
 
     fn process(
         &mut self,
-        ctx: AudioCtx,
+        ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -74,13 +74,13 @@ impl<T: UGen> UGen for WrArParams<T> {
         T::param_hints()
     }
 
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         if self.buffers[index].is_none() {
             self.ugen.param_apply(ctx, index, value);
         }
     }
 
-    unsafe fn set_ar_param_buffer(&mut self, index: usize, buffer: *const T::Sample) {
+    unsafe fn set_ar_param_buffer(&mut self , _ctx: &mut AudioCtx, index: usize, buffer: *const T::Sample) {
         debug_assert!(index < T::Parameters::USIZE);
         self.buffers[index] = Some(buffer);
     }
@@ -110,14 +110,14 @@ where
 
     type Outputs = T::Outputs;
 
-    fn init(&mut self, ctx: &AudioCtx) {
+    fn init(&mut self, sample_rate: u32, block_size: usize) {
         // TODO: check that this parameter is a float parameter
-        self.ugen.init(ctx)
+        self.ugen.init(sample_rate, block_size)
     }
 
     fn process(
         &mut self,
-        ctx: AudioCtx,
+        ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -137,7 +137,7 @@ where
 
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        ctx: BlockAudioCtx,
+        ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
@@ -167,7 +167,7 @@ where
         T::param_hints()
     }
 
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         self.ugen.param_apply(ctx, index, value);
     }
 }

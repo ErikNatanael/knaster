@@ -1,5 +1,5 @@
 use crate::numeric_array::NumericArray;
-use crate::{AudioCtx, BlockAudioCtx, ParameterHint, ParameterValue, UGen, UGenFlags};
+use crate::{AudioCtx,  ParameterHint, ParameterValue, UGen, UGenFlags};
 use knaster_primitives::typenum::{U0, U1, U3, U4};
 use knaster_primitives::{Block, BlockRead, Float, Frame};
 
@@ -81,14 +81,14 @@ impl<F: Float> UGen for EnvAsr<F> {
     type Outputs = U1;
     type Parameters = U4;
 
-    fn init(&mut self, ctx: &AudioCtx) {
+    fn init(&mut self, sample_rate: u32, _block_size: usize) {
         // Init rate based on the seconds if the rate hasn't already been set through a param
         if self.attack_rate == F::ONE {
             if self.attack_seconds == F::ZERO {
                 self.attack_rate = F::ONE;
             } else {
                 self.attack_rate =
-                    F::ONE / (self.attack_seconds * F::from(ctx.sample_rate).unwrap());
+                    F::ONE / (self.attack_seconds * F::from(sample_rate).unwrap());
             }
         }
         if self.release_rate == F::ONE {
@@ -96,14 +96,14 @@ impl<F: Float> UGen for EnvAsr<F> {
                 self.release_rate = F::ONE;
             } else {
                 self.release_rate =
-                    F::ONE / (self.release_seconds * F::from(ctx.sample_rate).unwrap());
+                    F::ONE / (self.release_seconds * F::from(sample_rate).unwrap());
             }
         }
     }
 
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -112,7 +112,7 @@ impl<F: Float> UGen for EnvAsr<F> {
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        _ctx: BlockAudioCtx,
+        _ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
         _input: &InBlock,
         output: &mut OutBlock,
@@ -138,7 +138,7 @@ impl<F: Float> UGen for EnvAsr<F> {
         .into()
     }
 
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         match index {
             Self::ATTACK_TIME => {
                 let atk = F::new(value.float().unwrap());
@@ -259,14 +259,14 @@ impl<F: Float> UGen for EnvAr<F> {
     type Outputs = U1;
     type Parameters = U3;
 
-    fn init(&mut self, ctx: &AudioCtx) {
+    fn init(&mut self, sample_rate: u32, _block_size: usize) {
         // Init rate based on the seconds if the rate hasn't already been set through a param
         if self.attack_rate == F::ONE {
             if self.attack_seconds == F::ZERO {
                 self.attack_rate = F::ONE;
             } else {
                 self.attack_rate =
-                    F::ONE / (self.attack_seconds * F::from(ctx.sample_rate).unwrap());
+                    F::ONE / (self.attack_seconds * F::from(sample_rate).unwrap());
             }
         }
         if self.release_rate == F::ONE {
@@ -274,14 +274,14 @@ impl<F: Float> UGen for EnvAr<F> {
                 self.release_rate = F::ONE;
             } else {
                 self.release_rate =
-                    F::ONE / (self.release_seconds * F::from(ctx.sample_rate).unwrap());
+                    F::ONE / (self.release_seconds * F::from(sample_rate).unwrap());
             }
         }
     }
 
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
         _input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -290,7 +290,7 @@ impl<F: Float> UGen for EnvAr<F> {
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        _ctx: BlockAudioCtx,
+        _ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
         _input: &InBlock,
         output: &mut OutBlock,
@@ -315,7 +315,7 @@ impl<F: Float> UGen for EnvAr<F> {
         .into()
     }
 
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         match index {
             Self::ATTACK_TIME => {
                 let atk = F::new(value.float().unwrap());

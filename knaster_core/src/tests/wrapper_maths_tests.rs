@@ -1,10 +1,14 @@
+use crate::log::ArLogReceiver;
 use crate::tests::utils::TestNumUGen;
 use crate::wrappers_core::UGenWrapperCoreExt;
 use crate::{AudioCtx, UGen, UGenFlags};
 
 #[test]
 fn wrapper_arithmetic() {
-    let ctx = AudioCtx::new(48000, 4);
+    let mut log_receiver = ArLogReceiver::new();
+    let logger = log_receiver.sender();
+    let mut ctx = AudioCtx::new(48000, 4, logger);
+    let ctx = &mut ctx;
     let mut flags = UGenFlags::new();
     let mut g = TestNumUGen::new(2.5).wr_add(2.5);
     assert_eq!(g.process(ctx, &mut flags, [].into())[0], 5.0);

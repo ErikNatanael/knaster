@@ -1,7 +1,7 @@
 use knaster_core::numeric_array::NumericArray;
 use knaster_core::typenum::{Add1, B1, Unsigned};
 use knaster_core::{
-    AudioCtx, Block, BlockAudioCtx, BlockRead, Done, Frame, ParameterHint, ParameterValue, Size,
+    AudioCtx, Block, BlockMetadata, BlockRead, Done, Frame, ParameterHint, ParameterValue, Size,
     UGen, UGenFlags,
 };
 use std::ops::Add;
@@ -20,11 +20,11 @@ pub struct WrDone<T> {
     pub(crate) done_action: Done,
 }
 impl<T: UGen> WrDone<T> {
-    fn process_flags(&mut self, flags: &mut UGenFlags) {
+    fn process_flags(&mut self, ctx: &mut AudioCtx, flags: &mut UGenFlags) {
         if let Some(frame) = flags.done() {
             match self.done_action {
                 Done::None => {}
-                Done::FreeSelf => flags.mark_remove_self(),
+                Done::FreeSelf => flags.mark_remove_self(ctx),
                 Done::FreeParent => flags.mark_remove_parent(frame),
             }
         }
@@ -47,26 +47,26 @@ where
 
     type Outputs = T::Outputs;
 
-    fn init(&mut self, ctx: &AudioCtx) {
-        self.ugen.init(ctx)
+    fn init(&mut self, sample_rate: u32, block_size: usize) {
+        self.ugen.init(sample_rate, block_size)
     }
 
     fn process(
         &mut self,
-        ctx: AudioCtx,
+        ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         flags.clear_node_flags();
         flags.mark_remove_self_supported();
         let out = self.ugen.process(ctx, flags, input);
-        self.process_flags(flags);
+        self.process_flags(ctx, flags);
         out
     }
 
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        ctx: BlockAudioCtx,
+        ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
@@ -77,7 +77,7 @@ where
         flags.clear_node_flags();
         flags.mark_remove_self_supported();
         self.ugen.process_block(ctx, flags, input, output);
-        self.process_flags(flags);
+        self.process_flags(ctx, flags);
     }
     type Parameters = Add1<T::Parameters>;
 
@@ -101,7 +101,7 @@ where
         d
     }
 
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         if index == T::Parameters::USIZE {
             self.done_action = value.integer().unwrap().into();
         } else {

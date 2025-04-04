@@ -118,17 +118,17 @@ impl<F: Float> UGen for OnePoleLpf<F> {
     type Inputs = U1;
     type Outputs = U1;
     type Parameters = U1;
-    fn init(&mut self, ctx: &AudioCtx) {
+    fn init(&mut self, sample_rate: u32, block_size: usize) {
         // Only assume b1 is frequency if a0 is set to its standard value
         if self.op.a0 == F::ONE {
             let freq = self.op.b1;
             self.op
-                .set_freq_lowpass(freq, F::new(ctx.sample_rate() as f32));
+                .set_freq_lowpass(freq, F::new(sample_rate as f32));
         }
     }
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -143,7 +143,7 @@ impl<F: Float> UGen for OnePoleLpf<F> {
         [ParameterHint::nyquist()].into()
     }
 
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         #[allow(clippy::single_match)]
         match index {
             0 => self.op.set_freq_lowpass(
@@ -180,7 +180,7 @@ impl<F: Float> UGen for OnePoleHpf<F> {
     type Parameters = U1;
     fn process(
         &mut self,
-        _ctx: AudioCtx,
+        _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
@@ -195,7 +195,7 @@ impl<F: Float> UGen for OnePoleHpf<F> {
         [ParameterHint::float(|h| h.nyquist())].into()
     }
 
-    fn param_apply(&mut self, ctx: AudioCtx, index: usize, value: ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         #[allow(clippy::single_match)]
         match index {
             0 => self.op.set_freq_highpass(
