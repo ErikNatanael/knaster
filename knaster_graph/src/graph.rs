@@ -4,6 +4,7 @@ use crate::{
     connectable::{Channels, NodeOrGraph, NodeSubset},
     core::sync::atomic::AtomicU64,
     edge::{Edge, NodeKeyOrGraph, ParameterEdge},
+    graph_edit::GraphEdit,
     graph_gen::GraphGen,
     handle::{Handle, RawHandle, SchedulingChannelSender},
     node::{Node, NodeData},
@@ -62,7 +63,7 @@ pub struct NodeId {
     pub(crate) graph: GraphId,
 }
 impl NodeId {
-    pub(crate) fn top_level_graph_node_id() -> Self {
+    pub fn invalid() -> Self {
         Self {
             key: NodeKey::default(),
             // We should never reach the max of a u64, see comment for GraphId
@@ -334,8 +335,25 @@ impl<F: Float> Graph<F> {
         }
         self.get_nodes().get(node_id.key()).map(|node| node.data)
     }
+    /// Get a metadata for a node with the given [`NodeId`] if it exists.
+    pub fn node_data_from_name(&self, name: impl Into<EcoString>) -> Option<(NodeId, NodeData)> {
+        let name = name.into();
+        self.get_nodes()
+            .iter()
+            .find(|node| node.1.name == name)
+            .map(|node| {
+                (
+                    NodeId {
+                        key: node.0,
+                        graph: self.id,
+                    },
+                    node.1.data,
+                )
+            })
+    }
 
     /// Push something implementing [`UGen`] to the graph.
+    #[deprecated(note = "use `edit` instead")]
     pub fn push<T: UGen<Sample = F> + 'static>(&mut self, ugen: T) -> Handle<T> {
         let name = std::any::type_name::<T>();
         let name = shorten_name(name);
@@ -434,6 +452,7 @@ impl<F: Float> Graph<F> {
         key
     }
 
+    #[deprecated(since = "0.1.0", note = "Will become private")]
     pub fn connect_nodes(
         &mut self,
         source: impl Into<NodeId>,
@@ -470,6 +489,9 @@ impl<F: Float> Graph<F> {
         }
         if sink_channel >= nodes[sink.key()].data.inputs {
             return Err(GraphError::InputOutOfBounds(sink_channel));
+        }
+        if self.has_path(sink, source) {
+            return Err(GraphError::CircularConnection);
         }
         self.connect_to_node_internal(
             NodeKeyOrGraph::Node(source.key()),
@@ -847,6 +869,7 @@ impl<F: Float> Graph<F> {
     /// // and 0 to 3.
     /// graph.connect_replace(&multi_oscillator, [1, 2, 0], [0, 1, 2], Sink::Graph)?;
     /// ```
+    #[deprecated(since = "0.1.0", note = "Deprecated in favour of the GraphEdit API")]
     pub fn connect_replace<N: Size>(
         &mut self,
         source: impl Into<Connectable>,
@@ -884,6 +907,7 @@ impl<F: Float> Graph<F> {
     }
     /// Connect a source to a sink with the designated channels, addin it to any existing connections to the sink at those channels. If you want to replace
     /// existing inputs to the sink, use [`Graph::connect_replace`]
+    #[deprecated(since = "0.1.0", note = "Deprecated in favour of the GraphEdit API")]
     pub fn connect<N: Size>(
         &mut self,
         source: impl Into<Connectable>,
@@ -920,7 +944,7 @@ impl<F: Float> Graph<F> {
         Ok(())
     }
     /// Connect a source to a sink with the designated channels, addin it to any existing connections to the sink at those channels. If you want to replace
-    /// existing inputs to the sink, use [`Graph::connect_replace`]
+    /// existing inputs to the sink, use [`Graph::connect2_replace`]
     pub fn connect2(
         &mut self,
         source: NodeOrGraph,
@@ -946,11 +970,73 @@ impl<F: Float> Graph<F> {
         }
         Ok(())
     }
+    /// Connect a source to a sink with the designated channels, replacing any existing connections to the sink at those channels.
+    pub fn connect2_replace(
+        &mut self,
+        source: NodeOrGraph,
+        source_channel: u16,
+        sink_channel: u16,
+        sink: NodeOrGraph,
+    ) -> Result<(), GraphError> {
+        let so_chan = source_channel;
+        let si_chan = sink_channel;
+        match (source, sink) {
+            (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
+                self.connect_input_to_node(sink, so_chan, si_chan, false)?;
+            }
+            (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
+                self.connect_nodes(source, sink, so_chan, si_chan, false, false)?;
+            }
+            (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
+                self.connect_node_to_output(source, so_chan, si_chan, false)?;
+            }
+            (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
+                self.connect_input_to_output(so_chan, si_chan, false)?;
+            }
+        }
+        Ok(())
+    }
+    /// Connect a source to a sink with the designated channels with feedback, adding to any existing connections to the sink at those channels. Feedback means that the signal data will be delayed by one block, breaking potential cycles in the graph.
+    pub fn connect2_feedback(
+        &mut self,
+        source: NodeOrGraph,
+        source_channel: u16,
+        sink_channel: u16,
+        sink: NodeOrGraph,
+    ) -> Result<(), GraphError> {
+        let so_chan = source_channel;
+        let si_chan = sink_channel;
+        match (source, sink) {
+            (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
+                log::error!(
+                    "There was an attempt to connect a graph input to a node via a feedback node. Feedback to or from graph outputs is non-sensical. Connection will be made without feedback."
+                );
+                self.connect_input_to_node(sink, so_chan, si_chan, true)?;
+            }
+            (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
+                self.connect_nodes(source, sink, so_chan, si_chan, true, true)?;
+            }
+            (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
+                log::error!(
+                    "There was an attempt to connect a node to a graph output via a feedback node. Feedback to or from graph outputs is non-sensical. Connection will be made without feedback."
+                );
+                self.connect_node_to_output(source, so_chan, si_chan, true)?;
+            }
+            (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
+                log::error!(
+                    "There was an attempt to connect to a graph input to a  graph output via a feedback node. Feedback to or from graph outputs is non-sensical. Connection will be made without feedback."
+                );
+                self.connect_input_to_output(so_chan, si_chan, true)?;
+            }
+        }
+        Ok(())
+    }
     /// Connect a source to a sink via a feedback edge with the designated channels, adding it to any existing connections to the sink at those channels. If you want to replace
     /// existing inputs to the sink, use [`Graph::connect_replace_feedback`]
     ///
     /// A feedback edge is used to break cycles in a graph and causes a one block delay of the
     /// signal data.
+    #[deprecated(since = "0.1.0", note = "Deprecated in favour of the GraphEdit API")]
     pub fn connect_feedback<N: Size>(
         &mut self,
         source: impl Into<Connectable>,
@@ -968,17 +1054,26 @@ impl<F: Float> Graph<F> {
             if let Some((source, so_chan)) = source.for_output_channel(so_chan) {
                 if let Some((sink, si_chan)) = sink.for_input_channel(si_chan) {
                     match (source, sink) {
-                        (NodeOrGraph::Graph, NodeOrGraph::Node(_)) => {
-                            // TODO: Report error, feedback to or from outputs is non-sensical
+                        (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
+                            log::error!(
+                                "There was an attempt to connect a graph input to a node via a feedback node. Feedback to or from graph outputs is non-sensical. Connection will be made without feedback."
+                            );
+                            self.connect_input_to_node(sink, so_chan, si_chan, true)?;
                         }
                         (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
                             self.connect_nodes(source, sink, so_chan, si_chan, true, true)?;
                         }
-                        (NodeOrGraph::Node(_), NodeOrGraph::Graph) => {
-                            // TODO: Report error, feedback to or from outputs is non-sensical
+                        (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
+                            log::error!(
+                                "There was an attempt to connect a node to a graph output via a feedback node. Feedback to or from graph outputs is non-sensical. Connection will be made without feedback."
+                            );
+                            self.connect_node_to_output(source, so_chan, si_chan, true)?;
                         }
                         (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
-                            // TODO: Report error, feedback to or from outputs is non-sensical
+                            log::error!(
+                                "There was an attempt to connect to a graph input to a  graph output via a feedback node. Feedback to or from graph outputs is non-sensical. Connection will be made without feedback."
+                            );
+                            self.connect_input_to_output(so_chan, si_chan, false)?;
                         }
                     }
                 }
@@ -1049,9 +1144,17 @@ impl<F: Float> Graph<F> {
             }
         }
     }
+    /// Perform edits on the graph structure, such as adding nodes, removing nodes, connecting nodes.
+    /// The edits are committed in a single step when the [`GraphEdit`] is dropped.
+    ///
+    /// Note that parameter changes don't require editing the structure of the graph, and therefore
+    /// don't require this method. See [`Parameter`], [`Graph::set`] and [`Graph::set_many`].
+    pub fn edit<T>(&mut self, c: impl FnOnce(GraphEdit<F>) -> T) -> T {
+        c(GraphEdit::new(self))
+    }
 
     pub fn subgraph<Inputs: Size, Outputs: Size>(&mut self, options: GraphOptions) -> Self {
-        let temporary_invalid_node_id = NodeId::top_level_graph_node_id();
+        let temporary_invalid_node_id = NodeId::invalid();
         let (mut subgraph, graph_gen) = Self::new::<Inputs, Outputs>(
             options,
             temporary_invalid_node_id,
@@ -1059,7 +1162,6 @@ impl<F: Float> Graph<F> {
             self.block_size,
             self.sample_rate,
         );
-        // TODO: Store node key in graph
         let node_key = self.push_node(graph_gen);
         self.get_nodes_mut()[node_key].is_graph = Some(subgraph.id);
         // Set the real NodeId of the Graph
@@ -1071,6 +1173,29 @@ impl<F: Float> Graph<F> {
         subgraph
     }
 
+    /// Returns true if there is a path from `from` to `to` in the graph.
+    fn has_path(&self, from: NodeId, to: NodeId) -> bool {
+        let mut visited = HashSet::new();
+        let mut stack = vec![from.key];
+        let to = to.key;
+
+        while let Some(node) = stack.pop() {
+            if node == to {
+                return true;
+            }
+            if visited.insert(node) {
+                if let Some(edges) = self.node_input_edges.get(node) {
+                    for &parent in edges.iter().flatten() {
+                        if let NodeKeyOrGraph::Node(parent) = parent.source {
+                            stack.push(parent);
+                        }
+                    }
+                }
+            }
+        }
+
+        false
+    }
     /// Create the list of node executions, with all the data they need to be
     /// run, in the correct order.
     fn generate_tasks(&mut self) -> Vec<Task<F>> {
@@ -1848,6 +1973,10 @@ impl<F: Float> GraphGenCommunicator<F> {
 
 #[derive(thiserror::Error, Debug)]
 pub enum GraphError {
+    #[error(
+        "Connection would create a circular dependency. Cannot connect. Try using a feedback connection."
+    )]
+    CircularConnection,
     #[error("Error sending new data to GraphGen: `{0}`")]
     SendToGraphGen(String),
     #[error("Node cannot be found in current Graph.")]

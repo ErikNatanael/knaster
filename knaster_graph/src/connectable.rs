@@ -198,7 +198,7 @@ mod tests {
         // Compile test, this should compile, there is no assertion
         let (g, node) = Graph::<f32>::new::<U0, U1>(
             GraphOptions::default(),
-            NodeId::top_level_graph_node_id(),
+            NodeId::invalid(),
             SharedFrameClock::new(),
             16,
             44100,

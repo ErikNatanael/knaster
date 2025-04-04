@@ -51,7 +51,7 @@ impl<F: Float> Runner<F> {
         let sample_rate = options.sample_rate;
         assert!(block_size != 0, "The block size must not be 0");
         let output_buffer = OwnedRawBuffer::new(options.block_size * Outputs::USIZE);
-        let invalid_node_id = NodeId::top_level_graph_node_id();
+        let invalid_node_id = NodeId::invalid();
         let shared_frame_clock = SharedFrameClock::new();
         let graph_options = GraphOptions {
             name: "OuterGraph".into(),

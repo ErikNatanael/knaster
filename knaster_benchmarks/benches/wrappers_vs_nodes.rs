@@ -13,9 +13,9 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         sample_rate: 48000,
         ring_buffer_size: 50,
     });
-    let g = graph.push(TestNumUGen::new(2.0).wr_mul(0.5));
-    graph.connect_node_to_output(&g, 0, 0, false).unwrap();
-    graph.commit_changes().unwrap();
+    graph.edit(|g| {
+        g.push(TestNumUGen::new(2.0).wr_mul(0.5)).to_graph_out();
+    });
     c.bench_function("wr_mul block: 32", |b| {
         b.iter(|| {
             unsafe { runner.run(&[]) };
@@ -31,13 +31,16 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         sample_rate: 48000,
         ring_buffer_size: 50,
     });
-    let g = graph.push(TestNumUGen::new(2.0));
-    let v = graph.push(TestNumUGen::new(0.5));
-    let m = graph.push(MathUGen::<_, U1, Mul>::new());
-    graph.connect(&g, 0, 0, &m).unwrap();
-    graph.connect(&v, 0, 1, &m).unwrap();
-    graph.connect_node_to_output(&m, 0, 0, false).unwrap();
-    graph.commit_changes().unwrap();
+    graph.edit(|graph| {
+        let g = graph.push(TestNumUGen::new(2.0));
+        let v = graph.push(TestNumUGen::new(0.5));
+        let m = graph.push(MathUGen::<_, U1, Mul>::new());
+        (g * v).to_graph_out();
+        // graph.connect(&g, 0, 0, &m).unwrap();
+        // graph.connect(&v, 0, 1, &m).unwrap();
+        // graph.connect_node_to_output(&m, 0, 0, false).unwrap();
+        // graph.commit_changes().unwrap();
+    });
     c.bench_function("MathGen Mul block: 32", |b| {
         b.iter(|| {
             unsafe { runner.run(&[]) };
@@ -54,11 +57,16 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         sample_rate: 48000,
         ring_buffer_size: 50,
     });
-    for _ in 0..100 {
-        let g = graph.push(TestNumUGen::new(2.0).wr_mul(0.5));
-        graph.connect_node_to_output(&g, 0, 0, true).unwrap();
-    }
-    graph.commit_changes().unwrap();
+    graph.edit(|g| {
+        for _ in 0..100 {
+            g.push(TestNumUGen::new(2.0).wr_mul(0.5)).to_graph_out();
+        }
+    });
+    // for _ in 0..100 {
+    //     let g = graph.push(TestNumUGen::new(2.0).wr_mul(0.5));
+    //     graph.connect_node_to_output(&g, 0, 0, true).unwrap();
+    // }
+    // graph.commit_changes().unwrap();
     c.bench_function("100 wr_mul block: 32", |b| {
         b.iter(|| {
             unsafe { runner.run(&[]) };
@@ -74,15 +82,18 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         sample_rate: 48000,
         ring_buffer_size: 50,
     });
-    for _ in 0..100 {
-        let g = graph.push(TestNumUGen::new(2.0));
-        let v = graph.push(TestNumUGen::new(0.5));
-        let m = graph.push(MathUGen::<_, U1, Mul>::new());
-        graph.connect(&g, 0, 0, &m).unwrap();
-        graph.connect(&v, 0, 1, &m).unwrap();
-        graph.connect_node_to_output(&m, 0, 0, true).unwrap();
-    }
-    graph.commit_changes().unwrap();
+    graph.edit(|graph| {
+        for _ in 0..100 {
+            let g = graph.push(TestNumUGen::new(2.0));
+            let v = graph.push(TestNumUGen::new(0.5));
+            (g * v).to_graph_out();
+        }
+        // let m = graph.push(MathUGen::<_, U1, Mul>::new());
+        // graph.connect(&g, 0, 0, &m).unwrap();
+        // graph.connect(&v, 0, 1, &m).unwrap();
+        // graph.connect_node_to_output(&m, 0, 0, true).unwrap();
+        // graph.commit_changes().unwrap();
+    });
     c.bench_function("100 MathGen Mul block: 32", |b| {
         b.iter(|| {
             unsafe { runner.run(&[]) };

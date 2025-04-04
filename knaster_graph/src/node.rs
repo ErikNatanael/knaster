@@ -19,6 +19,24 @@ pub struct NodeData {
     pub(crate) outputs: u16,
     pub(crate) parameters: u16,
 }
+impl NodeData {
+    pub fn parameter_descriptions(&self) -> impl Iterator<Item = &'static str> {
+        let mut i = 0;
+        std::iter::from_fn(move || {
+            i += 1;
+
+            (self.parameter_descriptions_fn)(i)
+        })
+    }
+    pub fn parameter_hints(&self) -> impl Iterator<Item = ParameterHint> {
+        let mut i = 0;
+        std::iter::from_fn(move || {
+            i += 1;
+
+            (self.parameter_hints_fn)(i)
+        })
+    }
+}
 
 /// `Node` wraps a [`DynUGen`] for storage in a graph. It is used to hold a pointer to the
 /// UGen allocation and some metadata about it.
@@ -129,20 +147,10 @@ impl<F: Float> Node<F> {
         }
     }
     pub fn parameter_descriptions(&self) -> impl Iterator<Item = &'static str> {
-        let mut i = 0;
-        std::iter::from_fn(move || {
-            i += 1;
-
-            (self.data.parameter_descriptions_fn)(i)
-        })
+        self.data.parameter_descriptions()
     }
     pub fn parameter_hints(&self) -> impl Iterator<Item = ParameterHint> {
-        let mut i = 0;
-        std::iter::from_fn(move || {
-            i += 1;
-
-            (self.data.parameter_hints_fn)(i)
-        })
+        self.data.parameter_hints()
     }
 }
 
