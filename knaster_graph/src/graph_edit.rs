@@ -163,7 +163,7 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
         }
         SH {
             nodes: ChannelsHandle { channels },
-            graph: &self.graph,
+            graph: self.graph,
         }
     }
     /// Connect the output(s) of self to the input(s) of another node or nodes, summing the output

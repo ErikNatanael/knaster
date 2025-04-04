@@ -26,6 +26,7 @@ mod core {
 }
 
 pub mod dsp;
+pub mod log;
 mod parameters;
 #[cfg(test)]
 mod tests;

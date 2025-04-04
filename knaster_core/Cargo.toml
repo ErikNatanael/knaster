@@ -28,6 +28,7 @@ fastapprox = "0.3.1"
 symphonia = { version = "0.5.4", optional = true }
 hound = { version = "3.5.1", optional = true }
 no_denormals = "0.2.0"
+rtrb = { version = "0.3.2", default-features = false }
 
 [dev-dependencies]
 anyhow = "1.0.94"
