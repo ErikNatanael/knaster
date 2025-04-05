@@ -5,8 +5,6 @@
 // Original code: Copyright (c) 2016 airwindows, Airwindows uses the MIT license
 // Ported code: Copyright 2023 Erik Natanael Gustafsson
 
-use std::iter::Sum;
-
 use knaster_core::{
     AudioCtx, Float, ParameterHint, UGen,
     delay::StaticSampleDelay,
@@ -147,8 +145,8 @@ impl<F: Float> Galactic<F> {
     pub fn new(replace: F, detune: F, brightness: F, bigness: F, wet: F) -> Self {
         let mut rng = fastrand::Rng::with_seed(next_randomness_seed());
         Self {
-            delays_left: std::array::from_fn(|_| StaticSampleDelay::new(1)),
-            delays_right: std::array::from_fn(|_| StaticSampleDelay::new(1)),
+            delays_left: core::array::from_fn(|_| StaticSampleDelay::new(1)),
+            delays_right: core::array::from_fn(|_| StaticSampleDelay::new(1)),
             detune_delay_left: StaticSampleDelay::new(1),
             detune_delay_right: StaticSampleDelay::new(1),
             lowpass_pre: [F::ZERO, F::ZERO],

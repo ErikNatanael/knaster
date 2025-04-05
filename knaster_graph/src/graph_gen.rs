@@ -8,8 +8,8 @@ use crate::{
     },
     dyngen::DynUGen,
 };
-use std::collections::VecDeque;
-use std::sync::Arc;
+use crate::core::collections::VecDeque;
+use crate::core::sync::Arc;
 
 use knaster_core::{
     AudioCtx, Float, Size, UGen, UGenFlags, numeric_array::NumericArray, rt_log, typenum::U0,
@@ -94,7 +94,7 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
             if let Ok(td_chunk) = self.new_task_data_consumer.read_chunk(num_new_task_data) {
                 for mut td in td_chunk {
                     td.apply_self_on_audio_thread(ctx);
-                    let old_td = std::mem::replace(&mut self.current_task_data, td);
+                    let old_td = crate::core::mem::replace(&mut self.current_task_data, td);
                     match self.task_data_to_be_dropped_producer.push(old_td) {
                         Ok(_) => (),
                         Err(e) => {

@@ -26,7 +26,7 @@ fn main() -> Result<()> {
     osc.process_block(&mut ctx, &mut flags, &&empty_block(), &mut output_block);
     assert!(
         (output_block.read(0, 63)
-            - ((200.0 / ctx.sample_rate() as f32) * std::f32::consts::TAU * 64.).sin())
+            - ((200.0 / ctx.sample_rate() as f32) * core::f32::consts::TAU * 64.).sin())
         .abs()
             < f32::EPSILON
     );

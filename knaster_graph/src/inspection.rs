@@ -3,7 +3,7 @@
 //! Metadata from the structs in this module can be used to visualise and/or
 //! manipulate a graph based on the whole graph structure.
 
-use std::sync::{Arc, Mutex};
+use crate::core::sync::{Arc, Mutex};
 
 use crate::graph::{GraphId, NodeId, NodeKey};
 use crate::handle::{AnyHandle, RawHandle, SchedulingChannelSender};

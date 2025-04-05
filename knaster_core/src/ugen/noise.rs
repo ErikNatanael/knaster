@@ -20,7 +20,7 @@ static NEXT_SEED: AtomicU64 = AtomicU64::new(0);
 /// let rng = fastrand::Rng::with_seed(next_randomness_seed());
 /// ```
 pub fn next_randomness_seed() -> u64 {
-    NEXT_SEED.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+    NEXT_SEED.fetch_add(1, crate::core::sync::atomic::Ordering::SeqCst)
 }
 
 /// White noise (fastrand RNG, based on wyrand)

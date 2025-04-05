@@ -13,11 +13,7 @@
 //!
 //! 2. is mostly accomplished by using [`SchedulingToken`]
 
-#[cfg(not(feature = "std"))]
-use alloc::sync::Arc;
-
-#[cfg(feature = "std")]
-use std::sync::Arc;
+use crate::core::sync::Arc;
 
 use crate::{
     core::sync::atomic::{AtomicBool, AtomicU64},
@@ -173,7 +169,7 @@ impl SchedulingToken {
     /// prefer [`SchedulingToken::activate`]. If activated outside of the audio
     /// thread changes aren't guaranteed to be applied in the same block.
     pub fn activate_inner(self) {
-        self.token.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.token.store(true, crate::core::sync::atomic::Ordering::SeqCst);
     }
 }
 

@@ -195,6 +195,7 @@ impl PIntegerHint {
         Self {
             default: None,
             range,
+            #[cfg(any(feature="alloc", feature="std"))]
             value_descriptions: None,
         }
     }
@@ -235,6 +236,7 @@ impl ParameterHint {
         ParameterHint::Integer(PIntegerHint {
             default: Some(T::default().into()),
             range: T::pinteger_range(),
+            #[cfg(any(feature="alloc", feature="std"))]
             value_descriptions: Some(T::pinteger_descriptions),
         })
     }

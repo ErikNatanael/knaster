@@ -13,8 +13,6 @@ pub mod polyblep;
 pub mod svf;
 pub mod util;
 
-#[cfg(feature = "std")]
-use crate::core::eprintln;
 use crate::log::ArLogSender;
 use crate::numeric_array::NumericArray;
 use crate::{rt_log, Param, ParameterError, ParameterHint, ParameterType, ParameterValue};

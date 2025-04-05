@@ -141,7 +141,7 @@ fn run<T, F: Float>(
     mut runner: Runner<F>,
 ) -> Result<cpal::Stream, AudioBackendError>
 where
-    T: cpal::Sample + cpal::FromSample<f32> + cpal::SizedSample + std::fmt::Display,
+    T: cpal::Sample + cpal::FromSample<f32> + cpal::SizedSample + crate::core::fmt::Display,
 {
     let channels = config.channels as usize;
 

@@ -4,9 +4,9 @@ use knaster_core::{
     AudioCtx, Block, BlockMetadata, BlockRead, Done, Frame, ParameterHint, ParameterValue, Size,
     UGen, UGenFlags,
 };
-use std::ops::Add;
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use crate::core::ops::Add;
+use crate::core::sync::Arc;
+use crate::core::sync::atomic::AtomicBool;
 
 /// Wrapper that can free a node once it has been marked as done. Unlike most wrappers_graph, this one
 /// can only be added by the [`Graph`] when pushing a node using the corresponding function.
@@ -30,7 +30,7 @@ impl<T: UGen> WrDone<T> {
         }
         if flags.remove_self() {
             self.free_self_flag
-                .store(true, std::sync::atomic::Ordering::Relaxed);
+                .store(true, crate::core::sync::atomic::Ordering::Relaxed);
         }
     }
 }

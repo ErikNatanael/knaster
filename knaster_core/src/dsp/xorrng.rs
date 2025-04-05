@@ -40,12 +40,12 @@ impl XOrShift32Rng {
     /// Convenience function to convert [`XOrShift32Rng::gen_u32`] to an f32 in the range 0.0..=1.0
     #[inline]
     pub fn gen_f32(&mut self) -> f32 {
-        self.gen_u32() as f32 / std::u32::MAX as f32
+        self.gen_u32() as f32 / crate::core::u32::MAX as f32
     }
 
     /// Convenience function to convert [`XOrShift32Rng::gen_u32`] to an f32 in the range 0.0..=1.0
     #[inline]
     pub fn gen_f64(&mut self) -> f64 {
-        self.gen_u32() as f64 / std::u32::MAX as f64
+        self.gen_u32() as f64 / crate::core::u32::MAX as f64
     }
 }

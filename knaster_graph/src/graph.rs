@@ -23,8 +23,8 @@ use crate::{
 use alloc::{borrow::ToOwned, boxed::Box, string::String, string::ToString, vec, vec::Vec};
 use core::cell::Cell;
 use ecow::EcoString;
-use std::collections::VecDeque;
-use std::{
+use crate::core::collections::VecDeque;
+use crate::core::{
     collections::HashSet,
     sync::{Arc, Mutex},
 };
@@ -203,7 +203,7 @@ impl<F: Float> Graph<F> {
             ring_buffer_size,
         } = options;
         const DEFAULT_NUM_NODES: usize = 4;
-        let id = NEXT_GRAPH_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let id = NEXT_GRAPH_ID.fetch_add(1, crate::core::sync::atomic::Ordering::SeqCst);
         let nodes = Arc::new(UnsafeCell::new(SlotMap::with_capacity_and_key(
             DEFAULT_NUM_NODES,
         )));
@@ -356,7 +356,7 @@ impl<F: Float> Graph<F> {
     /// Push something implementing [`UGen`] to the graph.
     #[deprecated(note = "use `edit` instead")]
     pub fn push<T: UGen<Sample = F> + 'static>(&mut self, ugen: T) -> Handle<T> {
-        let name = std::any::type_name::<T>();
+        let name = crate::core::any::type_name::<T>();
         let name = shorten_name(name);
         let node = Node::new(name, ugen);
         let node_key = self.push_node(node);
@@ -390,7 +390,7 @@ impl<F: Float> Graph<F> {
             free_self_flag: free_self_flag.clone(),
             done_action: default_done_action,
         };
-        let name = std::any::type_name::<T>();
+        let name = crate::core::any::type_name::<T>();
         let name = shorten_name(name);
         let mut node = Node::new(name, ugen);
         node.remove_me = Some(free_self_flag);

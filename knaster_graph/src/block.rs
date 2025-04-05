@@ -104,11 +104,11 @@ impl<F: Float> Block for AggregateBlock<'_, F> {
     type Sample = F;
 
     fn channel_as_slice(&self, channel: usize) -> &[Self::Sample] {
-        unsafe { std::slice::from_raw_parts(self.buffers[channel], self.block_size) }
+        unsafe { crate::core::slice::from_raw_parts(self.buffers[channel], self.block_size) }
     }
 
     fn channel_as_slice_mut(&mut self, channel: usize) -> &mut [Self::Sample] {
-        unsafe { std::slice::from_raw_parts_mut(self.buffers[channel], self.block_size) }
+        unsafe { crate::core::slice::from_raw_parts_mut(self.buffers[channel], self.block_size) }
     }
 
     fn read(&self, channel: usize, frame: usize) -> Self::Sample {
@@ -164,7 +164,7 @@ impl<F: Float> BlockRead for AggregateBlockRead<'_, F> {
     type Sample = F;
 
     fn channel_as_slice(&self, channel: usize) -> &[Self::Sample] {
-        unsafe { std::slice::from_raw_parts(self.buffers[channel], self.block_size) }
+        unsafe { crate::core::slice::from_raw_parts(self.buffers[channel], self.block_size) }
     }
 
     fn read(&self, channel: usize, frame: usize) -> Self::Sample {

@@ -2,7 +2,8 @@ use crate::log::ArLogReceiver;
 use crate::math::{Add, Div, MathUGen, Mul, Sub};
 use crate::typenum::{U1, U2};
 use crate::{AudioCtx, BlockMetadata, UGen, UGenFlags};
-use knaster_primitives::{Block, VecBlock};
+use knaster_primitives::typenum::U4;
+use knaster_primitives::{Block, StaticBlock};
 
 #[test]
 fn gen_arithmetics() {
@@ -13,8 +14,8 @@ fn gen_arithmetics() {
     let mut ctx = AudioCtx::new(SR, BLOCK, logger);
     let ctx = &mut ctx;
     let mut flags = UGenFlags::new();
-    let mut b0 = VecBlock::new(2, BLOCK);
-    let mut b1 = VecBlock::new(2, BLOCK);
+    let mut b0 = StaticBlock::<f32, U2, U4>::new();
+    let mut b1 = StaticBlock::<f32, U2, U4>::new();
     b0.channel_as_slice_mut(0).fill(3.0);
     b0.channel_as_slice_mut(1).fill(2.0);
 
@@ -56,8 +57,8 @@ fn gen_arithmetics_multichannel() {
     let mut ctx = AudioCtx::new(SR, BLOCK, logger);
     let ctx = &mut ctx;
     let mut flags = UGenFlags::new();
-    let mut b0 = VecBlock::new(4, BLOCK);
-    let mut b1 = VecBlock::new(2, BLOCK);
+    let mut b0 = StaticBlock::<f64, U4, U4>::new();
+    let mut b1 = StaticBlock::<f64, U2, U4>::new();
     // Channels are laid out so that all the LHS come first, then all the RHS
     b0.channel_as_slice_mut(0).fill(3.0);
     b0.channel_as_slice_mut(1).fill(7.0);

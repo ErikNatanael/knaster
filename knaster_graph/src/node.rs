@@ -22,7 +22,7 @@ pub struct NodeData {
 impl NodeData {
     pub fn parameter_descriptions(&self) -> impl Iterator<Item = &'static str> {
         let mut i = 0;
-        std::iter::from_fn(move || {
+        crate::core::iter::from_fn(move || {
             let s = (self.parameter_descriptions_fn)(i);
             i += 1;
             s
@@ -30,7 +30,7 @@ impl NodeData {
     }
     pub fn parameter_hints(&self) -> impl Iterator<Item = ParameterHint> {
         let mut i = 0;
-        std::iter::from_fn(move || {
+        crate::core::iter::from_fn(move || {
             let s = (self.parameter_hints_fn)(i);
             i += 1;
             s

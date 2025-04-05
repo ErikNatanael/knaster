@@ -1,4 +1,4 @@
-use std::vec::Vec;
+use crate::core::vec::Vec;
 
 use crate::core::format;
 

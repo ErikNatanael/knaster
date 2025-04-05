@@ -15,10 +15,7 @@ use knaster_core::{
     typenum::Unsigned,
 };
 
-#[cfg(not(feature = "std"))]
-use alloc::sync::{Arc, Mutex};
-#[cfg(feature = "std")]
-use std::sync::{Arc, Mutex};
+use crate::core::sync::{Arc, Mutex};
 
 use crate::SchedulingChannelProducer;
 

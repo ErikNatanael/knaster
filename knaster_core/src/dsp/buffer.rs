@@ -147,7 +147,7 @@ impl<F: Float> Buffer<F> {
 
 #[cfg(any(feature = "std", feature = "alloc"))]
 use crate::core::boxed::Box;
-#[cfg(feature = "symphonia")]
+#[cfg(all(feature = "symphonia", feature = "std"))]
 impl<F: Float> Buffer<F> {
     /// Create a [`Buffer`] by loading a sound file from disk. Currently
     /// supported file formats: Wave, Ogg Vorbis, FLAC, MP3

@@ -17,7 +17,7 @@ pub enum ArLogMessage {
     End,
 }
 impl Display for ArLogMessage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut crate::core::fmt::Formatter<'_>) -> crate::core::fmt::Result {
         match self {
             ArLogMessage::Str(s) => write!(f, "{}", s),
             ArLogMessage::Float(n) => write!(f, "{}", n),
@@ -94,6 +94,8 @@ impl From<Seconds> for ArLogMessage {
     }
 }
 
+// TODO: Make the array of receivers static with a generic sender() method that returns a new
+// ArLogReceiver
 pub struct ArLogReceiver {
     receivers: Vec<rtrb::Consumer<ArLogMessage>>,
     received_messages: VecDeque<ArLogMessage>,

@@ -1,4 +1,4 @@
-use knaster_primitives::{Block, VecBlock};
+use knaster_primitives::{Block, StaticBlock, typenum::*};
 
 use crate::{
     log::ArLogReceiver, tests::utils::TestInPlusParamGen, wrappers_core::{UGenWrapperCoreExt, WrPreciseTiming}, AudioCtx,  UGen, UGenFlags
@@ -26,8 +26,8 @@ fn sample_accurate_parameters_test() {
     g.set_delay_within_block_for_param(ctx, 0, 10);
     g.param((ctx).into(), 0, 10.).unwrap();
 
-    let in_block = VecBlock::<f32>::new(2, 16);
-    let mut out_block = VecBlock::new(2, 16);
+    let in_block = StaticBlock::<f32, U2, U16>::new();
+    let mut out_block= StaticBlock::<f32, U2, U16>::new();
 
     g.process_block(ctx, &mut flags, &&in_block, &mut out_block);
 
@@ -68,8 +68,8 @@ fn sample_accurate_parameters_with_wrappers_test() {
     g.set_delay_within_block_for_param(ctx, 0, 10);
     g.param((ctx).into(), 0, 10.).unwrap();
 
-    let in_block = VecBlock::<f32>::new(2, 16);
-    let mut out_block = VecBlock::new(2, 16);
+    let in_block = StaticBlock::<f32, U2, U16>::new();
+    let mut out_block= StaticBlock::<f32, U2, U16>::new();
 
     g.process_block(ctx, &mut flags, &&in_block, &mut out_block);
 
