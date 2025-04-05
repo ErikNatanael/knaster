@@ -52,12 +52,12 @@ impl<F> CpalBackend<F> {
         }
         .expect("failed to find output device");
         if options.verbose {
-            println!("Output device: {}", device.name()?);
+            log::info!("Output device: {}", device.name()?);
         }
 
         let config = device.default_output_config().unwrap();
         if options.verbose {
-            println!("Default output config: {:?}", config);
+            log::info!("Default output config: {:?}", config);
         }
         Ok(Self {
             stream: None,
@@ -88,7 +88,9 @@ impl<F: Float> AudioBackend for CpalBackend<F> {
             )
         }
         if runner.inputs() > 0 {
-            log::error!("Warning: CpalBackend currently does not support inputs into the top level Graph. Top level graph inputs will have no data.");
+            log::error!(
+                "Warning: CpalBackend currently does not support inputs into the top level Graph. Top level graph inputs will have no data."
+            );
         }
         let config = self.config.clone();
         let stream = match self.config.sample_format() {

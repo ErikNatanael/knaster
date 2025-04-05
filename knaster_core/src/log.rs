@@ -1,3 +1,5 @@
+use core::fmt::Display;
+
 use crate::core::{collections::VecDeque, vec::Vec};
 
 use knaster_primitives::Seconds;
@@ -13,6 +15,18 @@ pub enum ArLogMessage {
     Signed(i64),
     Timestamp(Seconds),
     End,
+}
+impl Display for ArLogMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ArLogMessage::Str(s) => write!(f, "{}", s),
+            ArLogMessage::Float(n) => write!(f, "{}", n),
+            ArLogMessage::Unsigned(u) => write!(f, "{}", u),
+            ArLogMessage::Signed(i) => write!(f, "{}", i),
+            ArLogMessage::Timestamp(s) => write!(f, "{} seconds", s.to_secs_f64()),
+            ArLogMessage::End => write!(f, "End"),
+        }
+    }
 }
 impl From<&'static str> for ArLogMessage {
     fn from(value: &'static str) -> Self {
@@ -119,15 +133,24 @@ impl ArLogReceiver {
     pub fn sender(&mut self) -> ArLogSender {
         let (tx, rx) = rtrb::RingBuffer::new(100);
         self.receivers.push(rx);
-        ArLogSender { sender: tx }
+        ArLogSender::RingBuffer(tx)
     }
 }
-pub struct ArLogSender {
-    sender: rtrb::Producer<ArLogMessage>,
+pub enum ArLogSender {
+    RingBuffer(rtrb::Producer<ArLogMessage>),
+    Log,
 }
 impl ArLogSender {
+    pub fn non_rt() -> Self {
+        ArLogSender::Log
+    }
     pub fn send(&mut self, message: ArLogMessage) {
-        self.sender.push(message).ok();
+        match self {
+            ArLogSender::RingBuffer(sender) => {
+                sender.push(message).ok();
+            }
+            ArLogSender::Log => log::warn!("{}", message),
+        }
     }
 }
 

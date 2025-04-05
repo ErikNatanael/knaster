@@ -29,6 +29,7 @@ symphonia = { version = "0.5.4", optional = true }
 hound = { version = "3.5.1", optional = true }
 no_denormals = "0.2.0"
 rtrb = { version = "0.3.2", default-features = false }
+log = "0.4.26"
 
 [dev-dependencies]
 anyhow = "1.0.94"

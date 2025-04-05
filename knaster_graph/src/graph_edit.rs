@@ -177,7 +177,9 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
             Static::iter_outputs(&self.nodes).zip(Static::iter_inputs(&n.nodes))
         {
             if let Err(e) = g.connect2(source, source_channel, sink_channel, sink) {
-                log::error!("Failed to connect {source:?}:{source_channel} to {sink:?}:{sink_channel}: {e}");
+                log::error!(
+                    "Failed to connect {source:?}:{source_channel} to {sink:?}:{sink_channel}: {e}"
+                );
             }
         }
         n
@@ -1073,7 +1075,11 @@ pub struct Parameter {
     sender: SchedulingChannelSender,
 }
 impl Parameter {
-    pub fn set(&mut self, value: impl Into<ParameterValue>, t: Time) -> Result<(), GraphError> {
+    pub fn set(
+        &mut self,
+        value: impl Into<ParameterValue>,
+        t: impl Into<Time>,
+    ) -> Result<(), GraphError> {
         let value = value.into();
         self.sender.send(crate::SchedulingEvent {
             node_key: self.node.key(),
@@ -1081,11 +1087,15 @@ impl Parameter {
             value: Some(value),
             smoothing: None,
             token: None,
-            time: Some(t),
+            time: Some(t.into()),
         })?;
         Ok(())
     }
-    pub fn smooth(&mut self, s: impl Into<ParameterSmoothing>, t: Time) -> Result<(), GraphError> {
+    pub fn smooth(
+        &mut self,
+        s: impl Into<ParameterSmoothing>,
+        t: impl Into<Time>,
+    ) -> Result<(), GraphError> {
         let s = s.into();
         self.sender.send(crate::SchedulingEvent {
             node_key: self.node.key(),
@@ -1093,18 +1103,18 @@ impl Parameter {
             value: None,
             smoothing: Some(s),
             token: None,
-            time: Some(t),
+            time: Some(t.into()),
         })?;
         Ok(())
     }
-    pub fn trig(&mut self, t: Time) -> Result<(), GraphError> {
+    pub fn trig(&mut self, t: impl Into<Time>) -> Result<(), GraphError> {
         self.sender.send(crate::SchedulingEvent {
             node_key: self.node.key(),
             parameter: self.param_index as usize,
             value: Some(ParameterValue::Trigger),
             smoothing: None,
             token: None,
-            time: Some(t),
+            time: Some(t.into()),
         })?;
         Ok(())
     }
@@ -1288,9 +1298,9 @@ mod tests {
                 // Use the handle to connect it to another node
                 let new_sine = graph.push(SinWt::new(200.));
                 let new_pan = graph.push(Pan2::new(0.));
-                let a = (handle * new_sine) >> new_pan >> (lpf | lpf );
+                let a = (handle * new_sine) >> new_pan >> (lpf | lpf);
                 let a = (new_sine * handle) >> new_pan;
-                (new_pan + (handle2 | handle2)).to(lpf | lpf );
+                (new_pan + (handle2 | handle2)).to(lpf | lpf);
                 a.to_graph_out();
                 (new_sine + handle) >> new_pan;
             }

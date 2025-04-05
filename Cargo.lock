@@ -725,6 +725,7 @@ dependencies = [
  "hound",
  "knaster_macros",
  "knaster_primitives",
+ "log",
  "no_denormals",
  "rtrb",
  "symphonia",

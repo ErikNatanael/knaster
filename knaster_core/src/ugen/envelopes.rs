@@ -1,5 +1,5 @@
 use crate::numeric_array::NumericArray;
-use crate::{AudioCtx,  ParameterHint, ParameterValue, UGen, UGenFlags};
+use crate::{AudioCtx, ParameterHint, ParameterValue, UGen, UGenFlags};
 use knaster_primitives::typenum::{U0, U1, U3, U4};
 use knaster_primitives::{Block, BlockRead, Float, Frame};
 
@@ -87,16 +87,14 @@ impl<F: Float> UGen for EnvAsr<F> {
             if self.attack_seconds == F::ZERO {
                 self.attack_rate = F::ONE;
             } else {
-                self.attack_rate =
-                    F::ONE / (self.attack_seconds * F::from(sample_rate).unwrap());
+                self.attack_rate = F::ONE / (self.attack_seconds * F::from(sample_rate).unwrap());
             }
         }
         if self.release_rate == F::ONE {
             if self.release_seconds == F::ZERO {
                 self.release_rate = F::ONE;
             } else {
-                self.release_rate =
-                    F::ONE / (self.release_seconds * F::from(sample_rate).unwrap());
+                self.release_rate = F::ONE / (self.release_seconds * F::from(sample_rate).unwrap());
             }
         }
     }
@@ -265,16 +263,14 @@ impl<F: Float> UGen for EnvAr<F> {
             if self.attack_seconds == F::ZERO {
                 self.attack_rate = F::ONE;
             } else {
-                self.attack_rate =
-                    F::ONE / (self.attack_seconds * F::from(sample_rate).unwrap());
+                self.attack_rate = F::ONE / (self.attack_seconds * F::from(sample_rate).unwrap());
             }
         }
         if self.release_rate == F::ONE {
             if self.release_seconds == F::ZERO {
                 self.release_rate = F::ONE;
             } else {
-                self.release_rate =
-                    F::ONE / (self.release_seconds * F::from(sample_rate).unwrap());
+                self.release_rate = F::ONE / (self.release_seconds * F::from(sample_rate).unwrap());
             }
         }
     }

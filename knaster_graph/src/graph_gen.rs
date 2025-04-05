@@ -12,7 +12,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use knaster_core::{
-    numeric_array::NumericArray, rt_log, typenum::U0, AudioCtx, Float, Size, UGen, UGenFlags
+    AudioCtx, Float, Size, UGen, UGenFlags, numeric_array::NumericArray, rt_log, typenum::U0,
 };
 use slotmap::SlotMap;
 
@@ -98,7 +98,7 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
                     match self.task_data_to_be_dropped_producer.push(old_td) {
                         Ok(_) => (),
                         Err(e) => {
-                        rt_log!(ctx.logger(); "RingBuffer for TaskData to be dropped was full. Please increase the size of the RingBuffer. The GraphGen will drop the TaskData here instead. e: {e}");
+                            rt_log!(ctx.logger(); "RingBuffer for TaskData to be dropped was full. Please increase the size of the RingBuffer. The GraphGen will drop the TaskData here instead. e: {e}");
                         }
                     }
                 }

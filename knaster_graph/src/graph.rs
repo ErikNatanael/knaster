@@ -33,6 +33,7 @@ use crate::inspection::{EdgeInspection, EdgeSource, GraphInspection, NodeInspect
 use crate::wrappers_graph::done::WrDone;
 use knaster_core::{
     AudioCtx, Done, Float, Param, ParameterError, ParameterValue, Size, UGen,
+    log::ArLogSender,
     math::{Add, MathUGen},
     typenum::*,
 };
@@ -434,6 +435,10 @@ impl<F: Float> Graph<F> {
         None
     }
 
+    pub fn ctx(&self) -> AudioCtx {
+        AudioCtx::new(self.sample_rate, self.block_size, ArLogSender::non_rt())
+    }
+
     /// Add a node to this Graph. The Node will be (re)initialised with the
     /// correct block size for this Graph.
     fn push_node(&mut self, mut node: Node<F>) -> NodeKey {
@@ -616,7 +621,13 @@ impl<F: Float> Graph<F> {
                 if let Some(index) = sink_node.parameter_descriptions().position(|s| s == desc) {
                     index as u16
                 } else {
-                    log::error!("Parameter description not found: {desc}, found instead {}", sink_node.parameter_descriptions().collect::<Vec<_>>().join(", "));
+                    log::error!(
+                        "Parameter description not found: {desc}, found instead {}",
+                        sink_node
+                            .parameter_descriptions()
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
                     return Err(GraphError::ParameterDescriptionNotFound(desc.to_string()));
                 }
             }
@@ -2103,7 +2114,12 @@ impl<F: Float> UGen for FeedbackSink<F> {
         [].into()
     }
 
-    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: knaster_core::ParameterValue) {
+    fn param_apply(
+        &mut self,
+        _ctx: &mut AudioCtx,
+        _index: usize,
+        _value: knaster_core::ParameterValue,
+    ) {
     }
 }
 /// The source for a feedback connection
@@ -2154,7 +2170,12 @@ impl<F: Float> UGen for FeedbackSource<F> {
         [].into()
     }
 
-    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: knaster_core::ParameterValue) {
+    fn param_apply(
+        &mut self,
+        _ctx: &mut AudioCtx,
+        _index: usize,
+        _value: knaster_core::ParameterValue,
+    ) {
     }
 }
 
