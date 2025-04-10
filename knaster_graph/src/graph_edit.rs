@@ -24,6 +24,7 @@ use crate::Time;
 use crate::graph::GraphError;
 use crate::handle::SchedulingChannelSender;
 use crate::node::NodeData;
+use crate::wrappers_graph::done::WrDone;
 use crate::{
     SchedulingChannelProducer,
     core::{
@@ -37,10 +38,11 @@ use crate::{
 use ecow::EcoString;
 use knaster_core::math::MathUGen;
 use knaster_core::numeric_array::ArrayLength;
+use knaster_core::util::Constant;
+use knaster_core::{Done, PFloat, ParameterSmoothing, ParameterValue};
 use knaster_core::{
     Float, Param, ParameterHint, Size, UGen, numeric_array::NumericArray, typenum::*,
 };
-use knaster_core::{PFloat, ParameterSmoothing, ParameterValue};
 use smallvec::SmallVec;
 
 use crate::{
@@ -64,6 +66,33 @@ impl<'b, F: Float> GraphEdit<'b, F> {
     /// Create a new node in the graph and return a handle to it.
     pub fn push<'a, T: UGen<Sample = F> + 'static>(&'a self, ugen: T) -> SH<'a, 'b, F, Handle3<T>> {
         let handle = self.graph.write().unwrap().push(ugen);
+        let node_id = handle.node_id();
+        SH {
+            nodes: Handle3 {
+                node_id,
+                ugen: PhantomData,
+            },
+            graph: &self.graph,
+        }
+    }
+
+    /// Push something implementing [`UGen`] to the graph, adding the [`WrDone`] wrapper. This
+    /// enables the node to free itself if it marks itself as done or for removal using [`GenFlags`].
+    pub fn push_with_done_action<'a, T: UGen<Sample = F> + 'static>(
+        &'a self,
+        ugen: T,
+        default_done_action: Done,
+    ) -> SH<'a, 'b, F, Handle3<WrDone<T>>>
+    where
+        // Make sure we can add a parameter
+        <T as UGen>::Parameters: crate::core::ops::Add<B1>,
+        <<T as UGen>::Parameters as crate::core::ops::Add<B1>>::Output: Size,
+    {
+        let handle = self
+            .graph
+            .write()
+            .unwrap()
+            .push_with_done_action(ugen, default_done_action);
         let node_id = handle.node_id();
         SH {
             nodes: Handle3 {
@@ -409,7 +438,7 @@ impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, Handle3<U>> {
     }
 
     /// Returns the [`NodeId`] of the node this handle points to.
-    pub fn node_id(self) -> NodeId {
+    pub fn id(self) -> NodeId {
         self.nodes.node_id
     }
     /// Get a parameter from the node this handle points to if it exists.
@@ -474,7 +503,7 @@ impl<'a, 'b, F: Float> DH<'a, 'b, F, DynamicHandle3> {
     }
 
     /// Returns the [`NodeId`] of the node this handle points to.
-    pub fn node_id(self) -> NodeId {
+    pub fn id(self) -> NodeId {
         self.nodes.node_id
     }
     /// Get a parameter from the node this handle points to if it exists.
@@ -555,7 +584,7 @@ impl<U: UGen> Static for Handle3<U> {
     }
 }
 // Macros for implementing arithmetics on sources with statically known channel configurations
-macro_rules! math_gen_fn {
+macro_rules! math_gen_fn_static {
     ($fn_name:ident, $op:ty) => {
         fn $fn_name<F: Float, S0: Static, S1: Static>(
             s0: S0,
@@ -586,13 +615,106 @@ macro_rules! math_gen_fn {
         }
     };
 }
-math_gen_fn!(add_sources, knaster_core::math::Add);
-math_gen_fn!(sub_sources, knaster_core::math::Sub);
-math_gen_fn!(mul_sources, knaster_core::math::Mul);
-math_gen_fn!(div_sources, knaster_core::math::Div);
+math_gen_fn_static!(add_sources, knaster_core::math::Add);
+math_gen_fn_static!(sub_sources, knaster_core::math::Sub);
+math_gen_fn_static!(mul_sources, knaster_core::math::Mul);
+math_gen_fn_static!(div_sources, knaster_core::math::Div);
+
+pub enum ConstantNumber {
+    F32(f32),
+    F64(f64),
+    Usize(usize),
+    I32(i32),
+}
+impl ConstantNumber {
+    pub fn into_f<F: Float>(self) -> F {
+        match self {
+            ConstantNumber::F32(f) => F::new(f),
+            ConstantNumber::F64(f) => F::new(f),
+            ConstantNumber::Usize(u) => F::from_usize(u),
+            ConstantNumber::I32(i) => F::new(i as f32),
+        }
+    }
+}
+impl From<f32> for ConstantNumber {
+    fn from(val: f32) -> Self {
+        ConstantNumber::F32(val)
+    }
+}
+impl From<f64> for ConstantNumber {
+    fn from(val: f64) -> Self {
+        ConstantNumber::F64(val)
+    }
+}
+impl From<usize> for ConstantNumber {
+    fn from(val: usize) -> Self {
+        ConstantNumber::Usize(val)
+    }
+}
+impl From<i32> for ConstantNumber {
+    fn from(val: i32) -> Self {
+        ConstantNumber::I32(val)
+    }
+}
+impl From<ConstantNumber> for f32 {
+    fn from(value: ConstantNumber) -> Self {
+        match value {
+            ConstantNumber::F32(f) => f,
+            ConstantNumber::F64(f) => f as f32,
+            ConstantNumber::Usize(u) => u as f32,
+            ConstantNumber::I32(i) => i as f32,
+        }
+    }
+}
+impl From<ConstantNumber> for f64 {
+    fn from(value: ConstantNumber) -> Self {
+        match value {
+            ConstantNumber::F32(f) => f as f64,
+            ConstantNumber::F64(f) => f,
+            ConstantNumber::Usize(u) => u as f64,
+            ConstantNumber::I32(i) => i as f64,
+        }
+    }
+}
+
+macro_rules! math_gen_fn_static_constant {
+    ($fn_name:ident, $op:ty) => {
+        fn $fn_name<F: Float, S0: Static, S1: Into<ConstantNumber>>(
+            s0: S0,
+            s1: S1,
+            graph: &RwLock<&mut Graph<F>>,
+        ) -> ChannelsHandle<S0::Outputs> {
+            let mut out_channels = ChannelIterBuilder::new();
+            let mut g = graph.write().unwrap();
+            // TODO: Make a separate UGen for constant number maths to avoid this extra node
+            let c: F = s1.into().into_f();
+            let c = g.push(Constant::new(c));
+            for s0 in Static::iter_outputs(&s0) {
+                let mul = g.push(MathUGen::<_, U1, $op>::new());
+                if let Err(e) = g.connect2(s0.0, s0.1, 0, NodeOrGraph::Node(mul.node_id())) {
+                    log::error!("Failed to connect node to arithmetics node: {e}");
+                }
+                if let Err(e) = g.connect2(c.node_id(), 0, 1, NodeOrGraph::Node(mul.node_id())) {
+                    log::error!("Failed to connect node to arithmetics node: {e}");
+                }
+                out_channels.push(NodeOrGraph::Node(mul.node_id()), 0);
+            }
+            let channels = out_channels
+                .into_channel_iter()
+                .expect("all the channels should be initialised");
+            ChannelsHandle {
+                channels: channels.channels,
+            }
+        }
+    };
+}
+math_gen_fn_static_constant!(add_sources_static_constant, knaster_core::math::Add);
+math_gen_fn_static_constant!(sub_sources_static_constant, knaster_core::math::Sub);
+math_gen_fn_static_constant!(mul_sources_static_constant, knaster_core::math::Mul);
+math_gen_fn_static_constant!(div_sources_static_constant, knaster_core::math::Div);
 
 // Macros for implementing arithmetics on sources without statically known channel configurations
-macro_rules! math_gen_dynamic_fn {
+macro_rules! math_gen_fn_dynamic {
     ($fn_name:ident, $op:ty) => {
         fn $fn_name<F: Float, S0: Dynamic, S1: Dynamic>(
             s0: S0,
@@ -621,12 +743,46 @@ macro_rules! math_gen_dynamic_fn {
         }
     };
 }
-math_gen_dynamic_fn!(add_sources_dynamic, knaster_core::math::Add);
-math_gen_dynamic_fn!(sub_sources_dynamic, knaster_core::math::Sub);
-math_gen_dynamic_fn!(mul_sources_dynamic, knaster_core::math::Mul);
-math_gen_dynamic_fn!(div_sources_dynamic, knaster_core::math::Div);
+math_gen_fn_dynamic!(add_sources_dynamic, knaster_core::math::Add);
+math_gen_fn_dynamic!(sub_sources_dynamic, knaster_core::math::Sub);
+math_gen_fn_dynamic!(mul_sources_dynamic, knaster_core::math::Mul);
+math_gen_fn_dynamic!(div_sources_dynamic, knaster_core::math::Div);
 
-// Arithmetics with Handle3 and static types
+// Macros for implementing arithmetics on sources without statically known channel configurations
+macro_rules! math_gen_fn_dynamic_constant {
+    ($fn_name:ident, $op:ty) => {
+        fn $fn_name<F: Float, S0: Dynamic, S1: Into<ConstantNumber>>(
+            s0: S0,
+            s1: S1,
+            graph: &RwLock<&mut Graph<F>>,
+        ) -> DynamicChannelsHandle {
+            let mut out_channels = SmallVec::with_capacity(s0.outputs() as usize);
+            let mut g = graph.write().unwrap();
+            let c: F = s1.into().into_f();
+            let c = g.push(Constant::new(c));
+            for s0 in Dynamic::iter_outputs(&s0) {
+                let mul = g.push(MathUGen::<_, U1, $op>::new());
+                if let Err(e) = g.connect2(s0.0, s0.1, 0, NodeOrGraph::Node(mul.node_id())) {
+                    log::error!("Failed to connect node to arithmetics node: {e}");
+                }
+                if let Err(e) = g.connect2(c.node_id(), 0, 1, NodeOrGraph::Node(mul.node_id())) {
+                    log::error!("Failed to connect node to arithmetics node: {e}");
+                }
+                out_channels.push((NodeOrGraph::Node(mul.node_id()), 0));
+            }
+            DynamicChannelsHandle {
+                in_channels: SmallVec::new(),
+                out_channels,
+            }
+        }
+    };
+}
+math_gen_fn_dynamic_constant!(add_sources_dynamic_constant, knaster_core::math::Add);
+math_gen_fn_dynamic_constant!(sub_sources_dynamic_constant, knaster_core::math::Sub);
+math_gen_fn_dynamic_constant!(mul_sources_dynamic_constant, knaster_core::math::Mul);
+math_gen_fn_dynamic_constant!(div_sources_dynamic_constant, knaster_core::math::Div);
+
+// Arithmetics with static types
 macro_rules! math_impl_static_static {
     ($fn_name:ident, $op:ident, $op_lowercase:ident) => {
         impl<'a, 'b, F: Float, S0: Static, S1: Static> $op<SH<'a, 'b, F, S1>> for SH<'a, 'b, F, S0>
@@ -649,6 +805,47 @@ math_impl_static_static!(mul_sources, Mul, mul);
 math_impl_static_static!(add_sources, Add, add);
 math_impl_static_static!(sub_sources, Sub, sub);
 math_impl_static_static!(div_sources, Div, div);
+
+// Arithmetics with and static types and constants
+// Create implementations for arithmetics with constants f32 f64 or usize
+macro_rules! math_impl_static_constant_type {
+    ($fn_name:ident, $op:ident, $op_lowercase:ident, $ty:ty) => {
+        impl<'a, 'b, F: Float, S0: Static> $op<$ty> for SH<'a, 'b, F, S0> {
+            type Output = SH<'a, 'b, F, ChannelsHandle<S0::Outputs>>;
+
+            fn $op_lowercase(self, rhs: $ty) -> Self::Output {
+                let graph = self.graph;
+                SH {
+                    nodes: $fn_name(self.nodes, rhs, graph),
+                    graph: &self.graph,
+                }
+            }
+        }
+        impl<'a, 'b, F: Float, S0: Static> $op<SH<'a, 'b, F, S0>> for $ty {
+            type Output = SH<'a, 'b, F, ChannelsHandle<S0::Outputs>>;
+
+            fn $op_lowercase(self, rhs: SH<'a, 'b, F, S0>) -> Self::Output {
+                let graph = rhs.graph;
+                SH {
+                    nodes: $fn_name(rhs.nodes, self, graph),
+                    graph: &rhs.graph,
+                }
+            }
+        }
+    };
+}
+macro_rules! math_impl_static_constant {
+    ($fn_name:ident, $op:ident, $op_lowercase:ident) => {
+        math_impl_static_constant_type!($fn_name, $op, $op_lowercase, f32);
+        math_impl_static_constant_type!($fn_name, $op, $op_lowercase, f64);
+        math_impl_static_constant_type!($fn_name, $op, $op_lowercase, usize);
+        math_impl_static_constant_type!($fn_name, $op, $op_lowercase, i32);
+    };
+}
+math_impl_static_constant!(mul_sources_static_constant, Mul, mul);
+math_impl_static_constant!(add_sources_static_constant, Add, add);
+math_impl_static_constant!(sub_sources_static_constant, Sub, sub);
+math_impl_static_constant!(div_sources_static_constant, Div, div);
 
 impl<'a, 'b, F: Float, S0: Static, S1: Static> Shr<SH<'a, 'b, F, S1>> for SH<'a, 'b, F, S0>
 where
@@ -784,11 +981,15 @@ macro_rules! math_impl_dynamic_handle3_dynamic {
         impl<'a, 'b, F: Float, S: Dynamic, S1: Dynamic> $op<DH<'a, 'b, F, S1>>
             for DH<'a, 'b, F, S>
         {
-            type Output = DynamicChannelsHandle;
+            type Output = DH<'a, 'b, F, DynamicChannelsHandle>;
 
             fn $op_lowercase(self, rhs: DH<'a, 'b, F, S1>) -> Self::Output {
                 let graph = self.graph;
-                $fn_name(self.nodes, rhs.nodes, graph)
+                let handle = $fn_name(self.nodes, rhs.nodes, graph);
+                DH {
+                    nodes: handle,
+                    graph,
+                }
             }
         }
     };
@@ -812,6 +1013,49 @@ impl<'a, 'b, F: Float, D0: Dynamic, D1: Dynamic> BitOr<DH<'a, 'b, F, D1>> for DH
         self.stack(rhs)
     }
 }
+
+// Arithmetics with and dynamic types and constants
+// Create implementations for arithmetics with constants f32 f64 or usize
+macro_rules! math_impl_dynamic_constant_type {
+    ($fn_name:ident, $op:ident, $op_lowercase:ident, $ty:ty) => {
+        impl<'a, 'b, F: Float, S: Dynamic> $op<$ty> for DH<'a, 'b, F, S> {
+            type Output = DH<'a, 'b, F, DynamicChannelsHandle>;
+
+            fn $op_lowercase(self, rhs: $ty) -> Self::Output {
+                let graph = self.graph;
+                let handle = $fn_name(self.nodes, rhs, graph);
+                DH {
+                    nodes: handle,
+                    graph,
+                }
+            }
+        }
+        impl<'a, 'b, F: Float, S: Dynamic> $op<DH<'a, 'b, F, S>> for $ty {
+            type Output = DH<'a, 'b, F, DynamicChannelsHandle>;
+
+            fn $op_lowercase(self, rhs: DH<'a, 'b, F, S>) -> Self::Output {
+                let graph = rhs.graph;
+                let handle = $fn_name(rhs.nodes, self, graph);
+                DH {
+                    nodes: handle,
+                    graph,
+                }
+            }
+        }
+    };
+}
+macro_rules! math_impl_dynamic_constant {
+    ($fn_name:ident, $op:ident, $op_lowercase:ident) => {
+        math_impl_dynamic_constant_type!($fn_name, $op, $op_lowercase, f32);
+        math_impl_dynamic_constant_type!($fn_name, $op, $op_lowercase, f64);
+        math_impl_dynamic_constant_type!($fn_name, $op, $op_lowercase, usize);
+        math_impl_dynamic_constant_type!($fn_name, $op, $op_lowercase, i32);
+    };
+}
+math_impl_dynamic_constant!(mul_sources_dynamic_constant, Mul, mul);
+math_impl_dynamic_constant!(add_sources_dynamic_constant, Add, add);
+math_impl_dynamic_constant!(sub_sources_dynamic_constant, Sub, sub);
+math_impl_dynamic_constant!(div_sources_dynamic_constant, Div, div);
 
 #[derive(Copy, Clone)]
 pub struct Stack<S0, S1> {
@@ -1262,8 +1506,9 @@ mod tests {
                 let lpf_l = graph.push(OnePoleLpf::new(2600.));
                 let lpf_r = graph.push(OnePoleLpf::new(2600.));
                 a.to(lpf).to(pan).to_graph_out();
-                let d = (a / c - c) + c * c;
+                let d = (a / c - c) + c * c * 0.2 / 4 - c;
                 let e = (d | d) - (c | c);
+                0.2 * e;
                 ((a >> lpf >> pan >> (lpf_l | lpf_r)) * (amp | amp)).to_graph_out();
                 lpf.to_graph_out_channels(1);
 
@@ -1284,7 +1529,7 @@ mod tests {
                 // s = Some(sine);
                 let c = graph.push(Constant::new(0.2));
                 let c = sine * sine2 * c;
-                (sine.node_id(), lpf.node_id())
+                (sine.id(), lpf.id())
             }
         });
         graph.edit(|graph| {
@@ -1293,13 +1538,14 @@ mod tests {
                 // Retreive a handle to the node
                 let handle = graph.handle(kept_sine).unwrap();
                 let handle2 = graph.handle_from_name("MySine").unwrap();
-                assert_eq!(handle.node_id(), handle2.node_id());
+                assert_eq!(handle.id(), handle2.id());
                 let lpf = graph.handle(kept_lpf).unwrap();
                 // Use the handle to connect it to another node
                 let new_sine = graph.push(SinWt::new(200.));
                 let new_pan = graph.push(Pan2::new(0.));
                 let a = (handle * new_sine) >> new_pan >> (lpf | lpf);
                 let a = (new_sine * handle) >> new_pan;
+                ((handle * 2.0) - 3) / 5.0 + handle;
                 (new_pan + (handle2 | handle2)).to(lpf | lpf);
                 a.to_graph_out();
                 (new_sine + handle) >> new_pan;
