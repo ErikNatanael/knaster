@@ -1459,8 +1459,11 @@ impl<F: Float> Graph<F> {
         }
         Ok(())
     }
+    pub fn graph_id(&self) -> GraphId {
+        self.graph_id
+    }
 
-    fn free_node_from_key(&mut self, node_key: NodeKey) -> Result<(), FreeError> {
+    pub(crate) fn free_node_from_key(&mut self, node_key: NodeKey) -> Result<(), FreeError> {
         // Does the Node exist?
         if !self.get_nodes_mut().contains_key(node_key) {
             return Err(FreeError::NodeNotFound);
@@ -2024,6 +2027,8 @@ pub enum GraphError {
     ParameterError(#[from] ParameterError),
     #[error("There was an error sending the change: `{0}`")]
     PushChangeError(String),
+    #[error(transparent)]
+    FreeError(#[from] FreeError),
 }
 
 #[allow(missing_docs)]

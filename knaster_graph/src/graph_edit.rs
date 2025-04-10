@@ -135,6 +135,18 @@ impl<'b, F: Float> GraphEdit<'b, F> {
         self.graph.read().unwrap().set(node, param, value, t)?;
         Ok(())
     }
+    pub fn free_node(&self, node: impl Into<NodeId>) -> Result<(), GraphError> {
+        let node = node.into();
+        let graph_id = self.graph.read().unwrap().graph_id();
+        if !node.graph == graph_id {
+            return Err(GraphError::WrongSinkNodeGraph {
+                expected_graph: graph_id,
+                found_graph: node.graph,
+            });
+        }
+        self.graph.write().unwrap().free_node_from_key(node.key())?;
+        Ok(())
+    }
     // pub fn smooth(
     //     &mut self,
     //     s: impl Into<ParameterSmoothing>,
