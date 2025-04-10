@@ -26,6 +26,11 @@ pub struct PTrigger;
 /// enable this functionality for your own type, implement [`PIntegerConvertible`] for it.
 #[derive(Copy, Clone, Debug)]
 pub struct PInteger(pub usize);
+impl PInteger {
+    pub const MAX: Self = PInteger(usize::MAX);
+    pub const MIN: Self = PInteger(usize::MIN);
+    pub const ZERO: Self = PInteger(0);
+}
 
 /// Implement to ergonomically send a value as a parameter change through a PInteger
 pub trait PIntegerConvertible: From<PInteger> + Into<PInteger> {
@@ -195,7 +200,7 @@ impl PIntegerHint {
         Self {
             default: None,
             range,
-            #[cfg(any(feature="alloc", feature="std"))]
+            #[cfg(any(feature = "alloc", feature = "std"))]
             value_descriptions: None,
         }
     }
@@ -236,7 +241,7 @@ impl ParameterHint {
         ParameterHint::Integer(PIntegerHint {
             default: Some(T::default().into()),
             range: T::pinteger_range(),
-            #[cfg(any(feature="alloc", feature="std"))]
+            #[cfg(any(feature = "alloc", feature = "std"))]
             value_descriptions: Some(T::pinteger_descriptions),
         })
     }
