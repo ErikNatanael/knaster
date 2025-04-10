@@ -1,3 +1,8 @@
+use crate::core::collections::VecDeque;
+use crate::core::{
+    collections::HashSet,
+    sync::{Arc, Mutex},
+};
 use crate::{
     SchedulingChannelProducer, SharedFrameClock, Time,
     buffer_allocator::{AllocationCopy, BufferAllocator},
@@ -23,11 +28,6 @@ use crate::{
 use alloc::{borrow::ToOwned, boxed::Box, string::String, string::ToString, vec, vec::Vec};
 use core::cell::Cell;
 use ecow::EcoString;
-use crate::core::collections::VecDeque;
-use crate::core::{
-    collections::HashSet,
-    sync::{Arc, Mutex},
-};
 
 use crate::inspection::{EdgeInspection, EdgeSource, GraphInspection, NodeInspection};
 use crate::wrappers_graph::done::WrDone;
@@ -145,7 +145,7 @@ impl<F: Float> Drop for OwnedRawBuffer<F> {
 }
 
 pub struct Graph<F: Float> {
-    id: GraphId,
+    graph_id: GraphId,
     name: EcoString,
     // The reason this is an Arc is for the GraphGen to hold a clone of the Arc
     // so that the data doesn't get dropped if the Graph is dropped while the
@@ -203,7 +203,7 @@ impl<F: Float> Graph<F> {
             ring_buffer_size,
         } = options;
         const DEFAULT_NUM_NODES: usize = 4;
-        let id = NEXT_GRAPH_ID.fetch_add(1, crate::core::sync::atomic::Ordering::SeqCst);
+        let graph_id = NEXT_GRAPH_ID.fetch_add(1, crate::core::sync::atomic::Ordering::SeqCst);
         let nodes = Arc::new(UnsafeCell::new(SlotMap::with_capacity_and_key(
             DEFAULT_NUM_NODES,
         )));
@@ -230,7 +230,7 @@ impl<F: Float> Graph<F> {
         };
         let remove_me = Arc::new(AtomicBool::new(false));
         let mut graph = Self {
-            id,
+            graph_id,
             name,
             nodes,
             node_input_edges,
@@ -331,7 +331,7 @@ impl<F: Float> Graph<F> {
     /// Get a metadata for a node with the given [`NodeId`] if it exists.
     pub fn node_data(&self, id: impl Into<NodeId>) -> Option<NodeData> {
         let node_id = id.into();
-        if node_id.graph != self.id {
+        if node_id.graph != self.graph_id {
             return None;
         }
         self.get_nodes().get(node_id.key()).map(|node| node.data)
@@ -346,7 +346,7 @@ impl<F: Float> Graph<F> {
                 (
                     NodeId {
                         key: node.0,
-                        graph: self.id,
+                        graph: self.graph_id,
                     },
                     node.1.data,
                 )
@@ -364,7 +364,7 @@ impl<F: Float> Graph<F> {
         Handle::new(RawHandle::new(
             NodeId {
                 key: node_key,
-                graph: self.id,
+                graph: self.graph_id,
             },
             self.graph_gen_communicator
                 .scheduling_event_producer
@@ -374,6 +374,7 @@ impl<F: Float> Graph<F> {
     }
     /// Push something implementing [`UGen`] to the graph, adding the [`WrDone`] wrapper. This
     /// enables the node to free itself if it marks itself as done or for removal using [`GenFlags`].
+    #[deprecated(note = "use `edit` instead")]
     pub fn push_with_done_action<T: UGen<Sample = F> + 'static>(
         &mut self,
         ugen: T,
@@ -398,7 +399,7 @@ impl<F: Float> Graph<F> {
         Handle::new(RawHandle::new(
             NodeId {
                 key: node_key,
-                graph: self.id,
+                graph: self.graph_id,
             },
             self.graph_gen_communicator
                 .scheduling_event_producer
@@ -428,7 +429,7 @@ impl<F: Float> Graph<F> {
             if node.name == name {
                 return Some(NodeId {
                     key: id,
-                    graph: self.id,
+                    graph: self.graph_id,
                 });
             }
         }
@@ -468,15 +469,15 @@ impl<F: Float> Graph<F> {
     ) -> Result<(), GraphError> {
         let source = source.into();
         let sink = sink.into();
-        if !source.graph == self.id {
+        if !source.graph == self.graph_id {
             return Err(GraphError::WrongSourceNodeGraph {
-                expected_graph: self.id,
+                expected_graph: self.graph_id,
                 found_graph: source.graph,
             });
         }
-        if !sink.graph == self.id {
+        if !sink.graph == self.graph_id {
             return Err(GraphError::WrongSinkNodeGraph {
-                expected_graph: self.id,
+                expected_graph: self.graph_id,
                 found_graph: sink.graph,
             });
         }
@@ -536,9 +537,9 @@ impl<F: Float> Graph<F> {
         additive: bool,
     ) -> Result<(), GraphError> {
         let source = source.into();
-        if !source.graph == self.id {
+        if !source.graph == self.graph_id {
             return Err(GraphError::WrongSourceNodeGraph {
-                expected_graph: self.id,
+                expected_graph: self.graph_id,
                 found_graph: source.graph,
             });
         }
@@ -599,16 +600,16 @@ impl<F: Float> Graph<F> {
         additive: bool,
     ) -> Result<(), GraphError> {
         let source = source.into();
-        if !source.graph == self.id {
+        if !source.graph == self.graph_id {
             return Err(GraphError::WrongSourceNodeGraph {
-                expected_graph: self.id,
+                expected_graph: self.graph_id,
                 found_graph: source.graph,
             });
         }
         let sink = sink.into();
-        if !sink.graph == self.id {
+        if !sink.graph == self.graph_id {
             return Err(GraphError::WrongSinkNodeGraph {
-                expected_graph: self.id,
+                expected_graph: self.graph_id,
                 found_graph: sink.graph,
             });
         }
@@ -696,9 +697,9 @@ impl<F: Float> Graph<F> {
         additive: bool,
     ) -> Result<(), GraphError> {
         let sink = sink.into();
-        if !sink.graph == self.id {
+        if !sink.graph == self.graph_id {
             return Err(GraphError::WrongSinkNodeGraph {
-                expected_graph: self.id,
+                expected_graph: self.graph_id,
                 found_graph: sink.graph,
             });
         }
@@ -958,14 +959,14 @@ impl<F: Float> Graph<F> {
     /// existing inputs to the sink, use [`Graph::connect2_replace`]
     pub fn connect2(
         &mut self,
-        source: NodeOrGraph,
+        source: impl Into<NodeOrGraph>,
         source_channel: u16,
         sink_channel: u16,
-        sink: NodeOrGraph,
+        sink: impl Into<NodeOrGraph>,
     ) -> Result<(), GraphError> {
         let so_chan = source_channel;
         let si_chan = sink_channel;
-        match (source, sink) {
+        match (source.into(), sink.into()) {
             (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
                 self.connect_input_to_node(sink, so_chan, si_chan, true)?;
             }
@@ -1098,12 +1099,12 @@ impl<F: Float> Graph<F> {
         node: impl Into<NodeId>,
         param: impl Into<Param>,
         value: impl Into<ParameterValue>,
-        t: Time,
+        t: impl Into<Time>,
     ) -> Result<(), GraphError> {
         let node_id = node.into();
-        if !node_id.graph == self.id {
+        if !node_id.graph == self.graph_id {
             return Err(GraphError::WrongSinkNodeGraph {
-                expected_graph: self.id,
+                expected_graph: self.graph_id,
                 found_graph: node_id.graph,
             });
         }
@@ -1138,7 +1139,7 @@ impl<F: Float> Graph<F> {
                 value: Some(value),
                 smoothing: None,
                 token: None,
-                time: Some(t),
+                time: Some(t.into()),
             })?;
         Ok(())
     }
@@ -1164,6 +1165,8 @@ impl<F: Float> Graph<F> {
         c(GraphEdit::new(self))
     }
 
+    // TODO: Move this to GraphEdit and have it take a GraphEdit callback for the new Graph that
+    // gets evaluated before sending the GraphGen to the audio thread.
     pub fn subgraph<Inputs: Size, Outputs: Size>(&mut self, options: GraphOptions) -> Self {
         let temporary_invalid_node_id = NodeId::invalid();
         let (mut subgraph, graph_gen) = Self::new::<Inputs, Outputs>(
@@ -1174,11 +1177,11 @@ impl<F: Float> Graph<F> {
             self.sample_rate,
         );
         let node_key = self.push_node(graph_gen);
-        self.get_nodes_mut()[node_key].is_graph = Some(subgraph.id);
+        self.get_nodes_mut()[node_key].is_graph = Some(subgraph.graph_id);
         // Set the real NodeId of the Graph
         subgraph.self_node_id = NodeId {
             key: node_key,
-            graph: self.id,
+            graph: self.graph_id,
         };
 
         subgraph
@@ -1586,7 +1589,7 @@ impl<F: Float> Graph<F> {
             nodes,
             num_inputs: self.num_inputs,
             num_outputs: self.num_outputs,
-            graph_id: self.id,
+            graph_id: self.graph_id,
             graph_output_edges,
             graph_name: self.name.clone(),
             param_sender: self

@@ -1,5 +1,6 @@
-use knaster_core::log::{ArLogReceiver, ArLogSender};
 use knaster_core::Seconds;
+use knaster_core::log::{ArLogReceiver, ArLogSender};
+use knaster_core::typenum::U1;
 use knaster_core::{AudioCtx, Float, Size, UGenFlags, typenum::NonZero};
 
 use crate::SharedFrameClock;
@@ -47,7 +48,7 @@ pub struct Runner<F: Float> {
 impl<F: Float> Runner<F> {
     pub fn new<Inputs: Size, Outputs: Size + NonZero>(
         options: RunnerOptions,
-    ) -> (Graph<F>, Runner<F>, ArLogReceiver) {
+    ) -> (Graph<F>, Runner<F>, ArLogReceiver<U1>) {
         let block_size = options.block_size;
         let sample_rate = options.sample_rate;
         assert!(block_size != 0, "The block size must not be 0");
@@ -65,8 +66,8 @@ impl<F: Float> Runner<F> {
             block_size,
             sample_rate,
         );
-        let mut log_receiver = ArLogReceiver::new();
-        let log_sender = log_receiver.sender();
+        let log_receiver = ArLogReceiver::new();
+        let (log_sender, log_receiver) = log_receiver.sender();
         let ctx = AudioCtx::new(sample_rate, block_size, log_sender);
         let runner = Runner {
             graph_node: node,
@@ -103,7 +104,12 @@ impl<F: Float> Runner<F> {
         let mut flags = UGenFlags::new();
         let ugen = self.graph_node.ugen;
         let input = unsafe { AggregateBlockRead::new(input_pointers, self.block_size) };
-        unsafe { &mut (*ugen) }.process_block(&mut self.ctx, &mut flags, &input, &mut self.output_block);
+        unsafe { &mut (*ugen) }.process_block(
+            &mut self.ctx,
+            &mut flags,
+            &input,
+            &mut self.output_block,
+        );
         self.frame_clock += self.block_size as u64;
         self.shared_frame_clock
             .store_new_time(Seconds::from_samples(

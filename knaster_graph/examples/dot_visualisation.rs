@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use knaster_core::AudioCtx;
+use knaster_core::log::ArLogSender;
 use knaster_core::{
     ParameterSmoothing, UGen,
     osc::SinNumeric,
@@ -33,7 +34,11 @@ fn main() -> Result<()> {
     backend.start_processing(runner)?;
     // push some nodes
     let mut osc1 = WrSmoothParams::new(SinNumeric::new(200.));
-    let mut ctx = AudioCtx::new(graph.sample_rate(), graph.block_size(), log_receiver.sender());
+    let mut ctx = AudioCtx::new(
+        graph.sample_rate(),
+        graph.block_size(),
+        ArLogSender::non_rt(),
+    );
     let ctx = &mut ctx;
     osc1.param(ctx, "freq", 200.)?;
     let osc1 = graph.push(osc1.wr_mul(0.2));

@@ -10,7 +10,7 @@ fn gen_arithmetics() {
     const SR: u32 = 48000;
     const BLOCK: usize = 4;
     let mut log_receiver = ArLogReceiver::new();
-    let logger = log_receiver.sender();
+    let (logger, log_receiver) = log_receiver.sender();
     let mut ctx = AudioCtx::new(SR, BLOCK, logger);
     let ctx = &mut ctx;
     let mut flags = UGenFlags::new();
@@ -53,7 +53,7 @@ fn gen_arithmetics_multichannel() {
     const SR: u32 = 48000;
     const BLOCK: usize = 4;
     let mut log_receiver = ArLogReceiver::new();
-    let logger = log_receiver.sender();
+    let (logger, log_receiver) = log_receiver.sender();
     let mut ctx = AudioCtx::new(SR, BLOCK, logger);
     let ctx = &mut ctx;
     let mut flags = UGenFlags::new();

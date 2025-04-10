@@ -1,8 +1,12 @@
-use core::fmt::Display;
+use core::{fmt::Display, mem::MaybeUninit};
 
 use crate::core::{collections::VecDeque, vec::Vec};
 
-use knaster_primitives::Seconds;
+use knaster_primitives::{
+    Seconds, Size,
+    numeric_array::{self, NumericArray},
+    typenum::{Add1, B1, U0},
+};
 
 /// A log message sent from the audio thread, requiring no allocations.
 ///
@@ -96,20 +100,20 @@ impl From<Seconds> for ArLogMessage {
 
 // TODO: Make the array of receivers static with a generic sender() method that returns a new
 // ArLogReceiver
-pub struct ArLogReceiver {
-    receivers: Vec<rtrb::Consumer<ArLogMessage>>,
-    received_messages: VecDeque<ArLogMessage>,
+pub struct ArLogReceiver<N: Size> {
+    receivers: NumericArray<rtrb::Consumer<ArLogMessage>, N>,
 }
-impl ArLogReceiver {
+impl ArLogReceiver<U0> {
     pub fn new() -> Self {
         Self {
-            receivers: Vec::new(),
-            received_messages: VecDeque::with_capacity(10),
+            receivers: NumericArray::from([]),
         }
     }
+}
+impl<N: Size> ArLogReceiver<N> {
     /// Receive messages and store them internally. Only full message chains are received ending
-    /// with `AtLogMessage::End`.
-    pub fn recv(&mut self) {
+    /// with `AtLogMessage::End`. Messages are passed to the log_handler. Each call to the log_handler may or may not contain a full message chain. If a message chain is not complete, the remaining messages are passed to the next call to log_handler.
+    pub fn recv(&mut self, mut log_handler: impl FnMut(&[ArLogMessage])) {
         for rec in &mut self.receivers {
             let slots = rec.slots();
             if let Ok(read_chunk) = rec.read_chunk(slots) {
@@ -121,21 +125,52 @@ impl ArLogReceiver {
                     .skip(last_end)
                     .position(|m| matches!(m, &ArLogMessage::End))
                 {
-                    for m in s0.iter().chain(s1).skip(last_end).take(pos) {
-                        self.received_messages.push_back(*m);
-                    }
+                    let slice0 = if last_end >= s0.len() {
+                        &[]
+                    } else {
+                        &s0[last_end..pos.min(s0.len())]
+                    };
+                    let slice1 = if last_end + pos <= s0.len() {
+                        &[]
+                    } else {
+                        &s1[last_end + pos - s0.len()..pos]
+                    };
+                    log_handler(slice0);
+                    log_handler(slice1);
+                    // for m in s0.iter().chain(s1).skip(last_end).take(pos) {
+                    //     self.received_messages.push_back(*m);
+                    // }
                     last_end += pos;
                 }
                 read_chunk.commit(last_end);
             }
         }
     }
-    /// Log received messages using log::info
-    pub fn log(&mut self) {}
-    pub fn sender(&mut self) -> ArLogSender {
+
+    pub fn sender(self) -> (ArLogSender, ArLogReceiver<Add1<N>>)
+    where
+        N: core::ops::Add<B1>,
+        <N as core::ops::Add<B1>>::Output: Size,
+    {
         let (tx, rx) = rtrb::RingBuffer::new(100);
-        self.receivers.push(rx);
-        ArLogSender::RingBuffer(tx)
+        let mut array: numeric_array::generic_array::GenericArray<MaybeUninit<_>, Add1<N>> =
+            numeric_array::generic_array::GenericArray::uninit();
+
+        // Copy existing elements
+        for (i, p) in self.receivers.into_iter().enumerate() {
+            array[i].write(p);
+        }
+
+        // Write new element
+        array[N::USIZE].write(rx);
+
+        // SAFETY: All items are initialized
+        let receivers = unsafe {
+            NumericArray::from(numeric_array::generic_array::GenericArray::assume_init(
+                array,
+            ))
+        };
+        (ArLogSender::RingBuffer(tx), ArLogReceiver { receivers })
     }
 }
 pub enum ArLogSender {
@@ -174,8 +209,8 @@ mod tests {
 
     #[test]
     fn log_rt() {
-        let mut log_receiver = ArLogReceiver::new();
-        let mut logger = log_receiver.sender();
+        let log_receiver = ArLogReceiver::new();
+        let (mut logger, log_receiver) = log_receiver.sender();
         rt_log!(logger; "En", 10, " mängd olika ", 5.0, 4.0_f32, 3.0_f64);
     }
 }

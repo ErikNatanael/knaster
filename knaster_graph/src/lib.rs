@@ -72,13 +72,13 @@ pub use scheduling::*;
 /// let (mut graph, mut runner, log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions::default());
 /// let osc0 = graph.push(SinNumeric::new(440.));
 /// let osc1 = graph.push(SinNumeric::new(440.));
-/// set_many!(graph, Time::asap(); &osc0, "freq", 440., &osc1, "freq", 880.);
+/// set_many!(graph, Time::asap(); (&osc0, "freq", 440.), (&osc1, "freq", 880.));
 /// ```
 #[macro_export]
 macro_rules! set_many {
-    ($graph:expr, $time:expr; $($node:expr, $param:expr, $value:expr),* $(,)?) => {
+    ($graph:expr, $time:expr; $(($node:expr, $param:expr, $value:expr)),* $(,)?) => {
         $graph.set_many(&[
             $((($node).into(), ($param).into(), ($value).into())),*
-        ], $time);
+        ], $time.into());
     };
 }

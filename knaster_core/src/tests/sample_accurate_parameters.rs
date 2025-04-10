@@ -1,7 +1,10 @@
 use knaster_primitives::{Block, StaticBlock, typenum::*};
 
 use crate::{
-    log::ArLogReceiver, tests::utils::TestInPlusParamGen, wrappers_core::{UGenWrapperCoreExt, WrPreciseTiming}, AudioCtx,  UGen, UGenFlags
+    AudioCtx, UGen, UGenFlags,
+    log::ArLogReceiver,
+    tests::utils::TestInPlusParamGen,
+    wrappers_core::{UGenWrapperCoreExt, WrPreciseTiming},
 };
 
 #[test]
@@ -10,7 +13,7 @@ fn sample_accurate_parameters_test() {
     const SR: u32 = 48000;
 
     let mut log_receiver = ArLogReceiver::new();
-    let logger = log_receiver.sender();
+    let (logger, log_receiver) = log_receiver.sender();
     let mut ctx = AudioCtx::new(SR, BLOCK_SIZE, logger);
     let ctx = &mut ctx;
     let mut flags = UGenFlags::new();
@@ -27,14 +30,16 @@ fn sample_accurate_parameters_test() {
     g.param((ctx).into(), 0, 10.).unwrap();
 
     let in_block = StaticBlock::<f32, U2, U16>::new();
-    let mut out_block= StaticBlock::<f32, U2, U16>::new();
+    let mut out_block = StaticBlock::<f32, U2, U16>::new();
 
     g.process_block(ctx, &mut flags, &&in_block, &mut out_block);
 
     let o = out_block.channel_as_slice(0);
     assert_eq!(
         o,
-        [0., 0., 0., 0., 0., 5., 6., 6., 8., 9., 10., 10., 10., 10., 10., 10.]
+        [
+            0., 0., 0., 0., 0., 5., 6., 6., 8., 9., 10., 10., 10., 10., 10., 10.
+        ]
     );
 }
 #[test]
@@ -42,7 +47,7 @@ fn sample_accurate_parameters_with_wrappers_test() {
     const BLOCK_SIZE: usize = 16;
     const SR: u32 = 48000;
     let mut log_receiver = ArLogReceiver::new();
-    let logger = log_receiver.sender();
+    let (logger, log_receiver) = log_receiver.sender();
     let mut ctx = AudioCtx::new(SR, BLOCK_SIZE, logger);
     let ctx = &mut ctx;
 
@@ -69,13 +74,15 @@ fn sample_accurate_parameters_with_wrappers_test() {
     g.param((ctx).into(), 0, 10.).unwrap();
 
     let in_block = StaticBlock::<f32, U2, U16>::new();
-    let mut out_block= StaticBlock::<f32, U2, U16>::new();
+    let mut out_block = StaticBlock::<f32, U2, U16>::new();
 
     g.process_block(ctx, &mut flags, &&in_block, &mut out_block);
 
     let o = out_block.channel_as_slice(0);
     assert_eq!(
         o,
-        [0., 0., 0., 0., 0., 5., 6., 6., 8., 9., 10., 10., 10., 10., 10., 10.]
+        [
+            0., 0., 0., 0., 0., 5., 6., 6., 8., 9., 10., 10., 10., 10., 10., 10.
+        ]
     );
 }

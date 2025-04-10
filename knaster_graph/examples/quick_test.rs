@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use knaster_core::envelopes::EnvAsr;
+use knaster_core::log::ArLogSender;
 use knaster_core::math::{MathUGen, Mul};
 use knaster_core::noise::{RandomLin, WhiteNoise};
 use knaster_core::onepole::OnePoleHpf;
@@ -28,11 +29,12 @@ fn main() -> Result<()> {
     let mut backend = CpalBackend::new(CpalBackendOptions::default())?;
 
     // Create a graph
-    let (mut top_level_graph, runner, mut log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
-        block_size: backend.block_size().unwrap_or(64),
-        sample_rate: backend.sample_rate(),
-        ring_buffer_size: 200,
-    });
+    let (mut top_level_graph, runner, mut log_receiver) =
+        Runner::<f32>::new::<U0, U2>(RunnerOptions {
+            block_size: backend.block_size().unwrap_or(64),
+            sample_rate: backend.sample_rate(),
+            ring_buffer_size: 200,
+        });
     backend.start_processing(runner)?;
     // push some nodes
     loop {
@@ -41,8 +43,12 @@ fn main() -> Result<()> {
 
         top_level_graph.commit_changes()?;
 
-    let mut ctx = AudioCtx::new(graph.sample_rate(), graph.block_size(), log_receiver.sender());
-    let ctx = &mut ctx;
+        let mut ctx = AudioCtx::new(
+            graph.sample_rate(),
+            graph.block_size(),
+            ArLogSender::non_rt(),
+        );
+        let ctx = &mut ctx;
         let mut rng = thread_rng();
         let freq = rng.gen_range(200.0..800.);
         dbg!(freq);

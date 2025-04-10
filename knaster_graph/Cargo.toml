@@ -34,7 +34,7 @@ smallvec = { version = "1.14.0", features = [
   "const_generics",
   "const_new",
 ] }
-log = "0.4.26"
+log = "0.4"
 ecow = { version = "0.2.3", default-features = false }
 
 [dev-dependencies]
