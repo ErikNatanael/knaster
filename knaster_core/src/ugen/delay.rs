@@ -1,9 +1,8 @@
-use crate::core::{vec, vec::Vec};
-
 use crate::numeric_array::NumericArray;
 use crate::typenum::{U1, U2};
 use crate::{AudioCtx, PFloat, ParameterHint, ParameterValue, UGen, UGenFlags};
 use knaster_primitives::{Float, Frame, Seconds};
+use std::prelude::v1::*;
 
 /// Delay by an integer number of samples, no interpolation. This is good for e.g. triggers.
 ///
@@ -44,7 +43,7 @@ impl<F: Float> UGen for SampleDelay<F> {
         self.write_position = (self.write_position + 1) % self.buffer.len();
         [out].into()
     }
-    fn init(&mut self, sample_rate: u32, block_size: usize) {
+    fn init(&mut self, sample_rate: u32, _block_size: usize) {
         self.buffer =
             vec![F::ZERO; (self.max_delay_length.to_secs_f64() * sample_rate as f64) as usize];
         self.write_position = 0;
@@ -286,7 +285,7 @@ impl<F: Float> UGen for AllpassFeedbackDelay<F> {
     type Outputs = U1;
     type Parameters = U2;
 
-    fn init(&mut self, sample_rate: u32, block_size: usize) {
+    fn init(&mut self, sample_rate: u32, _block_size: usize) {
         self.allpass_delay.init(sample_rate as u64);
     }
 
@@ -413,7 +412,7 @@ impl<F: Float> StaticSampleDelay<F> {
         assert!(self.buffer.len() >= block_size);
         let write_end = self.position + block_size;
         if write_end <= self.buffer.len() {
-            self.buffer[self.position..write_end].copy_from_slice(&input);
+            self.buffer[self.position..write_end].copy_from_slice(input);
         } else {
             // block wraps around
             let write_end = write_end % self.delay_length;

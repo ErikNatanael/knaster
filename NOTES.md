@@ -58,10 +58,10 @@ This requires copying a block of data every block, but since blocks for anything
 # [ ] Error reporting
 
 - [ ] macros for warnings and errors, maybe different for control and audio thread.
-- [ ] Many/most errors don't need Result, but can be logged instead. We never want to crash.
+- [x] Many/most errors don't need Result, but can be logged instead. We never want to crash.
 - [ ] Feature for enabling backtraces
 - [ ] Feature for panic on error
-- [ ] Remove Result for change(), connect(), send()
+- [/] Remove Result for change(), connect(), send()
 
 Parameter changes don't need to panic, especially if a backtrace can report the line number of the error. We never want our program to crash and parameter name/channel index/parameter type errors are not recoverable without human intervention so the benefits of Result are small.
 
@@ -80,8 +80,6 @@ Each thread in the real-time processing thread pool requires a RingBuffer for lo
 - Provide a separate logger argument to the methods.treesitter.lua:177: attempt to call method 'range' (a nil value)
 
 # [ ] Recording audio output
-
-# [ ] Macro for graph building
 
 # [ ] Parallel processing
 
@@ -168,22 +166,62 @@ let synth = g.subgraph::<U0, U2>([("freq", 200.), ("cutoff_freq", 2000.), ("amp"
 synth.set("freq", 300.)?;
 ```
 
-### Knaster v3 (connectable3)
+### Knaster v3 (connectable3, GraphEdit)
 
 ```rust
-graph.edit(|graph| {
-let freq = g.push(Constant::new(200.));
-let cutoff_freq = g.push(Constant::new(2600.));
-let amp = g.push(Constant::new(0.5));
-let sine = g.push(SinWt::new(200.));
-let sine_mod = g.push(SinWt::new(200.).ar_params());
-let reverb = g.push(Reverb::new());
-let lpf_l = g.push(OnePoleLpf::new(2600.));
-let lpf_r = g.push(OnePoleLpf::new(2600.));
+let freq = graph.edit(|graph| {
+  let freq = g.push(Constant::new(200.));
+  let cutoff_freq = g.push(Constant::new(2600.));
+  let amp = g.push(Constant::new(0.5));
+  let sine = g.push(SinWt::new(200.));
+  let sine_mod = g.push(SinWt::new(200.).ar_params());
+  let reverb = g.push(Reverb::new());
+  let lpf_l = g.push(OnePoleLpf::new(2600.));
+  let lpf_r = g.push(OnePoleLpf::new(2600.));
 
-sine_mod.link("freq", freq);
-sine.link("freq", sine_mod * freq + freq);
-(sine.out([0, 0]) >> reverb >> (lpf_l | lpf_r) * amp.out([0, 0])).to_graph_out();
+  sine_mod.link("freq", freq);
+  sine.link("freq", sine_mod * freq + freq);
+  (sine.out([0, 0]) >> reverb >> (lpf_l | lpf_r) * amp.out([0, 0])).to_graph_out();
+  freq.param(0).unwrap()
+});
 
-freq.change(0)?.value(300.);
+freq.set(300., Time::asap());
+```
+
+# [ ] UGen macro
+
+```rust
+struct Sine<F: Float> {
+    freq: F,
+}
+
+#[knaster::ugen(inputs = 0, outputs = 1)]
+impl<F: Float> Sine<F> {
+    fn new(freq: F) -> Self {
+        Self { freq }
+    }
+    #[init]
+    fn init(&mut self, sample_rate: u32, block_size: usize) {
+        self.freq = F::from(sample_rate).unwrap();
+    }
+    #[param(default = 220., hint = AudibleHz )]
+    fn freq(&mut self, freq: F) -> {
+        self.freq = freq;
+    }
+    #[param(default = 0., hint = Unipolar)]
+    fn phase_offset(&mut self, freq: F) -> {
+        self.freq = freq;
+    }
+    #[process]
+        fn process(
+            &mut self,
+            ctx: &mut AudioCtx,
+            flags: &mut UGenFlags,
+            input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
+        ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
+          todo!()
+        }
+}
+
+
 ```

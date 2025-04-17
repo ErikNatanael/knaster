@@ -10,19 +10,24 @@
 //! # Features
 //!
 //! - `alloc`: Enables alloc in `knaster_primitives` and heap based data structures
-#[cfg(feature = "alloc")]
-extern crate alloc;
-#[cfg(feature = "std")]
-extern crate std;
+// #[cfg(feature = "alloc")]
+// extern crate alloc;
+// #[cfg(feature = "std")]
+// extern crate std;
+
+extern crate no_std_compat as std;
 
 // Switches between std and core based on features. This reduces boilerplate when importing.
 mod core {
-    #[cfg(all(feature = "alloc", not(feature = "std")))]
-    pub use alloc::*;
-    #[cfg(not(feature = "std"))]
-    pub use core::*;
-    #[cfg(feature = "std")]
-    pub use std::*;
+    pub use no_std_compat::*;
+    // #[cfg(all(feature = "alloc", not(feature = "std")))]
+    // extern crate alloc as __alloc;
+    // #[cfg(all(feature = "alloc", not(feature = "std")))]
+    // pub use __alloc::*;
+    // #[cfg(not(feature = "std"))]
+    // pub use core::*;
+    // #[cfg(feature = "std")]
+    // pub use std::*;
 }
 
 pub mod dsp;
@@ -37,6 +42,7 @@ use knaster_macros::KnasterIntegerParameter;
 use knaster_primitives::num_derive::*;
 pub use knaster_primitives::*;
 pub use parameters::*;
+use std::prelude::v1::*;
 pub use ugen::*;
 
 /// Rate determines the speed at which something is running. Something running

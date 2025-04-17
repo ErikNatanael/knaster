@@ -199,8 +199,8 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
         source_channels: impl Into<Channels<N>>,
     ) -> SH<'a, 'b, F, ChannelsHandle<N>> {
         let mut channels = NumericArray::default();
-        for c in source_channels.into() {
-            channels[c as usize] = self.nodes.iter_outputs().nth(c as usize).unwrap();
+        for (i, c) in source_channels.into().into_iter().enumerate() {
+            channels[i] = self.nodes.iter_outputs().nth(c as usize).unwrap();
         }
         SH {
             nodes: ChannelsHandle { channels },
@@ -246,7 +246,7 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
         let mut g = self.graph.write().unwrap();
         for (i, (source, source_channel)) in Static::iter_outputs(&self.nodes).enumerate() {
             g.connect2(source, source_channel, i as u16, NodeOrGraph::Graph)
-                .expect("Error connecting to graph output channel.");
+                .expect("Error connecting to graph output channel");
         }
     }
 
@@ -282,10 +282,37 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
             graph: &self.graph,
         }
     }
+    // Arithmetic operations that lack an operator overload.
+    pub fn pow<S1: Static>(
+        self,
+        rhs: SH<'a, 'b, F, S1>,
+    ) -> SH<'a, 'b, F, ChannelsHandle<S1::Outputs>>
+    where
+        S0::Outputs: Same<S1::Outputs>,
+    {
+        let nodes = pow_sources(self.nodes, rhs.nodes, self.graph);
+        SH {
+            nodes,
+            graph: self.graph,
+        }
+    }
 }
 impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
-    pub fn out<N: Size>(&self, source_channels: impl Into<Channels<N>>) -> ChannelsHandle<N> {
-        todo!()
+    pub fn out<N: Size>(
+        &self,
+        source_channels: impl Into<Channels<N>>,
+    ) -> DH<'a, 'b, F, DynamicChannelsHandle> {
+        let mut channels = SmallVec::with_capacity(N::USIZE);
+        for c in source_channels.into() {
+            channels.push(self.nodes.iter_outputs().nth(c as usize).unwrap());
+        }
+        DH {
+            nodes: DynamicChannelsHandle {
+                in_channels: SmallVec::new(),
+                out_channels: channels,
+            },
+            graph: self.graph,
+        }
     }
     /// Connect self to another node or nodes.
     ///
@@ -373,6 +400,14 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
     }
     pub fn dynamic(self) -> Self {
         self
+    }
+    pub fn pow<S1: Dynamic>(self, rhs: DH<'a, 'b, F, S1>) -> DH<'a, 'b, F, DynamicChannelsHandle> {
+        assert_eq!(self.nodes.outputs(), rhs.nodes.outputs());
+        let nodes = pow_sources_dynamic(self.nodes, rhs.nodes, self.graph);
+        DH {
+            nodes,
+            graph: self.graph,
+        }
     }
 }
 
@@ -631,6 +666,7 @@ math_gen_fn_static!(add_sources, knaster_core::math::Add);
 math_gen_fn_static!(sub_sources, knaster_core::math::Sub);
 math_gen_fn_static!(mul_sources, knaster_core::math::Mul);
 math_gen_fn_static!(div_sources, knaster_core::math::Div);
+math_gen_fn_static!(pow_sources, knaster_core::math::Pow);
 
 pub enum ConstantNumber {
     F32(f32),
@@ -724,6 +760,7 @@ math_gen_fn_static_constant!(add_sources_static_constant, knaster_core::math::Ad
 math_gen_fn_static_constant!(sub_sources_static_constant, knaster_core::math::Sub);
 math_gen_fn_static_constant!(mul_sources_static_constant, knaster_core::math::Mul);
 math_gen_fn_static_constant!(div_sources_static_constant, knaster_core::math::Div);
+math_gen_fn_static_constant!(pow_sources_static_constant, knaster_core::math::Pow);
 
 // Macros for implementing arithmetics on sources without statically known channel configurations
 macro_rules! math_gen_fn_dynamic {
@@ -759,6 +796,7 @@ math_gen_fn_dynamic!(add_sources_dynamic, knaster_core::math::Add);
 math_gen_fn_dynamic!(sub_sources_dynamic, knaster_core::math::Sub);
 math_gen_fn_dynamic!(mul_sources_dynamic, knaster_core::math::Mul);
 math_gen_fn_dynamic!(div_sources_dynamic, knaster_core::math::Div);
+math_gen_fn_dynamic!(pow_sources_dynamic, knaster_core::math::Pow);
 
 // Macros for implementing arithmetics on sources without statically known channel configurations
 macro_rules! math_gen_fn_dynamic_constant {
@@ -793,6 +831,7 @@ math_gen_fn_dynamic_constant!(add_sources_dynamic_constant, knaster_core::math::
 math_gen_fn_dynamic_constant!(sub_sources_dynamic_constant, knaster_core::math::Sub);
 math_gen_fn_dynamic_constant!(mul_sources_dynamic_constant, knaster_core::math::Mul);
 math_gen_fn_dynamic_constant!(div_sources_dynamic_constant, knaster_core::math::Div);
+math_gen_fn_dynamic_constant!(pow_sources_dynamic_constant, knaster_core::math::Pow);
 
 // Arithmetics with static types
 macro_rules! math_impl_static_static {
@@ -1520,7 +1559,7 @@ mod tests {
                 a.to(lpf).to(pan).to_graph_out();
                 let d = (a / c - c) + c * c * 0.2 / 4 - c;
                 let e = (d | d) - (c | c);
-                0.2 * e;
+                (0.2 * e).to_graph_out();
                 ((a >> lpf >> pan >> (lpf_l | lpf_r)) * (amp | amp)).to_graph_out();
                 lpf.to_graph_out_channels(1);
 

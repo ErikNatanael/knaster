@@ -354,185 +354,204 @@ impl<F: Float> UGen for EnvAr<F> {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct EnvelopeSegment {
-    reciprocal_duration: f64,
-    duration: f64,
-    value: f64,
-}
-impl EnvelopeSegment {
-    /// Duration is in seconds the time it takes to reach the value
-    pub fn new(duration: f64, value: f64) -> Self {
-        Self {
-            reciprocal_duration: 1.0 / duration,
-            duration,
-            value,
+#[cfg(any(feature = "std", feature = "alloc"))]
+pub use alloc_envelopes::*;
+
+#[cfg(any(feature = "std", feature = "alloc"))]
+mod alloc_envelopes {
+
+    use core::marker::PhantomData;
+
+    use knaster_primitives::{
+        Float, Frame,
+        numeric_array::NumericArray,
+        typenum::{U0, U1, U4},
+    };
+
+    use crate::{AudioCtx, PInteger, ParameterHint, ParameterValue, UGen, UGenFlags};
+
+    #[derive(Copy, Clone, Debug)]
+    pub struct EnvelopeSegment {
+        reciprocal_duration: f64,
+        duration: f64,
+        value: f64,
+    }
+    impl EnvelopeSegment {
+        /// Duration is in seconds the time it takes to reach the value
+        pub fn new(duration: f64, value: f64) -> Self {
+            Self {
+                reciprocal_duration: 1.0 / duration,
+                duration,
+                value,
+            }
         }
     }
-}
-#[derive(Copy, Clone, Debug)]
-pub enum EnvelopeShape {
-    Linear,
-    Exponential,
-    Sinusoidal,
-    Step,
-}
-#[derive(Copy, Clone, Debug)]
-enum EnvelopeState {
-    Stopped,
-    Running {
+    #[derive(Copy, Clone, Debug)]
+    pub enum EnvelopeShape {
+        Linear,
+        Exponential,
+        Sinusoidal,
+        Step,
+    }
+    #[derive(Copy, Clone, Debug)]
+    enum EnvelopeState {
+        Stopped,
+        Running {
+            current_segment: usize,
+            current_time: f64,
+        },
+    }
+
+    pub struct Envelope<F: Float> {
+        state: EnvelopeState,
+        segments: crate::core::vec::Vec<EnvelopeSegment>,
+        start_value: f64,
+        from_value: f64,
         current_segment: usize,
-        current_time: f64,
-    },
-}
-
-pub struct Envelope<F: Float> {
-    state: EnvelopeState,
-    segments: crate::core::vec::Vec<EnvelopeSegment>,
-    start_value: f64,
-    from_value: f64,
-    current_segment: usize,
-    time_scale: f64,
-    base_scale: f64,
-    _float: PhantomData<F>,
-}
-impl<F: Float> Envelope<F> {
-    pub fn new(start_value: f64, segments: crate::core::vec::Vec<EnvelopeSegment>) -> Self {
-        Self {
-            state: EnvelopeState::Stopped,
-            segments,
-            start_value,
-            from_value: start_value,
-            current_segment: 0,
-            time_scale: 1.0,
-            base_scale: 0.0,
-            _float: PhantomData,
+        time_scale: f64,
+        base_scale: f64,
+        _float: PhantomData<F>,
+    }
+    impl<F: Float> Envelope<F> {
+        pub fn new(start_value: f64, segments: crate::core::vec::Vec<EnvelopeSegment>) -> Self {
+            Self {
+                state: EnvelopeState::Stopped,
+                segments,
+                start_value,
+                from_value: start_value,
+                current_segment: 0,
+                time_scale: 1.0,
+                base_scale: 0.0,
+                _float: PhantomData,
+            }
+        }
+        pub fn time_scale(mut self, time_scale: f64) -> Self {
+            self.time_scale = time_scale;
+            self
         }
     }
-    pub fn time_scale(mut self, time_scale: f64) -> Self {
-        self.time_scale = time_scale;
-        self
-    }
-}
-impl<F: Float> UGen for Envelope<F> {
-    type Sample = F;
-    type Inputs = U0;
-    type Outputs = U1;
-    type Parameters = U4;
+    impl<F: Float> UGen for Envelope<F> {
+        type Sample = F;
+        type Inputs = U0;
+        type Outputs = U1;
+        type Parameters = U4;
 
-    fn init(&mut self, sample_rate: u32, _block_size: usize) {
-        self.base_scale = 1.0 / sample_rate as f64;
-    }
+        fn init(&mut self, sample_rate: u32, _block_size: usize) {
+            self.base_scale = 1.0 / sample_rate as f64;
+        }
 
-    fn process(
-        &mut self,
-        _ctx: &mut AudioCtx,
-        flags: &mut UGenFlags,
-        _input: Frame<Self::Sample, Self::Inputs>,
-    ) -> Frame<Self::Sample, Self::Outputs> {
-        let out: F;
-        match self.state {
-            EnvelopeState::Stopped => {
-                out = F::new(self.from_value);
-            }
-            EnvelopeState::Running {
-                current_segment,
-                current_time,
-            } => {
-                let t = current_time;
-                if t < self.segments[current_segment].duration {
-                    let segment = &self.segments[current_segment];
-                    out = F::new(
-                        self.from_value
-                            + (t * segment.reciprocal_duration) * (segment.value - self.from_value),
-                    );
-                    self.state = EnvelopeState::Running {
-                        current_segment,
-                        current_time: t + (self.time_scale * self.base_scale),
-                    };
-                } else if current_segment + 1 < self.segments.len() {
-                    self.from_value = self.segments[current_segment].value;
-                    let segment = &self.segments[current_segment];
-                    out = F::new(
-                        self.from_value
-                            + (t * segment.reciprocal_duration) * (segment.value - self.from_value),
-                    );
-                    self.state = EnvelopeState::Running {
-                        current_segment: current_segment + 1,
-                        current_time: current_time - segment.duration
-                            + (self.time_scale * self.base_scale),
-                    };
-                } else {
-                    self.from_value = self.segments[current_segment].value;
+        fn process(
+            &mut self,
+            _ctx: &mut AudioCtx,
+            flags: &mut UGenFlags,
+            _input: Frame<Self::Sample, Self::Inputs>,
+        ) -> Frame<Self::Sample, Self::Outputs> {
+            let out: F;
+            match self.state {
+                EnvelopeState::Stopped => {
                     out = F::new(self.from_value);
-                    self.state = EnvelopeState::Stopped;
-                    flags.mark_done(0);
                 }
-            }
-        }
-        [out].into()
-    }
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
-        ["time_scale", "jump_to_segment", "t_restart", "t_stop"].into()
-    }
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
-        [
-            ParameterHint::float(|h| h.logarithmic(true).minmax(0.0, 20.0)),
-            ParameterHint::integer((PInteger::ZERO, PInteger::MAX), |h| h),
-            ParameterHint::Trigger,
-            ParameterHint::Trigger,
-        ]
-        .into()
-    }
-    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
-        match index {
-            0 => {
-                self.time_scale = F::new(value.float().unwrap()).to_f64();
-            }
-            1 => {
-                let mut jump_to_segment = value.integer().unwrap().0;
-                if jump_to_segment >= self.segments.len() {
-                    jump_to_segment = self.segments.len() - 1;
-                }
-                match &mut self.state {
-                    EnvelopeState::Stopped => {
-                        self.state = EnvelopeState::Running {
-                            current_segment: jump_to_segment,
-                            current_time: 0.0,
-                        };
-                    }
-                    EnvelopeState::Running {
-                        current_segment,
-                        current_time,
-                    } => {
-                        *current_segment = jump_to_segment;
-                        *current_time = 0.0;
-                    }
-                }
-
-                self.current_segment = jump_to_segment;
-            }
-            2 => {
-                self.state = EnvelopeState::Running {
-                    current_segment: 0,
-                    current_time: 0.0,
-                };
-                self.from_value = self.start_value;
-            }
-            3 => {
-                if let EnvelopeState::Running {
+                EnvelopeState::Running {
                     current_segment,
                     current_time,
-                } = self.state
-                {
+                } => {
                     let t = current_time;
-                    let segment = &self.segments[current_segment];
-                    self.from_value = self.from_value
-                        + (t * segment.reciprocal_duration) * (segment.value - self.from_value);
+                    if t < self.segments[current_segment].duration {
+                        let segment = &self.segments[current_segment];
+                        out = F::new(
+                            self.from_value
+                                + (t * segment.reciprocal_duration)
+                                    * (segment.value - self.from_value),
+                        );
+                        self.state = EnvelopeState::Running {
+                            current_segment,
+                            current_time: t + (self.time_scale * self.base_scale),
+                        };
+                    } else if current_segment + 1 < self.segments.len() {
+                        self.from_value = self.segments[current_segment].value;
+                        let segment = &self.segments[current_segment];
+                        out = F::new(
+                            self.from_value
+                                + (t * segment.reciprocal_duration)
+                                    * (segment.value - self.from_value),
+                        );
+                        self.state = EnvelopeState::Running {
+                            current_segment: current_segment + 1,
+                            current_time: current_time - segment.duration
+                                + (self.time_scale * self.base_scale),
+                        };
+                    } else {
+                        self.from_value = self.segments[current_segment].value;
+                        out = F::new(self.from_value);
+                        self.state = EnvelopeState::Stopped;
+                        flags.mark_done(0);
+                    }
                 }
-                self.state = EnvelopeState::Stopped;
             }
-            _ => (),
+            [out].into()
+        }
+        fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+            ["time_scale", "jump_to_segment", "t_restart", "t_stop"].into()
+        }
+        fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
+            [
+                ParameterHint::float(|h| h.logarithmic(true).minmax(0.0, 20.0)),
+                ParameterHint::integer((PInteger::ZERO, PInteger::MAX), |h| h),
+                ParameterHint::Trigger,
+                ParameterHint::Trigger,
+            ]
+            .into()
+        }
+        fn param_apply(&mut self, _ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
+            match index {
+                0 => {
+                    self.time_scale = F::new(value.float().unwrap()).to_f64();
+                }
+                1 => {
+                    let mut jump_to_segment = value.integer().unwrap().0;
+                    if jump_to_segment >= self.segments.len() {
+                        jump_to_segment = self.segments.len() - 1;
+                    }
+                    match &mut self.state {
+                        EnvelopeState::Stopped => {
+                            self.state = EnvelopeState::Running {
+                                current_segment: jump_to_segment,
+                                current_time: 0.0,
+                            };
+                        }
+                        EnvelopeState::Running {
+                            current_segment,
+                            current_time,
+                        } => {
+                            *current_segment = jump_to_segment;
+                            *current_time = 0.0;
+                        }
+                    }
+
+                    self.current_segment = jump_to_segment;
+                }
+                2 => {
+                    self.state = EnvelopeState::Running {
+                        current_segment: 0,
+                        current_time: 0.0,
+                    };
+                    self.from_value = self.start_value;
+                }
+                3 => {
+                    if let EnvelopeState::Running {
+                        current_segment,
+                        current_time,
+                    } = self.state
+                    {
+                        let t = current_time;
+                        let segment = &self.segments[current_segment];
+                        self.from_value = self.from_value
+                            + (t * segment.reciprocal_duration) * (segment.value - self.from_value);
+                    }
+                    self.state = EnvelopeState::Stopped;
+                }
+                _ => (),
+            }
         }
     }
 }

@@ -30,6 +30,7 @@ use crate::{
 };
 use knaster_macros::KnasterIntegerParameter;
 use knaster_primitives::{Float, Frame};
+use std::prelude::v1::*;
 
 fn square_number<T: Mul + Copy>(num: T) -> <T as Mul>::Output {
     num * num
@@ -114,7 +115,7 @@ impl<F: Float> UGen for PolyBlep<F> {
     type Inputs = U0;
     type Outputs = U1;
     type Parameters = U3;
-    fn init(&mut self, sample_rate: u32, block_size: usize) {
+    fn init(&mut self, sample_rate: u32, _block_size: usize) {
         self.sample_rate = F::from(sample_rate).unwrap();
         if self.freq_in_seconds_per_sample == F::ZERO && self.freq_in_hz != F::ZERO {
             self.set_frequency(self.freq_in_hz);

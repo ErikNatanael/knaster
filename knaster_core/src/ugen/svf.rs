@@ -12,6 +12,7 @@ use crate::{
 use knaster_macros::KnasterIntegerParameter;
 use knaster_primitives::num_traits;
 use knaster_primitives::{Float, Frame};
+use std::prelude::v1::*;
 
 /// Different supported filter types
 #[derive(
@@ -216,7 +217,7 @@ impl<F: Float> UGen for SvfFilter<F> {
     type Outputs = U1;
     type Parameters = U5;
 
-    fn init(&mut self, sample_rate: u32, block_size: usize) {
+    fn init(&mut self, sample_rate: u32, _block_size: usize) {
         self.set_coeffs(
             self.cutoff_freq,
             self.q,

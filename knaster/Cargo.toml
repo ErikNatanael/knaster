@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["std"]
+default = ["std", "cpal"]
 std = ["knaster_graph/std"]
 unstable = ["knaster_graph/unstable"]
 sound_files = ["knaster_graph/sound_files"]
@@ -13,3 +13,7 @@ cpal = ["knaster_graph/cpal"]
 
 [dependencies]
 knaster_graph = { path = "../knaster_graph/" }
+log = "0.4"
+
+[dev-dependencies]
+color-eyre = "0.6.3"

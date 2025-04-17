@@ -6,11 +6,11 @@ edition = "2024"
 [features]
 default = ["std", "unstable", "sound_files"]
 # Enables the alloc in no_std. `alloc` does nothing if `std` is enabled.
-alloc = ["knaster_primitives/alloc"]
+alloc = ["knaster_primitives/alloc", "no-std-compat/alloc", "dep:embassy-sync"]
 # Enables the standard library. `alloc` does nothing if `std` is enabled.
-std = ["knaster_primitives/std"]
+std = ["knaster_primitives/std", "no-std-compat/std"]
 # Enables unstable Rust features that may speed up execution
-unstable = ["dep:target-features"]
+unstable = ["dep:target-features", "no-std-compat/unstable"]
 # Requires std to be enabled
 symphonia = ["dep:symphonia"]
 # Requires std to be enabled
@@ -30,6 +30,8 @@ hound = { version = "3.5.1", optional = true }
 no_denormals = "0.2.0"
 rtrb = { version = "0.3.2", default-features = false }
 log = "0.4.26"
+no-std-compat = "0.4.1"
+embassy-sync = { version = "0.6.2", optional = true }
 
 [dev-dependencies]
 anyhow = "1.0.94"
@@ -37,5 +39,5 @@ anyhow = "1.0.94"
 
 [[example]]
 name = "implement_gen"
-path = "examples/implement_gen.rs"
+path = "examples/implement_a_gen.rs"
 required-features = ["alloc"]

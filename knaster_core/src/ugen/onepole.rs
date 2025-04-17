@@ -118,12 +118,11 @@ impl<F: Float> UGen for OnePoleLpf<F> {
     type Inputs = U1;
     type Outputs = U1;
     type Parameters = U1;
-    fn init(&mut self, sample_rate: u32, block_size: usize) {
+    fn init(&mut self, sample_rate: u32, _block_size: usize) {
         // Only assume b1 is frequency if a0 is set to its standard value
         if self.op.a0 == F::ONE {
             let freq = self.op.b1;
-            self.op
-                .set_freq_lowpass(freq, F::new(sample_rate as f32));
+            self.op.set_freq_lowpass(freq, F::new(sample_rate as f32));
         }
     }
     fn process(

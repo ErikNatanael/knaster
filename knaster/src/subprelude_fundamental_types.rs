@@ -1,13 +1,27 @@
 // Fundamental types
 #[allow(unused)]
 pub use knaster_graph::{
-    Beats, Done, Float, Frame, PFloat, PInteger, PTrigger, ParameterHint, ParameterType,
-    ParameterValue, Seconds, Size, UGen, audio_backend::AudioBackend, connectable::Connectable,
-    graph::GraphOptions, handle::Handle, handle::HandleTrait, numeric_array::NumericArray,
-    runner::Runner, runner::RunnerOptions, typenum::*, wrappers_core::UGenWrapperCoreExt,
-    wrappers_core::WrAdd, wrappers_core::WrDiv, wrappers_core::WrMul,
-    wrappers_core::WrSmoothParams, wrappers_core::WrSub, wrappers_core::WrVDiv,
-    wrappers_core::WrVSub, wrappers_graph::done::WrDone,
+    Beats, Done, Float, Frame, PFloat, PInteger, PTrigger, ParameterHint, ParameterSmoothing,
+    ParameterType, ParameterValue, Seconds, Size, Time, UGen,
+    audio_backend::AudioBackend,
+    connectable::Connectable,
+    graph::GraphOptions,
+    graph_edit::{DH, Dynamic, GraphEdit, SH, Static},
+    handle::Handle,
+    handle::HandleTrait,
+    numeric_array::NumericArray,
+    runner::Runner,
+    runner::RunnerOptions,
+    typenum::*,
+    wrappers_core::UGenWrapperCoreExt,
+    wrappers_core::WrAdd,
+    wrappers_core::WrDiv,
+    wrappers_core::WrMul,
+    wrappers_core::WrSmoothParams,
+    wrappers_core::WrSub,
+    wrappers_core::WrVDiv,
+    wrappers_core::WrVSub,
+    wrappers_graph::done::WrDone,
 };
 
 #[cfg(feature = "cpal")]

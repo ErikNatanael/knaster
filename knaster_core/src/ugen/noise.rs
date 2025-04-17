@@ -248,7 +248,7 @@ impl<F: Float> UGen for RandomLin<F> {
     type Outputs = U1;
     type Parameters = U1;
 
-    fn init(&mut self, sample_rate: u32, block_size: usize) {
+    fn init(&mut self, sample_rate: u32, _block_size: usize) {
         self.freq_to_phase_inc = F::ONE / F::from(sample_rate).unwrap();
         // freq is stored in phase_step until init
         self.phase_step *= self.freq_to_phase_inc;

@@ -2,13 +2,15 @@
 
 use anyhow::Result;
 use knaster_core::{
-    empty_block, log::ArLogReceiver, numeric_array::NumericArray, typenum::{Unsigned, U0, U1, U3}, AudioCtx, Block, Float, Frame, Param, ParameterError, ParameterHint, ParameterType, ParameterValue, UGen, UGenFlags, VecBlock
+    AudioCtx, Block, Float, Frame, Param, ParameterError, ParameterHint, ParameterType,
+    ParameterValue, StaticBlock, UGen, UGenFlags, empty_block,
+    log::ArLogSender,
+    numeric_array::NumericArray,
+    typenum::{U0, U1, U3, U64, Unsigned},
 };
 fn main() -> Result<()> {
     // Let's pretend we're running an audio backend at 48kHz with a block size of 64.
-    let mut log_receiver = ArLogReceiver::new();
-    let logger = log_receiver.sender();
-    let mut ctx = AudioCtx::new(48000, 64, logger);
+    let mut ctx = AudioCtx::new(48000, 64, ArLogSender::non_rt());
     let mut flags = UGenFlags::new();
     let mut osc = Osc::new();
     // Since we own the Osc directly, and it isn't wrapped in anything, we can
@@ -22,7 +24,7 @@ fn main() -> Result<()> {
     let output = osc.process(&mut ctx, &mut flags, [].into());
     assert_eq!(output[0], 0.0);
     // Or in blocks
-    let mut output_block = VecBlock::new(1, 64);
+    let mut output_block = StaticBlock::<_, U1, U64>::new();
     osc.process_block(&mut ctx, &mut flags, &&empty_block(), &mut output_block);
     assert!(
         (output_block.read(0, 63)

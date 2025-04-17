@@ -7,6 +7,7 @@
 #[cfg(feature = "std")]
 use crate::core::path::PathBuf;
 use crate::core::{string::String, string::ToString, vec, vec::Vec};
+use std::prelude::v1::*;
 
 #[allow(unused)]
 use crate::ugen::buffer::BufferReader;
@@ -17,7 +18,7 @@ use symphonia::core::errors::Error as SymphoniaError;
 #[cfg(feature = "symphonia")]
 use symphonia::core::{
     audio::SampleBuffer,
-    codecs::{DecoderOptions, CODEC_TYPE_NULL},
+    codecs::{CODEC_TYPE_NULL, DecoderOptions},
     formats::FormatOptions,
     io::MediaSourceStream,
     meta::MetadataOptions,

@@ -5,10 +5,9 @@ mod types;
 
 pub use types::*;
 
-use thiserror::Error;
+use std::prelude::v1::*;
 
-#[cfg(any(feature = "std", feature = "alloc"))]
-use crate::core::string::String;
+use thiserror::Error;
 
 // The current type of parameter changes. It is set here to easily change it in the future.
 // It would be more robust to make this a newtype, since it avoids the risk that code uses the concrete type instead of the type alias, but the cost to ergonomics is significant.
@@ -57,7 +56,7 @@ impl PIntegerConvertible for usize {
 
     #[cfg(any(feature = "std", feature = "alloc"))]
     fn pinteger_descriptions(v: PInteger) -> String {
-        crate::core::format!("{}", v.0)
+        v.0.to_string()
     }
 }
 impl From<PInteger> for bool {
@@ -160,6 +159,10 @@ impl PFloatHint {
     }
     pub fn infinite(mut self) -> Self {
         self.range = Some(FloatRange::Infinite);
+        self
+    }
+    pub fn unipolar(mut self) -> Self {
+        self.range = Some(FloatRange::Range(0.0, 1.0));
         self
     }
     pub fn positive_infinite(mut self) -> Self {

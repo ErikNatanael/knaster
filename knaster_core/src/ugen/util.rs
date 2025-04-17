@@ -2,9 +2,9 @@ use crate::core::marker::PhantomData;
 use crate::{ParameterHint, ParameterValue};
 
 use knaster_primitives::{
+    Float, Frame,
     numeric_array::NumericArray,
     typenum::{U0, U1},
-    Float, Frame,
 };
 
 use crate::{AudioCtx, UGen, UGenFlags};

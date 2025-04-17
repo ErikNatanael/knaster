@@ -14,7 +14,10 @@ use super::{AudioCtx, UGen, UGenFlags};
 #[cfg(any(feature = "alloc", feature = "std"))]
 mod wavetable_vec {
     use crate::{core::marker::PhantomData, rt_log};
-    use crate::core::sync::LazyLock;
+    #[cfg(feature = "alloc")]
+    use embassy_sync::lazy_lock::LazyLock;
+    #[cfg(feature = "std")]
+    use std::sync::LazyLock;
 
     use knaster_primitives::{
         Float, Frame,
@@ -72,7 +75,7 @@ mod wavetable_vec {
         type Sample = F;
         type Inputs = U0;
         type Outputs = U1;
-        fn init(&mut self, sample_rate: u32, block_size: usize) {
+        fn init(&mut self, sample_rate: u32, __block_size: usize) {
             self.reset_phase();
             self.freq_to_phase_inc =
                 TABLE_SIZE as f64 * FRACTIONAL_PART as f64 * (1.0 / sample_rate as f64);
@@ -139,6 +142,7 @@ mod wavetable_vec {
 
     pub static SINE_WAVETABLE_F32: LazyLock<NonAaWavetable<f32>> =
         LazyLock::new(NonAaWavetable::sine);
+
     /// Sine wave based on a wavetable lookup.
     ///
     /// A sine wave does not need to be anti-aliased so it uses a simpler
@@ -161,7 +165,10 @@ mod wavetable_vec {
                 phase_increment: 0,
                 _marker: PhantomData,
                 freq_to_phase_inc: 0.0,
+                #[cfg(feature = "std")]
                 wavetable: &SINE_WAVETABLE_F32,
+                #[cfg(feature = "alloc")]
+                wavetable: SINE_WAVETABLE_F32.get(),
                 freq,
             }
         }
@@ -196,7 +203,7 @@ mod wavetable_vec {
         type Inputs = U0;
         type Outputs = U1;
 
-        fn init(&mut self, sample_rate: u32, block_size: usize) {
+        fn init(&mut self, sample_rate: u32, _block_size: usize) {
             self.reset_phase();
             self.freq_to_phase_inc =
                 TABLE_SIZE as f64 * FRACTIONAL_PART as f64 * (1.0 / sample_rate as f64);
@@ -279,7 +286,7 @@ impl<F: Float> UGen for Phasor<F> {
     type Inputs = U0;
     type Outputs = U1;
     #[allow(missing_docs)]
-    fn init(&mut self, sample_rate: u32, block_size: usize) {
+    fn init(&mut self, sample_rate: u32, _block_size: usize) {
         self.freq_to_phase_step_mult = 1.0_f64 / (sample_rate as f64);
         self.set_freq(self.step);
     }
@@ -352,7 +359,7 @@ impl<F: Float> UGen for SinNumeric<F> {
     type Inputs = U0;
     type Outputs = U1;
 
-    fn init(&mut self, sample_rate: u32, block_size: usize) {
+    fn init(&mut self, sample_rate: u32, _block_size: usize) {
         // self.phase holds the freq set in the constructor, but only use it if the freq hasn't
         // been set any other way
         if self.phase_increment == F::ZERO {
@@ -410,8 +417,7 @@ impl<F: Float> UGen for SinNumeric<F> {
         param: impl Into<Param>,
         value: impl Into<ParameterValue>,
     ) -> Result<(), ParameterError> {
-        let ctx = ctx.into();
-        let var_name = match param.into() {
+        match param.into() {
             Param::Index(i) => {
                 if i >= Self::Parameters::USIZE {
                     return Err(ParameterError::ParameterIndexOutOfBounds);
@@ -428,7 +434,6 @@ impl<F: Float> UGen for SinNumeric<F> {
                 }
                 Err(ParameterError::DescriptionNotFound(desc))
             }
-        };
-        var_name
+        }
     }
 }

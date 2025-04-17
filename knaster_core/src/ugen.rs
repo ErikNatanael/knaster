@@ -1,6 +1,8 @@
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub mod buffer;
 #[cfg(any(feature = "std", feature = "alloc"))]
+pub mod closure;
+#[cfg(any(feature = "std", feature = "alloc"))]
 pub mod delay;
 
 pub mod envelopes;
@@ -15,7 +17,7 @@ pub mod util;
 
 use crate::log::ArLogSender;
 use crate::numeric_array::NumericArray;
-use crate::{rt_log, Param, ParameterError, ParameterHint, ParameterType, ParameterValue};
+use crate::{Param, ParameterError, ParameterHint, ParameterType, ParameterValue, rt_log};
 use knaster_primitives::{Block, BlockRead, Float, Frame, Size, typenum::*};
 
 /// Contains basic metadata about the context in which an audio process is
@@ -329,7 +331,7 @@ pub trait UGen {
     ///
     /// Wrappers must propagagte this call.
     #[allow(unused)]
-    fn set_delay_within_block_for_param(&mut self,ctx: &mut AudioCtx, index: usize, delay: u16) {
+    fn set_delay_within_block_for_param(&mut self, ctx: &mut AudioCtx, index: usize, delay: u16) {
         rt_log!(ctx.logger(); "Warning: Parameter delay set, but did not reach a WrHiResParams and will have no effect.");
     }
     /// Apply a parameter change. Typechecks and bounds checks the arguments and

@@ -1,7 +1,5 @@
 use core::{fmt::Display, mem::MaybeUninit};
 
-use crate::core::{collections::VecDeque, vec::Vec};
-
 use knaster_primitives::{
     Seconds, Size,
     numeric_array::{self, NumericArray},
@@ -210,7 +208,7 @@ mod tests {
     #[test]
     fn log_rt() {
         let log_receiver = ArLogReceiver::new();
-        let (mut logger, log_receiver) = log_receiver.sender();
+        let (mut logger, _log_receiver) = log_receiver.sender();
         rt_log!(logger; "En", 10, " mängd olika ", 5.0, 4.0_f32, 3.0_f64);
     }
 }

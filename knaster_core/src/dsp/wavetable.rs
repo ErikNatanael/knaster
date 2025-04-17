@@ -1,5 +1,7 @@
 //! Contains an anti-aliasing wavetable implementation [`Wavetable`] with related utilities.
 
+use std::prelude::v1::*;
+
 /// Decides the number of samples per [`Wavetable`] buffer, and therefore also
 /// the number of high bits used for the phase indexing into the wavetable. With
 /// the current u32 phase, this can be maximum 16.
@@ -64,10 +66,8 @@ mod wavetable_vec {
     use super::*;
     use crate::core::f64::consts::PI;
     use crate::dsp::xorrng::XOrShift32Rng;
+    use std::prelude::v1::*;
 
-    use crate::core::{string::String, vec, vec::Vec};
-
-    use crate::core::format;
     use knaster_primitives::Float;
 
     /// Non-anti-aliased wavetable.
@@ -247,11 +247,11 @@ mod wavetable_vec {
         pub fn add_saw(&mut self, start_harmonic: usize, end_harmonic: usize, amp: f64) {
             for i in start_harmonic..=end_harmonic {
                 let start_phase = 0.0;
-                let harmonic_amp = 1.0 / ((i + 1) as f64 * PI as f64);
+                let harmonic_amp = 1.0 / ((i + 1) as f64 * PI);
                 let len = self.buffer.len() as f64;
                 for k in 0..self.buffer.len() {
                     self.buffer[k] += F::new(
-                        ((k as f64 / len * PI as f64 * 2.0 * (i + 1) as f64 + start_phase).sin()
+                        ((k as f64 / len * PI * 2.0 * (i + 1) as f64 + start_phase).sin()
                             * harmonic_amp)
                             * amp,
                     );
