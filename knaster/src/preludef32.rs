@@ -10,6 +10,7 @@ pub type Graph = knaster_graph::graph::Graph<f32>;
 
 pub type EnvAr = knaster_graph::envelopes::EnvAr<f32>;
 pub type EnvAsr = knaster_graph::envelopes::EnvAsr<f32>;
+pub type Envelope = knaster_graph::envelopes::Envelope<f32>;
 
 pub type Pan2 = knaster_graph::pan::Pan2<f32>;
 
