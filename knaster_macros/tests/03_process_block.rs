@@ -1,6 +1,6 @@
 use knaster_core::{
-    AudioCtx, BlockRead, Float, PFloat, ParameterValue, UGen, UGenFlags, log::ArLogSender,
-    typenum::*,
+    AudioCtx, Block, BlockRead, Float, PFloat, ParameterValue, StaticBlock, UGen, UGenFlags,
+    log::ArLogSender, typenum::*,
 };
 
 /// Outputs a static number every frame
@@ -73,4 +73,8 @@ fn main() {
         UGen::process(&mut ugen, &mut ctx, &mut flags, [17.].into())[0],
         17. + 3.
     );
+    let mut input = StaticBlock::<f64, U1, U64>::new();
+    input.channel_as_slice_mut(0).fill(17.0);
+    let mut output = StaticBlock::<f64, U1, U64>::new();
+    UGen::process_block(&mut ugen, &mut ctx, &mut flags, &input, &mut output);
 }

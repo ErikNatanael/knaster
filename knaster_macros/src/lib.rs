@@ -3,7 +3,10 @@ extern crate proc_macro;
 use proc_macro::TokenStream;
 use proc_macro_crate::{FoundCrate, crate_name};
 use quote::quote;
-use syn::{DeriveInput, Expr, Ident, ImplItem, ItemImpl, Lit, parse_macro_input};
+use syn::{
+    DeriveInput, Expr, Ident, ImplItem, ImplItemFn, ItemImpl, Lit, parse_macro_input,
+    spanned::Spanned,
+};
 
 #[proc_macro_derive(KnasterIntegerParameter)]
 pub fn knaster_integer_parameter(input: TokenStream) -> TokenStream {
@@ -49,7 +52,12 @@ pub fn knaster_integer_parameter(input: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn ugen(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let mut input = parse_macro_input!(item as ItemImpl);
+    let input = parse_macro_input!(item as ItemImpl);
+    parse_ugen_impl(input)
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
+}
+fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream> {
     let crate_ident = get_knaster_crate_name();
     // Remove the ugen attribute from the impl block
     input
@@ -98,31 +106,36 @@ pub fn ugen(_attr: TokenStream, item: TokenStream) -> TokenStream {
         None => quote! { fn init(&mut self, _: u32, _: usize) {} },
     };
 
-    let mut num_input_channels = 0;
-    let mut num_output_channels = 0;
+    let mut num_input_channels = None;
+    let mut num_output_channels = None;
 
     let process_impl = match process_fn {
         Some(process_fn) => {
             match &process_fn.sig.output {
-                syn::ReturnType::Default => num_output_channels = 0,
+                syn::ReturnType::Default => num_output_channels = Some(0),
                 syn::ReturnType::Type(_rarrow, return_ty) => match &**return_ty {
                     syn::Type::Array(array) => {
                         num_output_channels = if let Expr::Lit(el) = &array.len {
                             if let Lit::Int(i) = &el.lit {
-                                i.base10_parse().unwrap()
+                                Some(i.base10_parse().unwrap())
                             } else {
-                                panic!(
-                                    "process function must return an array of samples with a literal length"
-                                )
+                                return Err(syn::Error::new(
+                                    el.span(),
+                                    "process function must return an array of samples with a literal length",
+                                ));
                             }
                         } else {
-                            panic!(
-                                "process function must return an array of samples with a literal length"
-                            )
+                            return Err(syn::Error::new(
+                                array.span(),
+                                "process function must return an array of samples with a literal length",
+                            ));
                         };
                     }
                     _ => {
-                        panic!("process function must return an array of samples")
+                        return Err(syn::Error::new(
+                            return_ty.span(),
+                            "process function must return an array of samples",
+                        ));
                     }
                 },
             }
@@ -144,32 +157,48 @@ pub fn ugen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                 {
                                     process_args.push(quote! { _flags.into(), });
                                 } else {
-                                    panic!("unknown argument found in process function");
+                                    return Err(syn::Error::new(
+                                        path.span(),
+                                        "unknown argument found in process function",
+                                    ));
                                 };
                             }
                             _ => {
-                                panic!("unknown argument found in process function");
+                                return Err(syn::Error::new(
+                                    ref_type.span(),
+                                    "unknown argument found in process function",
+                                ));
                             }
                         },
 
                         syn::Type::Array(array) => {
                             num_input_channels = if let Expr::Lit(el) = &array.len {
                                 if let Lit::Int(i) = &el.lit {
-                                    i.base10_parse().unwrap()
+                                    Some(i.base10_parse().unwrap())
                                 } else {
-                                    panic!("process function input array must use a literal length")
+                                    return Err(syn::Error::new(
+                                        el.span(),
+                                        "process function input array must use a literal length",
+                                    ));
                                 }
                             } else {
-                                panic!("process function input array must use a literal length")
+                                return Err(syn::Error::new(
+                                    array.span(),
+                                    "process function input array must use a literal length",
+                                ));
                             };
                             process_args.push(quote! { _input_array, });
                         }
                         _ => {
-                            panic!("unknown argument found in process function");
+                            return Err(syn::Error::new(
+                                pat_type.span(),
+                                "unknown argument found in process function",
+                            ));
                         }
                     }
                 }
             }
+            let num_input_channels = num_input_channels.unwrap_or(0);
             let input_array_elements = (0..num_input_channels)
                 .map(|i: usize| quote! { _input[#i], })
                 .collect::<Vec<_>>();
@@ -198,167 +227,133 @@ pub fn ugen(_attr: TokenStream, item: TokenStream) -> TokenStream {
         },
     };
 
-    // let process_block_impl = match process_block_fn {
-    //     Some(process_fn) => {
-    //         let mut process_args = Vec::new();
-    //
-    //         let process_fn_name = &process_fn.sig.ident;
-    //         for input in &process_fn.sig.inputs {
-    //             if let syn::FnArg::Typed(pat_type) = input {
-    //                 match &*pat_type.ty {
-    //                     syn::Type::Reference(ref_type) => match &*ref_type.elem {
-    //                         syn::Type::Path(path) => {
-    //                             if path.path.segments.iter().any(|seg| seg.ident == "AudioCtx") {
-    //                                 process_args.push(quote! { _ctx.into(), });
-    //                             } else if path
-    //                                 .path
-    //                                 .segments
-    //                                 .iter()
-    //                                 .any(|seg| seg.ident == "UGenFlags")
-    //                             {
-    //                                 process_args.push(quote! { _flags.into(), });
-    //                             } else {
-    //                                 panic!("unknown argument found in process function");
-    //                             };
-    //                         }
-    //                         _ => {
-    //                             panic!("unknown argument found in process function");
-    //                         }
-    //                     },
-    //
-    //                     // TODO: &[F] is input, &mut [F] is output
-    //                     syn::Type::Array(array) => {
-    //                         let num_input_channels = if let Expr::Lit(el) = &array.len {
-    //                             if let Lit::Int(i) = &el.lit {
-    //                                 i.base10_parse().unwrap()
-    //                             } else {
-    //                                 panic!("process function input array must use a literal length")
-    //                             }
-    //                         } else {
-    //                             panic!("process function input array must use a literal length")
-    //                         };
-    //                         process_args.push(quote! { _input_array, });
-    //                     }
-    //                     _ => {
-    //                         panic!("unknown argument found in process function");
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //         let input_array_elements = (0..num_input_channels)
-    //             .map(|i: usize| quote! { _input[#i], })
-    //             .collect::<Vec<_>>();
-    //
-    //         quote! {
-    //             fn process(
-    //                 &mut self,
-    //                 _ctx: &mut #crate_ident::AudioCtx,
-    //                 _flags: &mut #crate_ident::UGenFlags,
-    //                 _input: #crate_ident::Frame<Self::Sample, Self::Inputs>,
-    //             ) -> #crate_ident::Frame<Self::Sample, Self::Outputs> {
-    //                     let _input_array = [ #(#input_array_elements)* ];
-    //                     Self:: #process_fn_name (self,  #(#process_args)* ).into()
-    //             }
-    //         }
-    //     }
-    //     None => quote! {
-    //         fn process(
-    //             &mut self,
-    //             _ctx: &mut #crate_ident::AudioCtx,
-    //             _flags: &mut #crate_ident::UGenFlags,
-    //             _input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
-    //         ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
-    //             todo!()
-    //         }
-    //     },
-    // };
+    let process_block_impl = match process_block_fn {
+        Some(process_fn) => {
+            let mut process_args = Vec::new();
 
-    // Parse parameter data from attribute and function signature
-    let params = param_fns
-        .iter()
-        .map(|f| {
-            let name = f.sig.ident.to_string();
-            let mut arguments = Vec::new();
-            let mut ty = None;
-            let mut default = None;
-            for attr in &f.attrs {
-                if attr.path().is_ident("default") {
-                    default = Some(attr.parse_args::<Expr>().unwrap());
-                }
-            }
-            for input in &f.sig.inputs {
+            let process_block_fn_name = &process_fn.sig.ident;
+            for input in &process_fn.sig.inputs {
                 if let syn::FnArg::Typed(pat_type) = input {
                     match &*pat_type.ty {
                         syn::Type::Reference(ref_type) => match &*ref_type.elem {
                             syn::Type::Path(path) => {
                                 if path.path.segments.iter().any(|seg| seg.ident == "AudioCtx") {
-                                    arguments.push(ParameterArgumentTypes::Ctx);
+                                    process_args.push(quote! { _ctx.into(), });
                                 } else if path
                                     .path
                                     .segments
                                     .iter()
                                     .any(|seg| seg.ident == "UGenFlags")
                                 {
-                                    arguments.push(ParameterArgumentTypes::Flags);
+                                    process_args.push(quote! { _flags.into(), });
                                 } else {
-                                    panic!(
-                                        "unknown argument found in parameter function: {:?}",
-                                        path
-                                    );
+                                    return Err(syn::Error::new(
+                                        path.span(),
+                                        "unknown argument in process_block function",
+                                    ));
                                 };
                             }
                             _ => {
-                                panic!(
-                                    "unknown argument found in parameter function: {:?}",
-                                    ref_type
-                                );
+                                return Err(syn::Error::new(
+                                    pat_type.span(),
+                                    "unknown argument in process_block function",
+                                ));
                             }
                         },
-                        syn::Type::Path(path) => {
-                            if path
-                                .path
-                                .segments
-                                .iter()
-                                .any(|seg| seg.ident == "f64" || seg.ident == "PFloat")
-                            {
-                                ty = Some(ParameterType::Float);
-                                arguments
-                                    .push(ParameterArgumentTypes::Parameter(ParameterType::Float));
-                            } else if path.path.segments.iter().any(|seg| seg.ident == "f32") {
-                                ty = Some(ParameterType::Float32);
-                                arguments.push(ParameterArgumentTypes::Parameter(
-                                    ParameterType::Float32,
-                                ));
-                            } else if path.path.segments.iter().any(|seg| seg.ident == "PInteger") {
-                                ty = Some(ParameterType::Integer);
-                                arguments.push(ParameterArgumentTypes::Parameter(
-                                    ParameterType::Integer,
-                                ));
+                        // [&[F]; N] is input, [&mut [F]; N] is output
+                        syn::Type::Array(array) => {
+                            let num_channels: usize = if let Expr::Lit(el) = &array.len {
+                                if let Lit::Int(i) = &el.lit {
+                                    i.base10_parse().unwrap()
+                                } else {
+                                    return Err(syn::Error::new(
+                                        el.span(),
+                                        "process function input array must use a literal length",
+                                    ));
+                                }
                             } else {
-                                panic!("unknown argument found in parameter function: {:?}", path);
+                                return Err(syn::Error::new(
+                                    array.span(),
+                                    "process function input array must use a literal length",
+                                ));
                             };
+                            match array.elem.as_ref() {
+                                syn::Type::Reference(ref_type2) => {
+                                    if ref_type2.mutability.is_some() {
+                                        if let Some(num_output_channels) = num_output_channels {
+                                            if num_channels != num_output_channels {
+                                                panic!(
+                                                    "number of output chanels in process and process_block methods don't match"
+                                                );
+                                            }
+                                        }
+                                        process_args.push(quote! { output_array, });
+                                    } else if let Some(num_input_channels) = num_input_channels {
+                                        if num_channels != num_input_channels {
+                                            panic!(
+                                                "number of input chanels in process and process_block methods don't match"
+                                            );
+                                        }
+                                        process_args.push(quote! { input_array, });
+                                    }
+                                    // TODO: check that it's a slice of F/f32/f64
+                                }
+                                _ => {
+                                    return Err(syn::Error::new(
+                                        input.span(),
+                                        "unknown argument found in process_block function",
+                                    ));
+                                }
+                            }
                         }
+
                         _ => {
-                            panic!(
-                                "unknown argument found in parameter function: {:?}",
-                                pat_type.ty
-                            );
+                            return Err(syn::Error::new(
+                                input.span(),
+                                "unknown argument found in process_block function",
+                            ));
                         }
                     }
                 }
             }
+            let num_input_channels = num_input_channels.unwrap_or(0);
+            let input_array_elements = (0..num_input_channels)
+                .map(|i: usize| quote! { input.channel_as_slice( #i ), })
+                .collect::<Vec<_>>();
+            let num_output_channels = num_output_channels.unwrap_or(0);
+            let output_array_elements = (0..num_output_channels)
+                .map(|_i: usize| quote! { outputs.next().unwrap(), })
+                .collect::<Vec<_>>();
 
-            ParameterData {
-                name,
-                ty: ty.unwrap_or(ParameterType::Trigger),
-                arguments,
-                fn_name: f.sig.ident.clone(),
-            }
-        })
-        .collect::<Vec<_>>();
+            quote! {
+
+            fn process_block<InBlock, OutBlock>(
+                &mut self,
+                _ctx: &mut #crate_ident::AudioCtx,
+                _flags: &mut #crate_ident::UGenFlags,
+                input: &InBlock,
+                output: &mut OutBlock,
+            ) where
+                InBlock: #crate_ident::BlockRead<Sample = Self::Sample>,
+                OutBlock: #crate_ident::Block<Sample = Self::Sample>,
+            {
+                            let input_array = [ #(#input_array_elements)* ];
+                    let mut outputs = output.iter_mut();
+                    let output_array = [ #(#output_array_elements)* ];
+                            Self:: #process_block_fn_name (self,  #(#process_args)* ).into()
+                        }
+                    }
+        }
+        None => quote! {},
+    };
+
+    let num_input_channels = num_input_channels.unwrap_or(0);
+    let num_output_channels = num_output_channels.unwrap_or(0);
     let num_params: syn::Type = syn::parse_str(&format!("U{}", param_fns.len())).unwrap();
     let num_inputs: syn::Type = syn::parse_str(&format!("U{}", num_input_channels)).unwrap();
     let num_outputs: syn::Type = syn::parse_str(&format!("U{}", num_output_channels)).unwrap();
+
+    let params = parse_parameter_functions(param_fns)?;
 
     let parameter_descriptions = params
         .iter()
@@ -415,7 +410,7 @@ pub fn ugen(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
 
-    let expanded = quote! {
+    Ok(quote! {
         impl #impl_block_generics #crate_ident::UGen for #struct_name {
             type Sample = F;
             type Inputs = #num_inputs ;
@@ -424,7 +419,7 @@ pub fn ugen(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
             #init_impl
             #process_impl
-            #process_block_fn
+            #process_block_impl
 
 
     fn param_hints()
@@ -453,9 +448,92 @@ pub fn ugen(_attr: TokenStream, item: TokenStream) -> TokenStream {
             // #(#param_setters)*
         }
         #input
-    };
+    })
+}
 
-    TokenStream::from(expanded)
+fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<ParameterData>> {
+    // Parse parameter data from attribute and function signature
+    let mut params = Vec::new();
+    for f in param_fns {
+        let name = f.sig.ident.to_string();
+        let mut arguments = Vec::new();
+        let mut ty = None;
+        let mut default = None;
+        for attr in &f.attrs {
+            if attr.path().is_ident("default") {
+                default = Some(attr.parse_args::<Expr>().unwrap());
+            }
+        }
+        for input in &f.sig.inputs {
+            if let syn::FnArg::Typed(pat_type) = input {
+                match &*pat_type.ty {
+                    syn::Type::Reference(ref_type) => match &*ref_type.elem {
+                        syn::Type::Path(path) => {
+                            if path.path.segments.iter().any(|seg| seg.ident == "AudioCtx") {
+                                arguments.push(ParameterArgumentTypes::Ctx);
+                            } else if path
+                                .path
+                                .segments
+                                .iter()
+                                .any(|seg| seg.ident == "UGenFlags")
+                            {
+                                arguments.push(ParameterArgumentTypes::Flags);
+                            } else {
+                                return Err(syn::Error::new(
+                                    input.span(),
+                                    "unknown argument in parameter function",
+                                ));
+                            };
+                        }
+                        _ => {
+                            return Err(syn::Error::new(
+                                input.span(),
+                                "unknown argument in parameter function",
+                            ));
+                        }
+                    },
+                    syn::Type::Path(path) => {
+                        if path
+                            .path
+                            .segments
+                            .iter()
+                            .any(|seg| seg.ident == "f64" || seg.ident == "PFloat")
+                        {
+                            ty = Some(ParameterType::Float);
+                            arguments.push(ParameterArgumentTypes::Parameter(ParameterType::Float));
+                        } else if path.path.segments.iter().any(|seg| seg.ident == "f32") {
+                            ty = Some(ParameterType::Float32);
+                            arguments
+                                .push(ParameterArgumentTypes::Parameter(ParameterType::Float32));
+                        } else if path.path.segments.iter().any(|seg| seg.ident == "PInteger") {
+                            ty = Some(ParameterType::Integer);
+                            arguments
+                                .push(ParameterArgumentTypes::Parameter(ParameterType::Integer));
+                        } else {
+                            return Err(syn::Error::new(
+                                input.span(),
+                                "unknown argument in parameter function",
+                            ));
+                        };
+                    }
+                    _ => {
+                        return Err(syn::Error::new(
+                            input.span(),
+                            "unknown argument in parameter function",
+                        ));
+                    }
+                }
+            }
+        }
+
+        params.push(ParameterData {
+            name,
+            ty: ty.unwrap_or(ParameterType::Trigger),
+            arguments,
+            fn_name: f.sig.ident.clone(),
+        })
+    }
+    Ok(params)
 }
 
 enum ParameterArgumentTypes {

@@ -1,7 +1,7 @@
 use crate::core::{marker::PhantomData, ops::Mul, slice};
-use crate::{float::Float, Size};
+use crate::{Size, float::Float};
 
-use numeric_array::{typenum::Prod, NumericArray};
+use numeric_array::{NumericArray, typenum::Prod};
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub use vec_block::VecBlock;
 
@@ -482,5 +482,30 @@ where
 
     fn block_size(&self) -> usize {
         BLOCK_SIZE::USIZE
+    }
+}
+
+#[allow(non_camel_case_types)]
+impl<BLOCK_SIZE: Size, CHANNELS: Size, F: Float> BlockRead for StaticBlock<F, CHANNELS, BLOCK_SIZE>
+where
+    BLOCK_SIZE: Mul<CHANNELS>,
+    Prod<BLOCK_SIZE, CHANNELS>: Size,
+{
+    type Sample = F;
+
+    fn channel_as_slice(&self, channel: usize) -> &[Self::Sample] {
+        Block::channel_as_slice(self, channel)
+    }
+
+    fn read(&self, channel: usize, frame: usize) -> Self::Sample {
+        Block::read(self, channel, frame)
+    }
+
+    fn channels(&self) -> usize {
+        Block::channels(self)
+    }
+
+    fn block_size(&self) -> usize {
+        Block::block_size(self)
     }
 }
