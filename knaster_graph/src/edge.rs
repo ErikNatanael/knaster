@@ -1,4 +1,4 @@
-use crate::graph::NodeKey;
+use crate::{connectable::NodeOrGraph, graph::NodeKey};
 
 /// An edge in the Graph. Only stores the source in the Edge since they are stored per sink node.
 #[derive(Clone, Debug, Copy)]
@@ -16,6 +16,14 @@ pub(crate) enum NodeKeyOrGraph {
 impl From<NodeKey> for NodeKeyOrGraph {
     fn from(value: NodeKey) -> Self {
         Self::Node(value)
+    }
+}
+impl From<NodeOrGraph> for NodeKeyOrGraph {
+    fn from(value: NodeOrGraph) -> Self {
+        match value {
+            NodeOrGraph::Graph => NodeKeyOrGraph::Graph,
+            NodeOrGraph::Node(node_id) => NodeKeyOrGraph::Node(node_id.key()),
+        }
     }
 }
 

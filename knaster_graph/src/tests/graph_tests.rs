@@ -1,4 +1,5 @@
-use crate::connectable::Connectable;
+use crate::Time;
+use crate::connectable::{Connectable, NodeOrGraph};
 use crate::runner::RunnerOptions;
 use crate::tests::utils::TestNumUGen;
 use crate::{handle::HandleTrait, runner::Runner, tests::utils::TestInPlusParamUGen};
@@ -242,4 +243,51 @@ fn feedback_nodes2() {
     }
     let output = runner.output_block();
     assert_eq!(output.read(0, 0), 0.125 + 1.25);
+}
+#[test]
+fn disconnect() {
+    let block_size = 16;
+    let (mut g, mut runner, _log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+        block_size,
+        sample_rate: 48000,
+        ring_buffer_size: 50,
+    });
+
+    let n1 = g.push(TestInPlusParamUGen::new());
+    g.set(&n1, 0, 0.5, Time::asap()).unwrap();
+    let n2 = g.push(TestInPlusParamUGen::new());
+    g.set(&n2, 0, 1.25, Time::asap()).unwrap();
+    let n3 = g.push(TestInPlusParamUGen::new());
+    g.set(&n3, 0, 0.125, Time::asap()).unwrap();
+    g.connect2(&n1, 0, 0, &n2).unwrap();
+    g.connect2(&n2, 0, 0, &n3).unwrap();
+    g.connect2(&n3, 0, 0, NodeOrGraph::Graph).unwrap();
+
+    g.commit_changes().unwrap();
+
+    // Block 1
+    unsafe {
+        runner.run(&[]);
+    }
+    let output = runner.output_block();
+    assert_eq!(output.read(0, 0), 0.5 + 1.25 + 0.125);
+
+    g.disconnect_output_from_source(&n1, 0).unwrap();
+    g.commit_changes().unwrap();
+
+    // Block 2
+    unsafe {
+        runner.run(&[]);
+    }
+    let output = runner.output_block();
+    assert_eq!(output.read(0, 0), 1.25 + 0.125);
+
+    g.disconnect_input_to_sink(0, &n3).unwrap();
+    g.commit_changes().unwrap();
+    // Block 3
+    unsafe {
+        runner.run(&[]);
+    }
+    let output = runner.output_block();
+    assert_eq!(output.read(0, 0), 0.125);
 }

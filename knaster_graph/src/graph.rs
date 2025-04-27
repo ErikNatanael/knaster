@@ -955,6 +955,172 @@ impl<F: Float> Graph<F> {
         }
         Ok(())
     }
+    /// Disconnect all edges from a specific output channel of a node or a graph input.
+    pub fn disconnect_output_from_source(
+        &mut self,
+        source: impl Into<NodeOrGraph>,
+        source_channel: u16,
+    ) -> Result<(), GraphError> {
+        let source = source.into();
+        match source {
+            NodeOrGraph::Node(source_node) => {
+                if source_node.graph != self.graph_id {
+                    return Err(GraphError::WrongSinkNodeGraph {
+                        expected_graph: source_node.graph,
+                        found_graph: self.graph_id,
+                    });
+                }
+                let nodes = self.get_nodes();
+                if !nodes.contains_key(source_node.key()) {
+                    return Err(GraphError::NodeNotFound);
+                }
+                let key = source_node.key();
+                let node = &nodes[key];
+                if source_channel >= node.data.outputs {
+                    return Err(GraphError::OutputOutOfBounds(source_channel));
+                }
+            }
+            NodeOrGraph::Graph => {
+                if source_channel >= self.num_inputs {
+                    return Err(GraphError::GraphInputOutOfBounds(source_channel));
+                }
+                if let Some(edge) = self.output_edges[source_channel as usize].take() {
+                    if let NodeKeyOrGraph::Node(source_node) = edge.source {
+                        self.evaluate_if_node_should_be_removed(source_node);
+                    }
+                }
+            }
+        }
+        let source: NodeKeyOrGraph = source.into();
+        // We have to go through all edges
+        for (_k, input_edges) in &mut self.node_input_edges {
+            for edge in input_edges.iter_mut().filter(|e| e.is_some()) {
+                let edge_unwraped = edge.as_mut().unwrap();
+                if edge_unwraped.channel_in_source == source_channel
+                    && source == edge_unwraped.source
+                {
+                    *edge = None;
+                }
+            }
+        }
+        for edge in self.output_edges.iter_mut().filter(|e| e.is_some()) {
+            let edge_unwraped = edge.as_mut().unwrap();
+            if edge_unwraped.channel_in_source == source_channel && source == edge_unwraped.source {
+                *edge = None;
+            }
+        }
+
+        self.recalculation_required = true;
+        Ok(())
+    }
+    /// Disconnect any input from a specific channel on a node or an internal graph output.
+    pub fn disconnect_input_to_sink(
+        &mut self,
+        sink_channel: u16,
+        sink: impl Into<NodeOrGraph>,
+    ) -> Result<(), GraphError> {
+        match sink.into() {
+            NodeOrGraph::Node(sink_node) => {
+                if sink_node.graph != self.graph_id {
+                    return Err(GraphError::WrongSinkNodeGraph {
+                        expected_graph: sink_node.graph,
+                        found_graph: self.graph_id,
+                    });
+                }
+                let nodes = self.get_nodes();
+                if !nodes.contains_key(sink_node.key()) {
+                    return Err(GraphError::NodeNotFound);
+                }
+                let edges = &mut self.node_input_edges[sink_node.key()];
+                if sink_channel as usize >= edges.len() {
+                    return Err(GraphError::InputOutOfBounds(sink_channel));
+                }
+                if let Some(edge) = edges[sink_channel as usize].take() {
+                    self.evaluate_if_node_should_be_removed(sink_node.key());
+                    if let NodeKeyOrGraph::Node(source_node) = edge.source {
+                        self.evaluate_if_node_should_be_removed(source_node);
+                    }
+                }
+                self.recalculation_required = true;
+            }
+            NodeOrGraph::Graph => {
+                if sink_channel >= self.num_outputs {
+                    return Err(GraphError::GraphOutputOutOfBounds(sink_channel));
+                }
+                if let Some(edge) = self.output_edges[sink_channel as usize].take() {
+                    if let NodeKeyOrGraph::Node(source_node) = edge.source {
+                        self.evaluate_if_node_should_be_removed(source_node);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+    /// If the node should be automatically removed, this removes it.
+    fn evaluate_if_node_should_be_removed(&mut self, key: NodeKey) {
+        let node = &mut self.get_nodes_mut()[key];
+        if node.auto_math_node {
+            // We assume math nodes have two inputs and one output
+            assert_eq!(node.data.inputs, 2);
+            assert_eq!(node.data.outputs, 1);
+            if let Some(edges) = self.node_input_edges.get(key) {
+                match (edges[0], edges[1]) {
+                    (Some(_), Some(_)) => (),
+                    (None, Some(input_edge)) | (Some(input_edge), None) => {
+                        // Find out where this math node is pointing and replace the node
+                        for (_k, input_edges) in &mut self.node_input_edges {
+                            for edge in input_edges.iter_mut().filter(|e| e.is_some()) {
+                                let edge = edge.as_mut().unwrap();
+                                if let NodeKeyOrGraph::Node(source) = &edge.source {
+                                    if *source == key {
+                                        *edge = input_edge;
+                                    }
+                                }
+                            }
+                        }
+                        for edge in &mut self.output_edges {
+                            let edge = edge.as_mut().unwrap();
+                            if let NodeKeyOrGraph::Node(source) = &edge.source {
+                                if *source == key {
+                                    *edge = input_edge;
+                                }
+                            }
+                        }
+                        self.free_node_from_key(key).ok();
+                    }
+                    (None, None) => {
+                        // No inputs, simply remove
+                        self.free_node_from_key(key).ok();
+                    }
+                }
+            }
+        }
+        let node = &mut self.get_nodes_mut()[key];
+        if node.auto_free_when_unconnected {
+            let mut unconnected = true;
+            'unconnected_block: {
+                if let Some(edges) = self.node_input_edges.get(key) {
+                    if edges.iter().flatten().peekable().peek().is_some() {
+                        unconnected = false;
+                        break 'unconnected_block;
+                    }
+                }
+                for (_k, input_edges) in &mut self.node_input_edges {
+                    for edge in input_edges.iter().flatten() {
+                        if let NodeKeyOrGraph::Node(source) = &edge.source {
+                            if *source == key {
+                                unconnected = false;
+                                break 'unconnected_block;
+                            }
+                        }
+                    }
+                }
+            }
+            if unconnected {
+                self.free_node_from_key(key).ok();
+            }
+        }
+    }
     /// Connect a source to a sink with the designated channels, addin it to any existing connections to the sink at those channels. If you want to replace
     /// existing inputs to the sink, use [`Graph::connect2_replace`]
     pub fn connect2(
@@ -964,20 +1130,18 @@ impl<F: Float> Graph<F> {
         sink_channel: u16,
         sink: impl Into<NodeOrGraph>,
     ) -> Result<(), GraphError> {
-        let so_chan = source_channel;
-        let si_chan = sink_channel;
         match (source.into(), sink.into()) {
             (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
-                self.connect_input_to_node(sink, so_chan, si_chan, true)?;
+                self.connect_input_to_node(sink, source_channel, sink_channel, true)?;
             }
             (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
-                self.connect_nodes(source, sink, so_chan, si_chan, true, false)?;
+                self.connect_nodes(source, sink, source_channel, sink_channel, true, false)?;
             }
             (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
-                self.connect_node_to_output(source, so_chan, si_chan, true)?;
+                self.connect_node_to_output(source, source_channel, sink_channel, true)?;
             }
             (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
-                self.connect_input_to_output(so_chan, si_chan, true)?;
+                self.connect_input_to_output(source_channel, sink_channel, true)?;
             }
         }
         Ok(())
@@ -1625,67 +1789,9 @@ impl<F: Float> Graph<F> {
         // Math nodes should be removed when one of its inputs was removed
         // This could be merged with the loop above, but then math nodes would be removed one step after its input(s)
         let nodes = unsafe { &mut *self.nodes.get() };
-        for (key, node) in nodes.iter_mut() {
-            if node.auto_math_node {
-                // We assume math nodes have two inputs and one output
-                assert_eq!(node.data.inputs, 2);
-                assert_eq!(node.data.outputs, 1);
-                if let Some(edges) = self.node_input_edges.get(key) {
-                    match (edges[0], edges[1]) {
-                        (Some(_), Some(_)) => (),
-                        (None, Some(input_edge)) | (Some(input_edge), None) => {
-                            // Find out where this math node is pointing and replace the node
-                            for (_k, input_edges) in &mut self.node_input_edges {
-                                for edge in input_edges.iter_mut().filter(|e| e.is_some()) {
-                                    let edge = edge.as_mut().unwrap();
-                                    if let NodeKeyOrGraph::Node(source) = &edge.source {
-                                        if *source == key {
-                                            *edge = input_edge;
-                                        }
-                                    }
-                                }
-                            }
-                            for edge in &mut self.output_edges {
-                                let edge = edge.as_mut().unwrap();
-                                if let NodeKeyOrGraph::Node(source) = &edge.source {
-                                    if *source == key {
-                                        *edge = input_edge;
-                                    }
-                                }
-                            }
-                            self.free_node_from_key(key).ok();
-                        }
-                        (None, None) => {
-                            // No inputs, simply remove
-                            self.free_node_from_key(key).ok();
-                        }
-                    }
-                }
-            }
-            if node.auto_free_when_unconnected {
-                let mut unconnected = true;
-                'unconnected_block: {
-                    if let Some(edges) = self.node_input_edges.get(key) {
-                        if edges.iter().flatten().peekable().peek().is_some() {
-                            unconnected = false;
-                            break 'unconnected_block;
-                        }
-                    }
-                    for (_k, input_edges) in &mut self.node_input_edges {
-                        for edge in input_edges.iter().flatten() {
-                            if let NodeKeyOrGraph::Node(source) = &edge.source {
-                                if *source == key {
-                                    unconnected = false;
-                                    break 'unconnected_block;
-                                }
-                            }
-                        }
-                    }
-                }
-                if unconnected {
-                    self.free_node_from_key(key).ok();
-                }
-            }
+        for key in nodes.keys() {
+            // TODO: Evaluate for affected nodes when changes occur instead of on all nodes.
+            self.evaluate_if_node_should_be_removed(key);
         }
 
         // Remove old nodes

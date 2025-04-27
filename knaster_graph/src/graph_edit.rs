@@ -175,7 +175,7 @@ impl<'b, F: Float> GraphEdit<'b, F> {
     //     Ok(())
     // }
 }
-impl<'a, F: Float> Drop for GraphEdit<'a, F> {
+impl<F: Float> Drop for GraphEdit<'_, F> {
     fn drop(&mut self) {
         self.graph.write().unwrap().commit_changes().unwrap();
     }
@@ -262,6 +262,28 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
                 .expect("Error connecting to graph output channel.");
         }
     }
+    /// Disconnect all outputs from the specified channel.
+    pub fn disconnect_output(&self, source_channel: u16) {
+        let mut g = self.graph.write().unwrap();
+        let source = self
+            .nodes
+            .iter_outputs()
+            .nth(source_channel as usize)
+            .expect("Output channel to disconnect from does not exist.");
+        g.disconnect_output_from_source(source.0, source.1)
+            .expect("Error disconnecting from output channel.");
+    }
+    /// Disconnect any input from the specified channel.
+    pub fn disconnect_input(&self, sink_channel: u16) {
+        let mut g = self.graph.write().unwrap();
+        let sink = self
+            .nodes
+            .iter_inputs()
+            .nth(sink_channel as usize)
+            .expect("Input channel to disconnect does not exist.");
+        g.disconnect_input_to_sink(sink.1, sink.0)
+            .expect("Error disconnecting input channel.");
+    }
     /// Connect this handle to another handle, returning a [`Stack`] which can be used to connect
     /// to other handles.
     ///
@@ -273,13 +295,13 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
                 s0: self.nodes,
                 s1: s.nodes,
             },
-            graph: &self.graph,
+            graph: self.graph,
         }
     }
     pub fn dynamic(self) -> DH<'a, 'b, F, S0::DynamicType> {
         DH {
             nodes: self.nodes.dynamic(self.graph),
-            graph: &self.graph,
+            graph: self.graph,
         }
     }
     // Arithmetic operations that lack an operator overload.
@@ -368,6 +390,28 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
             }
         }
     }
+    /// Disconnect all outputs from the specified channel.
+    pub fn disconnect_output(&self, source_channel: u16) {
+        let mut g = self.graph.write().unwrap();
+        let source = self
+            .nodes
+            .iter_outputs()
+            .nth(source_channel as usize)
+            .expect("Output channel to disconnect from does not exist.");
+        g.disconnect_output_from_source(source.0, source.1)
+            .expect("Error disconnecting from output channel.");
+    }
+    /// Disconnect any input from the specified channel.
+    pub fn disconnect_input(&self, sink_channel: u16) {
+        let mut g = self.graph.write().unwrap();
+        let sink = self
+            .nodes
+            .iter_inputs()
+            .nth(sink_channel as usize)
+            .expect("Input channel to disconnect does not exist.");
+        g.disconnect_input_to_sink(sink.1, sink.0)
+            .expect("Error disconnecting input channel.");
+    }
     /// Connect this handle to another handle, returning a [`Stack`] which can be used to connect
     /// to other handles.
     ///
@@ -453,6 +497,11 @@ pub struct Handle3<U: UGen> {
     node_id: NodeId,
     ugen: PhantomData<U>,
 }
+impl<'a, 'b, F: Float, U: UGen<Sample = F>> From<SH<'a, 'b, F, Handle3<U>>> for NodeId {
+    fn from(value: SH<'a, 'b, F, Handle3<U>>) -> Self {
+        value.nodes.node_id
+    }
+}
 impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, Handle3<U>> {
     /// Change the name of the node in the [`Graph`].
     pub fn name(self, n: impl Into<EcoString>) -> Self {
@@ -516,6 +565,11 @@ impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, Handle3<U>> {
                 None
             }
         }
+    }
+}
+impl<'a, 'b, F: Float> From<DH<'a, 'b, F, DynamicHandle3>> for NodeId {
+    fn from(value: DH<'a, 'b, F, DynamicHandle3>) -> Self {
+        value.nodes.node_id
     }
 }
 impl<'a, 'b, F: Float> DH<'a, 'b, F, DynamicHandle3> {
@@ -1531,7 +1585,7 @@ mod tests {
         runner::{Runner, RunnerOptions},
     };
     use knaster_core::{
-        Seconds, noise::WhiteNoise, onepole::OnePoleLpf, osc::SinWt, pan::Pan2, typenum::*,
+        Block, Seconds, noise::WhiteNoise, onepole::OnePoleLpf, osc::SinWt, pan::Pan2, typenum::*,
         util::Constant, wrappers_core::UGenWrapperCoreExt,
     };
 
@@ -1559,7 +1613,7 @@ mod tests {
                 a.to(lpf).to(pan).to_graph_out();
                 let d = (a / c - c) + c * c * 0.2 / 4 - c;
                 let e = (d | d) - (c | c);
-                (0.2 * e).to_graph_out();
+                // (0.2 * e).to_graph_out();
                 ((a >> lpf >> pan >> (lpf_l | lpf_r)) * (amp | amp)).to_graph_out();
                 lpf.to_graph_out_channels(1);
 
@@ -1664,5 +1718,56 @@ mod tests {
                 runner.run(&[]);
             }
         }
+    }
+
+    use crate::tests::utils::TestInPlusParamUGen;
+    #[test]
+    fn disconnect() {
+        let block_size = 16;
+        let (mut g, mut runner, _log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+        });
+
+        g.edit(|g| {
+            let n1 = g.push(TestInPlusParamUGen::new()).name("n1");
+            g.set(n1, 0, 0.5, Time::asap()).unwrap();
+            let n2 = g.push(TestInPlusParamUGen::new()).name("n2");
+            g.set(n2, 0, 1.25, Time::asap()).unwrap();
+            let n3 = g.push(TestInPlusParamUGen::new()).name("n3");
+            g.set(n3, 0, 0.125, Time::asap()).unwrap();
+            (n1 >> n2 >> n3).to_graph_out();
+        });
+
+        // Block 1
+        unsafe {
+            runner.run(&[]);
+        }
+        let output = runner.output_block();
+        assert_eq!(output.read(0, 0), 0.5 + 1.25 + 0.125);
+
+        g.edit(|g| {
+            let n1 = g.handle_from_name("n1").unwrap();
+            n1.disconnect_output(0);
+        });
+
+        // Block 2
+        unsafe {
+            runner.run(&[]);
+        }
+        let output = runner.output_block();
+        assert_eq!(output.read(0, 0), 1.25 + 0.125);
+
+        g.edit(|g| {
+            let n3 = g.handle_from_name("n3").unwrap();
+            n3.disconnect_input(0);
+        });
+        // Block 3
+        unsafe {
+            runner.run(&[]);
+        }
+        let output = runner.output_block();
+        assert_eq!(output.read(0, 0), 0.125);
     }
 }

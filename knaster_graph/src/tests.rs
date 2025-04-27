@@ -1,2 +1,2 @@
 mod graph_tests;
-mod utils;
+pub(crate) mod utils;
