@@ -147,6 +147,23 @@ impl<'b, F: Float> GraphEdit<'b, F> {
         self.graph.write().unwrap().free_node_from_key(node.key())?;
         Ok(())
     }
+    pub fn from_inputs<'a, N: Size + Copy>(
+        &'a self,
+        source_channels: impl Into<Channels<N>>,
+    ) -> Result<SH<'a, 'b, F, ChannelsHandle<N>>, GraphError> {
+        let mut channels = NumericArray::default();
+        let num_inputs = self.graph.read().unwrap().inputs();
+        for (i, c) in source_channels.into().into_iter().enumerate() {
+            if c >= num_inputs {
+                return Err(GraphError::GraphInputOutOfBounds(c));
+            }
+            channels[i] = (NodeOrGraph::Graph, c);
+        }
+        Ok(SH {
+            nodes: ChannelsHandle { channels },
+            graph: &self.graph,
+        })
+    }
     // pub fn smooth(
     //     &mut self,
     //     s: impl Into<ParameterSmoothing>,
