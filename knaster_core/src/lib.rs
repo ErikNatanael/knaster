@@ -38,7 +38,7 @@ mod tests;
 mod ugen;
 pub mod wrappers_core;
 
-use knaster_macros::KnasterIntegerParameter;
+pub use knaster_macros::*;
 use knaster_primitives::num_derive::*;
 pub use knaster_primitives::*;
 pub use parameters::*;
