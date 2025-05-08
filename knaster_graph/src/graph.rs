@@ -1993,6 +1993,10 @@ impl<F: Float> Graph<F> {
     pub fn block_size(&self) -> usize {
         self.block_size
     }
+    /// Returns the [`NodeId`] of the Graph node in the parent. The top level Graph has an invalid NodeId since it is not a node in any other Graph.
+    pub fn id(&self) -> NodeId {
+        self.self_node_id
+    }
     /// Connectable for connecting the Graph to other nodes within its parent graph.
     pub fn as_node(&self) -> Connectable {
         Connectable::from_node(
