@@ -1,11 +1,13 @@
 extern crate proc_macro;
 
+use darling::FromMeta;
+use knaster_primitives::FloatParameterKind;
 use proc_macro::TokenStream;
 use proc_macro_crate::{FoundCrate, crate_name};
 use quote::quote;
 use syn::{
-    DeriveInput, Expr, Ident, ImplItem, ImplItemFn, ItemImpl, Lit, parse_macro_input,
-    spanned::Spanned,
+    DeriveInput, Expr, ExprRange, Ident, ImplItem, ImplItemFn, ItemImpl, Lit, MetaList, Type,
+    parse_macro_input, spanned::Spanned,
 };
 
 #[proc_macro_derive(KnasterIntegerParameter)]
@@ -102,8 +104,16 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
     }
 
     let init_impl = match init_fn {
-        Some(init_fn) => quote! { #init_fn },
-        None => quote! { fn init(&mut self, _: u32, _: usize) {} },
+        Some(init_fn) => {
+            // let init_fn_args = Vec::new();
+            let init_fn_name = &init_fn.sig.ident;
+            quote! {
+                fn init(&mut self, _sample_rate: u32, _block_size: usize) {
+                    self.#init_fn_name ( _sample_rate, _block_size );
+                }
+            }
+        }
+        None => quote! {},
     };
 
     let mut num_input_channels = None;
@@ -210,7 +220,7 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
                     _flags: &mut #crate_ident::UGenFlags,
                     _input: #crate_ident::Frame<Self::Sample, Self::Inputs>,
                 ) -> #crate_ident::Frame<Self::Sample, Self::Outputs> {
-                        let _input_array = [ #(#input_array_elements)* ];
+                        let _input_array: [F; #num_input_channels ] = [ #(#input_array_elements)* ];
                         Self:: #process_fn_name (self,  #(#process_args)* ).into()
                 }
             }
@@ -337,9 +347,9 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
                 InBlock: #crate_ident::BlockRead<Sample = Self::Sample>,
                 OutBlock: #crate_ident::Block<Sample = Self::Sample>,
             {
-                            let input_array = [ #(#input_array_elements)* ];
+                            let input_array: [&[F]; #num_input_channels ] = [ #(#input_array_elements)* ];
                     let mut outputs = output.iter_mut();
-                    let output_array = [ #(#output_array_elements)* ];
+                    let output_array: [&mut[F]; #num_output_channels ]= [ #(#output_array_elements)* ];
                             Self:: #process_block_fn_name (self,  #(#process_args)* ).into()
                         }
                     }
@@ -376,12 +386,13 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
             let fn_name = &p.fn_name;
             let arguments = p.arguments.iter().map(|a| match a {
                 ParameterArgumentTypes::Parameter(ty) => match ty {
-                    ParameterType::Float => quote! { _value.float().unwrap() },
+                    ParameterType::PFloat => quote! { _value.float().unwrap() },
+                    ParameterType::Float64 => quote! { _value.float().unwrap() as f64 },
                     ParameterType::Float32 => quote! { _value.float().unwrap() as f32 },
-                    ParameterType::Integer => quote! { _value.into() },
+                    ParameterType::Integer => quote! { _value.integer().unwrap() },
                     ParameterType::Trigger => quote! {},
                 },
-                ParameterArgumentTypes::Ctx => quote! { _ctx },
+                ParameterArgumentTypes::Ctx => quote! { ctx },
                 ParameterArgumentTypes::Flags => quote! { _flags },
             });
             quote! { #index => { Self::#fn_name (self, #(#arguments),*); } }
@@ -390,9 +401,27 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
     let parameter_hints = params
         .iter()
         .map(|p| match &p.ty {
-            ParameterType::Float => quote! { #crate_ident::ParameterHint::float(|h| h) },
-            ParameterType::Float32 => quote! { #crate_ident::ParameterHint::float(|h| h) },
-            ParameterType::Integer => quote! { #crate_ident::ParameterHint::integer(|h| h) },
+            ParameterType::Float32 | ParameterType::PFloat | ParameterType::Float64 => {
+                // let kind = if let Some(kind) = &p.kind {
+                //     quote! { .kind }
+                // } else {
+                //     quote! {}
+                // };
+                let range = if let Some(range) = &p.range {
+                    quote! { .range(#range) }
+                } else {
+                    quote! {}
+                };
+                quote! { #crate_ident::ParameterHint::float(|h| h #range ) }
+            }
+            ParameterType::Integer => {
+                let range = if let Some(range) = &p.range {
+                    quote! { #range }
+                } else {
+                    quote! { (#crate_ident::PInteger::MIN, #crate_ident::PInteger::MAX) }
+                };
+                quote! { #crate_ident::ParameterHint::integer(#range , |h| h) }
+            }
             ParameterType::Trigger => quote! { #crate_ident::ParameterHint::Trigger },
         })
         .collect::<Vec<_>>();
@@ -413,42 +442,51 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
     Ok(quote! {
         impl #impl_block_generics #crate_ident::UGen for #struct_name {
             type Sample = F;
-            type Inputs = #num_inputs ;
-            type Outputs = #num_outputs ;
-            type Parameters = #num_params ;
+            type Inputs = #crate_ident::typenum::#num_inputs ;
+            type Outputs = #crate_ident::typenum::#num_outputs ;
+            type Parameters = #crate_ident::typenum::#num_params ;
 
             #init_impl
             #process_impl
             #process_block_impl
 
 
-    fn param_hints()
-    -> #crate_ident::numeric_array::NumericArray<#crate_ident::ParameterHint, Self::Parameters> {
-        [ #(#parameter_hints),* ].into()
-    }
+            fn param_hints()
+            -> #crate_ident::numeric_array::NumericArray<#crate_ident::ParameterHint, Self::Parameters> {
+                [ #(#parameter_hints),* ].into()
+            }
 
-    fn param_descriptions(
-    ) -> #crate_ident::numeric_array::NumericArray<&'static str, Self::Parameters> {
-        [ #(#parameter_descriptions)* ].into()
-    }
+            fn param_descriptions(
+            ) -> #crate_ident::numeric_array::NumericArray<&'static str, Self::Parameters> {
+                [ #(#parameter_descriptions)* ].into()
+            }
 
-    fn param_apply(
-        &mut self,
-        _ctx: &mut #crate_ident::AudioCtx,
-        _index: usize,
-        _value: #crate_ident::ParameterValue,
-    ) {
+            fn param_apply(
+                &mut self,
+                ctx: &mut #crate_ident::AudioCtx,
+                _index: usize,
+                _value: #crate_ident::ParameterValue,
+            ) {
+                if let #crate_ident::ParameterValue::Smoothing(_, _) =_value  {
+                    #crate_ident::rt_log!(ctx.logger(); "Error setting parameter smoothing for #struct_name, wrapper does not exist. Index: ", _index);
+                }
                 match _index {
                     #(#parameter_calls),*
-                    _ => {}
+                    _ => {
+                        #crate_ident::rt_log!(ctx.logger(); "Unknown parameter set for #struct_name : ", _index);
+                    }
                 }
-    }
-
-            // #(#param_getters)*
-            // #(#param_setters)*
+            }
         }
         #input
     })
+}
+
+#[derive(Debug, FromMeta)]
+struct ParameterAttribute {
+    default: Option<syn::Expr>,
+    range: Option<syn::Expr>,
+    kind: Option<syn::Path>,
 }
 
 fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<ParameterData>> {
@@ -459,11 +497,76 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
         let mut arguments = Vec::new();
         let mut ty = None;
         let mut default = None;
+        let mut range = None;
+        let mut kind = None;
+        let mut attrs = None;
         for attr in &f.attrs {
-            if attr.path().is_ident("default") {
-                default = Some(attr.parse_args::<Expr>().unwrap());
+            if attr.path().is_ident("param") {
+                if let syn::Meta::List(list) = attr.meta.clone() {
+                    let attr_args = match darling::ast::NestedMeta::parse_meta_list(list.tokens) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            return Err(syn::Error::new(
+                                attr.span(),
+                                format!("Failed to parse param attribute: {e}"),
+                            ));
+                        }
+                    };
+
+                    attrs = match ParameterAttribute::from_list(&attr_args) {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            return Err(syn::Error::new(
+                                attr.span(),
+                                format!("Failed to parse param attribute: {e}"),
+                            ));
+                        }
+                    };
+                }
             }
         }
+        if let Some(attrs) = attrs {
+            if let Some(akind) = attrs.kind {
+                kind = {
+                    if akind.segments.len() != 1 {
+                        return Err(syn::Error::new(akind.span(), "Invalid parameter kind"));
+                    }
+                    let ident = akind.segments.first().unwrap().ident.to_string();
+                    match ident.as_str() {
+                        "Frequency" => Some(FloatParameterKind::Frequency),
+                        "Amplitude" => Some(FloatParameterKind::Amplitude),
+                        "Q" => Some(FloatParameterKind::Q),
+                        _ => {
+                            return Err(syn::Error::new(akind.span(), "Invalid parameter kind"));
+                        }
+                    }
+                };
+            }
+            if let Some(arange) = attrs.range {
+                if let Expr::Range(range) = arange {
+                    if range.start.is_none() {
+                        return Err(syn::Error::new(
+                            range.span(),
+                            "Parameter range must have a start value",
+                        ));
+                    }
+                    if range.end.is_none() {
+                        return Err(syn::Error::new(
+                            range.span(),
+                            "Parameter range must have an end value",
+                        ));
+                    }
+                    if let syn::RangeLimits::HalfOpen(_) = range.limits {
+                        return Err(syn::Error::new(
+                            range.span(),
+                            "Parameter range must be inclusive/closed",
+                        ));
+                    }
+                }
+            }
+            default = attrs.default;
+        }
+        let mut num_parameter_value_arguments = 0;
         for input in &f.sig.inputs {
             if let syn::FnArg::Typed(pat_type) = input {
                 match &*pat_type.ty {
@@ -493,22 +596,32 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
                         }
                     },
                     syn::Type::Path(path) => {
-                        if path
-                            .path
-                            .segments
-                            .iter()
-                            .any(|seg| seg.ident == "f64" || seg.ident == "PFloat")
-                        {
-                            ty = Some(ParameterType::Float);
-                            arguments.push(ParameterArgumentTypes::Parameter(ParameterType::Float));
+                        if num_parameter_value_arguments > 0 {
+                            return Err(syn::Error::new(
+                                input.span(),
+                                "each parameter function can only take one parameter value as argument",
+                            ));
+                        }
+                        if path.path.segments.iter().any(|seg| seg.ident == "PFloat") {
+                            ty = Some(ParameterType::PFloat);
+                            arguments
+                                .push(ParameterArgumentTypes::Parameter(ParameterType::PFloat));
+                            num_parameter_value_arguments += 1;
                         } else if path.path.segments.iter().any(|seg| seg.ident == "f32") {
                             ty = Some(ParameterType::Float32);
                             arguments
                                 .push(ParameterArgumentTypes::Parameter(ParameterType::Float32));
+                            num_parameter_value_arguments += 1;
+                        } else if path.path.segments.iter().any(|seg| seg.ident == "f64") {
+                            ty = Some(ParameterType::Float64);
+                            arguments
+                                .push(ParameterArgumentTypes::Parameter(ParameterType::Float64));
+                            num_parameter_value_arguments += 1;
                         } else if path.path.segments.iter().any(|seg| seg.ident == "PInteger") {
                             ty = Some(ParameterType::Integer);
                             arguments
                                 .push(ParameterArgumentTypes::Parameter(ParameterType::Integer));
+                            num_parameter_value_arguments += 1;
                         } else {
                             return Err(syn::Error::new(
                                 input.span(),
@@ -531,6 +644,9 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
             ty: ty.unwrap_or(ParameterType::Trigger),
             arguments,
             fn_name: f.sig.ident.clone(),
+            default,
+            range,
+            kind,
         })
     }
     Ok(params)
@@ -548,9 +664,13 @@ struct ParameterData {
     ty: ParameterType,
     arguments: Vec<ParameterArgumentTypes>,
     fn_name: Ident,
+    default: Option<Expr>,
+    range: Option<ExprRange>,
+    kind: Option<FloatParameterKind>,
 }
 enum ParameterType {
-    Float,
+    PFloat,
+    Float64,
     Float32,
     Trigger,
     Integer,

@@ -5,5 +5,7 @@ fn tests() {
     t.pass("tests/01_simple_param.rs");
     t.pass("tests/02_parameter_types.rs");
     t.pass("tests/03_process_block.rs");
+    t.pass("tests/04_random_lin.rs");
+    t.pass("tests/05_more_params.rs");
     //t.compile_fail("tests/07-unrecognized-pattern.rs");
 }

@@ -8,6 +8,8 @@ syn = { version = "2.0", features = ["full", "extra-traits"] }
 proc-macro2 = "1.0"
 quote = "1.0"
 proc-macro-crate = "3.3.0"
+knaster_primitives = { path = "../knaster_primitives" }
+darling = "0.20.11"
 
 [lib]
 proc-macro = true
