@@ -202,6 +202,7 @@ mod tests {
             SharedFrameClock::new(),
             16,
             44100,
+            |_| {},
         );
         // let c0 = Connectable::SingleNode(NodeId::top_level_graph_node_id());
         // let c1 = Connectable::SingleNode(NodeId::top_level_graph_node_id());

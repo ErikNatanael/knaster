@@ -65,6 +65,7 @@ impl<F: Float> Runner<F> {
             shared_frame_clock.clone(),
             block_size,
             sample_rate,
+            |_| {},
         );
         let log_receiver = ArLogReceiver::new();
         let (log_sender, log_receiver) = log_receiver.sender();

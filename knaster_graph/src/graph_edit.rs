@@ -21,7 +21,8 @@ use core::ops::{BitOr, Div, Shr, Sub};
 use crate::core::sync::{Arc, Mutex};
 
 use crate::Time;
-use crate::graph::GraphError;
+use crate::graph::{GraphError, GraphOptions};
+use crate::graph_gen::GraphGen;
 use crate::handle::SchedulingChannelSender;
 use crate::node::NodeData;
 use crate::wrappers_graph::done::WrDone;
@@ -37,18 +38,15 @@ use crate::{
 
 use ecow::EcoString;
 use knaster_core::math::MathUGen;
-use knaster_core::numeric_array::ArrayLength;
 use knaster_core::util::Constant;
-use knaster_core::{Done, PFloat, ParameterSmoothing, ParameterValue};
-use knaster_core::{
-    Float, Param, ParameterHint, Size, UGen, numeric_array::NumericArray, typenum::*,
-};
+use knaster_core::{Done, ParameterSmoothing, ParameterValue};
+use knaster_core::{Float, Param, Size, UGen, numeric_array::NumericArray, typenum::*};
 use smallvec::SmallVec;
 
 use crate::{
     connectable::{Channels, NodeOrGraph},
     graph::{Graph, NodeId},
-    handle::{AnyHandle, HandleTrait},
+    handle::HandleTrait,
 };
 
 /// A wrapper around a [`Graph`] that provides access to an ergonomic and interface for adding and
@@ -163,6 +161,30 @@ impl<'b, F: Float> GraphEdit<'b, F> {
             nodes: ChannelsHandle { channels },
             graph: &self.graph,
         })
+    }
+
+    // TODO: Move this to GraphEdit and have it take a GraphEdit callback for the new Graph that
+    // gets evaluated before sending the GraphGen to the audio thread.
+    pub fn subgraph<'a, Inputs: Size, Outputs: Size>(
+        &'a self,
+        options: GraphOptions,
+        init_callback: impl FnOnce(GraphEdit<F>),
+    ) -> (
+        SH<'a, 'b, F, Handle3<GraphGen<F, Inputs, Outputs>>>,
+        Graph<F>,
+    ) {
+        let mut g = self.graph.write().unwrap();
+        let subgraph = g.subgraph_init::<Inputs, Outputs>(options, init_callback);
+        (
+            SH {
+                nodes: Handle3 {
+                    node_id: subgraph.id(),
+                    ugen: PhantomData,
+                },
+                graph: &self.graph,
+            },
+            subgraph,
+        )
     }
     // pub fn smooth(
     //     &mut self,

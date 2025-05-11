@@ -197,6 +197,7 @@ impl<F: Float> Graph<F> {
         shared_frame_clock: SharedFrameClock,
         block_size: usize,
         sample_rate: u32,
+        init_callback: impl FnOnce(GraphEdit<F>),
     ) -> (Self, Node<F>) {
         let GraphOptions {
             name,
@@ -253,6 +254,7 @@ impl<F: Float> Graph<F> {
             buffer_allocator,
             self_node_id: node_id,
         };
+        (init_callback)(GraphEdit::new(&mut graph));
         // graph_gen
         let task_data = graph.generate_task_data(Arc::new(AtomicBool::new(false)), Vec::new());
 
@@ -1329,8 +1331,7 @@ impl<F: Float> Graph<F> {
         c(GraphEdit::new(self))
     }
 
-    // TODO: Move this to GraphEdit and have it take a GraphEdit callback for the new Graph that
-    // gets evaluated before sending the GraphGen to the audio thread.
+    #[deprecated(note = "Deprecated in favour or GraphEdit")]
     pub fn subgraph<Inputs: Size, Outputs: Size>(&mut self, options: GraphOptions) -> Self {
         let temporary_invalid_node_id = NodeId::invalid();
         let (mut subgraph, graph_gen) = Self::new::<Inputs, Outputs>(
@@ -1339,6 +1340,31 @@ impl<F: Float> Graph<F> {
             self.graph_gen_communicator.shared_frame_clock.clone(),
             self.block_size,
             self.sample_rate,
+            |_| {},
+        );
+        let node_key = self.push_node(graph_gen);
+        self.get_nodes_mut()[node_key].is_graph = Some(subgraph.graph_id);
+        // Set the real NodeId of the Graph
+        subgraph.self_node_id = NodeId {
+            key: node_key,
+            graph: self.graph_id,
+        };
+
+        subgraph
+    }
+    pub(crate) fn subgraph_init<Inputs: Size, Outputs: Size>(
+        &mut self,
+        options: GraphOptions,
+        init_callback: impl FnOnce(GraphEdit<F>),
+    ) -> Self {
+        let temporary_invalid_node_id = NodeId::invalid();
+        let (mut subgraph, graph_gen) = Self::new::<Inputs, Outputs>(
+            options,
+            temporary_invalid_node_id,
+            self.graph_gen_communicator.shared_frame_clock.clone(),
+            self.block_size,
+            self.sample_rate,
+            init_callback,
         );
         let node_key = self.push_node(graph_gen);
         self.get_nodes_mut()[node_key].is_graph = Some(subgraph.graph_id);
@@ -2296,12 +2322,3 @@ impl<F: Float> UGen for FeedbackSource<F> {
     ) {
     }
 }
-
-/// Same API as [`Graph`], but all methods log errors instead of returning them.
-///
-/// This can lead to cleaner looking code when errors are very rare and need to be corrected
-/// manually anyway using an error message
-pub struct LoggingGraph<'a, F: Float> {
-    graph: &'a mut Graph<F>,
-}
-impl<'a, F: Float> LoggingGraph<'a, F> {}
