@@ -5,6 +5,7 @@ pub mod closure;
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub mod delay;
 
+pub mod dynamics;
 pub mod envelopes;
 pub mod math;
 pub mod noise;
@@ -56,15 +57,12 @@ impl AudioCtx {
         self.block.frame_clock
     }
 }
-/// [`AudioCtx`] + metadata about the current context of block processing.
+/// Metadata about the current context of block processing.
 /// Blocks can be divided up into multiple smaller blocks. If so, this ctx
 /// provides that information.
 ///
-/// Most [`Gen`]s don't need that info and can work straight off of the buffers
+/// Most [`UGen`]s don't need that info and can work straight off of the buffers
 /// given, but some do need to know where they are within a standard block.
-// TODO: Make BlockAudioCtx mutably borrow an AudioCtx to make partial blocks
-// more efficient. This would avoid having to copy flags and parameters that
-// don't change when a partial block is created.
 #[derive(Clone, Copy, Debug)]
 pub struct BlockMetadata {
     /// The offset of the current processing block from the start of any

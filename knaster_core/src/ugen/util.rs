@@ -1,5 +1,5 @@
 use crate::core::marker::PhantomData;
-use crate::{ParameterHint, ParameterValue};
+use crate::{ParameterHint, ParameterValue, rt_log};
 
 use knaster_primitives::{
     Float, Frame,
@@ -120,5 +120,36 @@ impl<F: Float> UGen for Constant<F> {
         if index == 0 {
             self.value = value.f().unwrap();
         }
+    }
+}
+
+pub struct LogProbe<F: Float> {
+    samples_between_logs: usize,
+    sample_counter: usize,
+    name: &'static str,
+    _phantom: PhantomData<F>,
+}
+#[knaster_macros::ugen]
+impl<F: Float> LogProbe<F> {
+    pub fn new(name: &'static str) -> Self {
+        Self {
+            samples_between_logs: 44100,
+            sample_counter: 0,
+            name,
+            _phantom: PhantomData,
+        }
+    }
+    pub fn init(&mut self, sample_rate: u32, _block_size: usize) {
+        self.samples_between_logs = sample_rate as usize;
+    }
+
+    fn process(&mut self, _ctx: &mut AudioCtx, _flags: &mut UGenFlags, input: [F; 1]) -> [F; 0] {
+        if self.sample_counter == 0 {
+            rt_log!(_ctx.logger(); "Probe", self.name, input[0].to_f64());
+            self.sample_counter = self.samples_between_logs;
+        } else {
+            self.sample_counter -= 1;
+        }
+        []
     }
 }
