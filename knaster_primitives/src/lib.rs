@@ -29,8 +29,10 @@ mod core {
 
 // Reexport to not make the structure part of the public API and to reduce noise in paths.
 mod block;
+mod parameters;
 mod time;
 pub use block::*;
+pub use parameters::*;
 pub use time::*;
 mod float;
 pub use float::*;

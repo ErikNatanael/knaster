@@ -3,19 +3,16 @@
 
 mod types;
 
+use knaster_primitives::{FloatParameterKind, FloatParameterRange, PFloat};
 pub use types::*;
 
 use std::prelude::v1::*;
 
 use thiserror::Error;
 
-// The current type of parameter changes. It is set here to easily change it in the future.
-// It would be more robust to make this a newtype, since it avoids the risk that code uses the concrete type instead of the type alias, but the cost to ergonomics is significant.
-pub type PFloat = f64;
-
 /// A parameter trigger value
 ///
-/// Similar to a Bang in PureData in that it's a separate type value that triggers something to happen. It is unlike Bang in that Gen's only receive `Trigger`s on specific dedicated parameter indices, whereas `inlet`s in PureData often accept multiple types of parameters.
+/// Similar to a Bang in PureData in that it's a separate type value that triggers something to happen. It is unlike Bang in that UGens only receive `Trigger`s on specific dedicated parameter indices, whereas `inlet`s in PureData often accept multiple types of parameters.
 #[derive(Copy, Clone, Debug)]
 pub struct PTrigger;
 
@@ -118,26 +115,10 @@ impl From<&'static str> for Param {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub enum FloatRange {
-    Range(PFloat, PFloat),
-    /// Less than `sample_rate/2`. Some filters blow up above this frequency.
-    Nyquist,
-    Infinite,
-    PositiveInfinite,
-    NegativeInfinite,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub enum FloatKind {
-    Amplitude,
-    Frequency,
-}
-
-#[derive(Copy, Clone, Debug)]
 pub struct PFloatHint {
     pub default: Option<PFloat>,
-    pub range: Option<FloatRange>,
-    pub kind: Option<FloatKind>,
+    pub range: Option<FloatParameterRange>,
+    pub kind: Option<FloatParameterKind>,
     pub is_logarithmic: Option<bool>,
 }
 impl PFloatHint {
@@ -154,27 +135,27 @@ impl PFloatHint {
         self
     }
     pub fn minmax(mut self, min: PFloat, max: PFloat) -> Self {
-        self.range = Some(FloatRange::Range(min, max));
+        self.range = Some(FloatParameterRange::Range(min, max));
         self
     }
     pub fn infinite(mut self) -> Self {
-        self.range = Some(FloatRange::Infinite);
+        self.range = Some(FloatParameterRange::Infinite);
         self
     }
     pub fn unipolar(mut self) -> Self {
-        self.range = Some(FloatRange::Range(0.0, 1.0));
+        self.range = Some(FloatParameterRange::Range(0.0, 1.0));
         self
     }
     pub fn positive_infinite(mut self) -> Self {
-        self.range = Some(FloatRange::PositiveInfinite);
+        self.range = Some(FloatParameterRange::PositiveInfinite);
         self
     }
     pub fn negative_infinite(mut self) -> Self {
-        self.range = Some(FloatRange::NegativeInfinite);
+        self.range = Some(FloatParameterRange::NegativeInfinite);
         self
     }
     pub fn nyquist(mut self) -> Self {
-        self.range = Some(FloatRange::Nyquist);
+        self.range = Some(FloatParameterRange::Nyquist);
         self
     }
     pub fn logarithmic(mut self, b: bool) -> Self {
@@ -272,6 +253,12 @@ impl ParameterHint {
             ParameterHint::Float(_) => ParameterType::Float,
             ParameterHint::Trigger => ParameterType::Trigger,
             ParameterHint::Integer(_) => ParameterType::Integer,
+        }
+    }
+    pub fn get_float(&self) -> Option<&PFloatHint> {
+        match self {
+            ParameterHint::Float(hint) => Some(hint),
+            _ => None,
         }
     }
 }
