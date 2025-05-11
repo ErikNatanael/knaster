@@ -138,8 +138,10 @@ impl<N: Size> ArLogReceiver<N> {
                     };
                     let slice1 = if last_end + pos < s0.len() {
                         &[]
+                    } else if last_end >= s0.len() {
+                        &s1[(last_end - s0.len())..=(last_end + pos - s0.len())]
                     } else {
-                        &s1[last_end - s0.len()..=(last_end + pos - s0.len())]
+                        &s1[0..=(last_end + pos - s0.len())]
                     };
                     log_handler(slice0);
                     log_handler(slice1);
