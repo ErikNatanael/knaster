@@ -6,7 +6,7 @@ use crate::core::marker::PhantomData;
 use crate::core::sync::atomic::AtomicU64;
 use crate::numeric_array::NumericArray;
 use crate::typenum::{U0, U1};
-use crate::{AudioCtx, ParameterHint, ParameterValue, UGen, UGenFlags};
+use crate::{AudioCtx, PFloat, ParameterHint, ParameterValue, UGen, UGenFlags};
 use knaster_primitives::{Float, Frame};
 
 /// Used to seed random number generating Gens to create a deterministic result as long as all Gens are created in the same order from start.
@@ -81,6 +81,7 @@ pub struct PinkNoise<F: Copy = f32> {
     pink: F,
     rng: fastrand::Rng,
 }
+#[knaster_macros::ugen]
 impl<F: Float> PinkNoise<F> {
     #[allow(missing_docs)]
     pub fn new() -> Self {
@@ -111,7 +112,7 @@ impl<F: Float> PinkNoise<F> {
 
     // TODO: Generate f64 random number when F is f64
     #[allow(missing_docs)]
-    pub fn process_sample(&mut self) -> F {
+    pub fn process(&mut self) -> [F; 1] {
         let index = self.noise_index() as usize;
         assert!(index < PINK_NOISE_OCTAVES as usize);
 
@@ -125,7 +126,7 @@ impl<F: Float> PinkNoise<F> {
 
         self.increment_counter();
 
-        self.pink / (F::from(PINK_NOISE_OCTAVES).unwrap() + F::ONE)
+        [self.pink / (F::from(PINK_NOISE_OCTAVES).unwrap() + F::ONE)]
     }
 }
 
@@ -133,26 +134,6 @@ impl<F: Float> Default for PinkNoise<F> {
     fn default() -> Self {
         Self::new()
     }
-}
-impl<F: Float> UGen for PinkNoise<F> {
-    type Sample = F;
-    type Inputs = U0;
-    type Outputs = U1;
-    type Parameters = U0;
-
-    fn process(
-        &mut self,
-        _ctx: &mut AudioCtx,
-        _flags: &mut UGenFlags,
-        _input: Frame<Self::Sample, Self::Inputs>,
-    ) -> Frame<Self::Sample, Self::Outputs> {
-        [self.process_sample()].into()
-    }
-
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
-        [].into()
-    }
-    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: ParameterValue) {}
 }
 
 /// Brown noise (also known as red noise)
@@ -165,6 +146,7 @@ pub struct BrownNoise<F: Copy = f32> {
     last_output: F,
 }
 
+#[knaster_macros::ugen]
 impl<F: Float> BrownNoise<F> {
     #[allow(missing_docs)]
     pub fn new() -> Self {
@@ -174,6 +156,15 @@ impl<F: Float> BrownNoise<F> {
             last_output: F::ZERO,
         }
     }
+
+    pub fn process(&mut self) -> [F; 1] {
+        let white = F::new(self.rng.f32() * 2.0 - 1.0);
+        // Adjust the coefficient to control the step size
+        self.last_output += white * F::new(0.1);
+        // Clamp to [-1.0, 1.0] to prevent output from exceeding the range
+        self.last_output = self.last_output.clamp(-F::ONE, F::ONE);
+        [self.last_output]
+    }
 }
 
 impl<F: Float> Default for BrownNoise<F> {
@@ -182,31 +173,6 @@ impl<F: Float> Default for BrownNoise<F> {
     }
 }
 
-impl<F: Float> UGen for BrownNoise<F> {
-    type Sample = F;
-    type Inputs = U0;
-    type Outputs = U1;
-    type Parameters = U0;
-    fn process(
-        &mut self,
-        _ctx: &mut AudioCtx,
-        _flags: &mut UGenFlags,
-        _input: Frame<Self::Sample, Self::Inputs>,
-    ) -> Frame<Self::Sample, Self::Outputs> {
-        let white = F::new(self.rng.f32() * 2.0 - 1.0);
-        // Adjust the coefficient to control the step size
-        self.last_output += white * F::new(0.1);
-        // Clamp to [-1.0, 1.0] to prevent output from exceeding the range
-        self.last_output = self.last_output.clamp(-F::ONE, F::ONE);
-        [self.last_output].into()
-    }
-
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
-        [].into()
-    }
-
-    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: ParameterValue) {}
-}
 /// Random numbers 0..1 with linear interpolation with new values at some frequency. Freq is sampled at control rate only.
 pub struct RandomLin<F: Copy = f32> {
     rng: fastrand::Rng,
@@ -218,6 +184,7 @@ pub struct RandomLin<F: Copy = f32> {
     freq_to_phase_inc: F,
 }
 
+#[knaster_macros::ugen]
 impl<F: Float> RandomLin<F> {
     /// Create a new RandomLin, seeding it from the global atomic seed.
     pub fn new(freq: F) -> Self {
@@ -240,53 +207,28 @@ impl<F: Float> RandomLin<F> {
         self.current_change_width = new - old_target;
         self.phase = F::new(0.0);
     }
-}
-
-impl<F: Float> UGen for RandomLin<F> {
-    type Sample = F;
-    type Inputs = U0;
-    type Outputs = U1;
-    type Parameters = U1;
-
     fn init(&mut self, sample_rate: u32, _block_size: usize) {
         self.freq_to_phase_inc = F::ONE / F::from(sample_rate).unwrap();
         // freq is stored in phase_step until init
         self.phase_step *= self.freq_to_phase_inc;
         self.new_value();
     }
-    fn process(
-        &mut self,
-        _ctx: &mut AudioCtx,
-        _flags: &mut UGenFlags,
-        _input: Frame<Self::Sample, Self::Inputs>,
-    ) -> Frame<Self::Sample, Self::Outputs> {
+    fn process(&mut self, _ctx: &mut AudioCtx, _flags: &mut UGenFlags) -> [F; 1] {
         let out = self.current_value + self.phase * self.current_change_width;
         self.phase += self.phase_step;
 
         if self.phase >= F::ONE {
             self.new_value();
         }
-        [out].into()
+        [out]
     }
-
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
-        [ParameterHint::positive_infinite_float()].into()
-    }
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
-        ["freq"].into()
-    }
-
-    fn param_apply(&mut self, _ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
-        match index {
-            0 => {
-                if self.freq_to_phase_inc == F::ZERO {
-                    // freq is stored in phase_step until init
-                    self.phase_step = value.f().unwrap();
-                } else {
-                    self.phase_step = value.f::<F>().unwrap() * self.freq_to_phase_inc;
-                }
-            }
-            _ => {}
+    #[param]
+    pub fn freq(&mut self, value: PFloat) {
+        if self.freq_to_phase_inc == F::ZERO {
+            // freq is stored in phase_step until init
+            self.phase_step = F::new(value);
+        } else {
+            self.phase_step = F::new(value) * self.freq_to_phase_inc;
         }
     }
 }

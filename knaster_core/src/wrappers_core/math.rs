@@ -11,6 +11,8 @@ use crate::{AudioCtx, UGen, UGenFlags};
 // TODO: SIMD implementations for blocks
 // TODO: SIMD implementations for multi channel frame by frame outputs
 // TODO: min, max, powi, sqrt, exp, exp2, abs, range/mul_add, cbrt, tanh
+//
+// TODO: Replace by macro_rules macro
 
 /// `gen` * `value`
 pub struct WrMul<T: UGen> {
@@ -113,7 +115,8 @@ where
         }
     }
     fn set_delay_within_block_for_param(&mut self, ctx: &mut AudioCtx, index: usize, delay: u16) {
-        self.ugen.set_delay_within_block_for_param(ctx, index, delay);
+        self.ugen
+            .set_delay_within_block_for_param(ctx, index, delay);
     }
 }
 
@@ -195,7 +198,8 @@ impl<T: UGen> UGen for WrAdd<T> {
         }
     }
     fn set_delay_within_block_for_param(&mut self, ctx: &mut AudioCtx, index: usize, delay: u16) {
-        self.ugen.set_delay_within_block_for_param(ctx, index, delay);
+        self.ugen
+            .set_delay_within_block_for_param(ctx, index, delay);
     }
 }
 
@@ -261,13 +265,19 @@ impl<T: UGen> UGen for WrSub<T> {
     fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: crate::ParameterValue) {
         T::param_apply(&mut self.ugen, ctx, index, value)
     }
-    unsafe fn set_ar_param_buffer(&mut self, ctx: &mut AudioCtx, index: usize, buffer: *const T::Sample) {
+    unsafe fn set_ar_param_buffer(
+        &mut self,
+        ctx: &mut AudioCtx,
+        index: usize,
+        buffer: *const T::Sample,
+    ) {
         unsafe {
             self.ugen.set_ar_param_buffer(ctx, index, buffer);
         }
     }
     fn set_delay_within_block_for_param(&mut self, ctx: &mut AudioCtx, index: usize, delay: u16) {
-        self.ugen.set_delay_within_block_for_param(ctx, index, delay);
+        self.ugen
+            .set_delay_within_block_for_param(ctx, index, delay);
     }
 }
 /// The inverse of WrSub, i.e. the inner UGen is the right hand operand:
@@ -334,13 +344,19 @@ impl<T: UGen> UGen for WrVSub<T> {
     fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: crate::ParameterValue) {
         T::param_apply(&mut self.ugen, ctx, index, value)
     }
-    unsafe fn set_ar_param_buffer(&mut self, ctx: &mut AudioCtx, index: usize, buffer: *const T::Sample) {
+    unsafe fn set_ar_param_buffer(
+        &mut self,
+        ctx: &mut AudioCtx,
+        index: usize,
+        buffer: *const T::Sample,
+    ) {
         unsafe {
             self.ugen.set_ar_param_buffer(ctx, index, buffer);
         }
     }
     fn set_delay_within_block_for_param(&mut self, ctx: &mut AudioCtx, index: usize, delay: u16) {
-        self.ugen.set_delay_within_block_for_param(ctx, index, delay);
+        self.ugen
+            .set_delay_within_block_for_param(ctx, index, delay);
     }
 }
 
@@ -406,13 +422,19 @@ impl<T: UGen> UGen for WrDiv<T> {
     fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: crate::ParameterValue) {
         T::param_apply(&mut self.ugen, ctx, index, value)
     }
-    unsafe fn set_ar_param_buffer(&mut self, ctx: &mut AudioCtx, index: usize, buffer: *const T::Sample) {
+    unsafe fn set_ar_param_buffer(
+        &mut self,
+        ctx: &mut AudioCtx,
+        index: usize,
+        buffer: *const T::Sample,
+    ) {
         unsafe {
             self.ugen.set_ar_param_buffer(ctx, index, buffer);
         }
     }
     fn set_delay_within_block_for_param(&mut self, ctx: &mut AudioCtx, index: usize, delay: u16) {
-        self.ugen.set_delay_within_block_for_param(ctx, index, delay);
+        self.ugen
+            .set_delay_within_block_for_param(ctx, index, delay);
     }
 }
 
@@ -479,13 +501,19 @@ impl<T: UGen> UGen for WrVDiv<T> {
     fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: crate::ParameterValue) {
         T::param_apply(&mut self.ugen, ctx, index, value)
     }
-    unsafe fn set_ar_param_buffer(&mut self, ctx: &mut AudioCtx, index: usize, buffer: *const T::Sample) {
+    unsafe fn set_ar_param_buffer(
+        &mut self,
+        ctx: &mut AudioCtx,
+        index: usize,
+        buffer: *const T::Sample,
+    ) {
         unsafe {
             self.ugen.set_ar_param_buffer(ctx, index, buffer);
         }
     }
     fn set_delay_within_block_for_param(&mut self, ctx: &mut AudioCtx, index: usize, delay: u16) {
-        self.ugen.set_delay_within_block_for_param(ctx, index, delay);
+        self.ugen
+            .set_delay_within_block_for_param(ctx, index, delay);
     }
 }
 
@@ -552,13 +580,19 @@ impl<T: UGen> UGen for WrPowf<T> {
     fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: crate::ParameterValue) {
         T::param_apply(&mut self.ugen, ctx, index, value)
     }
-    unsafe fn set_ar_param_buffer(&mut self, ctx: &mut AudioCtx, index: usize, buffer: *const T::Sample) {
+    unsafe fn set_ar_param_buffer(
+        &mut self,
+        ctx: &mut AudioCtx,
+        index: usize,
+        buffer: *const T::Sample,
+    ) {
         unsafe {
             self.ugen.set_ar_param_buffer(ctx, index, buffer);
         }
     }
     fn set_delay_within_block_for_param(&mut self, ctx: &mut AudioCtx, index: usize, delay: u16) {
-        self.ugen.set_delay_within_block_for_param(ctx, index, delay);
+        self.ugen
+            .set_delay_within_block_for_param(ctx, index, delay);
     }
 }
 
@@ -623,12 +657,18 @@ impl<T: UGen> UGen for WrPowi<T> {
     fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: crate::ParameterValue) {
         T::param_apply(&mut self.ugen, ctx, index, value)
     }
-    unsafe fn set_ar_param_buffer(&mut self, ctx: &mut AudioCtx, index: usize, buffer: *const T::Sample) {
+    unsafe fn set_ar_param_buffer(
+        &mut self,
+        ctx: &mut AudioCtx,
+        index: usize,
+        buffer: *const T::Sample,
+    ) {
         unsafe {
             self.ugen.set_ar_param_buffer(ctx, index, buffer);
         }
     }
     fn set_delay_within_block_for_param(&mut self, ctx: &mut AudioCtx, index: usize, delay: u16) {
-        self.ugen.set_delay_within_block_for_param(ctx, index, delay);
+        self.ugen
+            .set_delay_within_block_for_param(ctx, index, delay);
     }
 }

@@ -1,6 +1,8 @@
-use knaster_primitives::{numeric_array::NumericArray, typenum::*, Block, BlockRead, Frame};
+use knaster_primitives::{
+    Block, BlockRead, Frame, PFloat, numeric_array::NumericArray, typenum::*,
+};
 
-use crate::{parameters::*, AudioCtx, Rate, UGen, UGenFlags};
+use crate::{AudioCtx, Rate, UGen, UGenFlags, parameters::*};
 
 /// Wrapper that enables input parameter smoothing for a [`UGen`]. Smoothing only
 /// works with `Float` type parameters.
@@ -162,8 +164,7 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
                     let mut output = output.partial_mut(i, 1);
                     let partial_ctx = org_block.make_partial(i, 1);
                     ctx.block = partial_ctx;
-                    self.ugen
-                        .process_block(ctx, flags, &input, &mut output);
+                    self.ugen.process_block(ctx, flags, &input, &mut output);
                     i += 1;
                 } else {
                     // Process the full block
@@ -171,8 +172,7 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
                     let mut output = output.partial_mut(i, output.block_size() - i);
                     let partial_ctx = org_block.make_partial(i, ctx.block_size() - i);
                     ctx.block = partial_ctx;
-                    self.ugen
-                        .process_block(ctx, flags, &input, &mut output);
+                    self.ugen.process_block(ctx, flags, &input, &mut output);
                     break;
                 }
             }

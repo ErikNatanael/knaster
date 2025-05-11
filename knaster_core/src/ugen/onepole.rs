@@ -1,10 +1,9 @@
 //! One pole filters make good and cheap lowpass 6dB/octave rolloff filters.
 //! It is also good for removing zipping from parameter changes.
 
-use crate::numeric_array::NumericArray;
-use crate::typenum::U1;
-use crate::{AudioCtx, ParameterHint, ParameterValue, UGen, UGenFlags};
-use knaster_primitives::{Float, Frame};
+use crate::{AudioCtx, PFloat};
+use knaster_macros::ugen;
+use knaster_primitives::Float;
 
 // To use it as a DC blocker:
 //
@@ -104,6 +103,7 @@ pub struct OnePoleLpf<F: Float> {
     /// The interval one pole filter implementation
     pub op: OnePole<F>,
 }
+#[ugen]
 impl<F: Float> OnePoleLpf<F> {
     #[allow(missing_docs)]
     pub fn new(cutoff_freq: F) -> Self {
@@ -111,13 +111,6 @@ impl<F: Float> OnePoleLpf<F> {
         op.b1 = cutoff_freq;
         Self { op }
     }
-}
-
-impl<F: Float> UGen for OnePoleLpf<F> {
-    type Sample = F;
-    type Inputs = U1;
-    type Outputs = U1;
-    type Parameters = U1;
     fn init(&mut self, sample_rate: u32, _block_size: usize) {
         // Only assume b1 is frequency if a0 is set to its standard value
         if self.op.a0 == F::ONE {
@@ -125,32 +118,15 @@ impl<F: Float> UGen for OnePoleLpf<F> {
             self.op.set_freq_lowpass(freq, F::new(sample_rate as f32));
         }
     }
-    fn process(
-        &mut self,
-        _ctx: &mut AudioCtx,
-        _flags: &mut UGenFlags,
-        input: Frame<Self::Sample, Self::Inputs>,
-    ) -> Frame<Self::Sample, Self::Outputs> {
-        [self.op.process_lp(input[0])].into()
+
+    fn process(&mut self, input: [F; 1]) -> [F; 1] {
+        [self.op.process_lp(input[0])]
     }
 
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
-        ["cutoff_freq"].into()
-    }
-
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
-        [ParameterHint::nyquist()].into()
-    }
-
-    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
-        #[allow(clippy::single_match)]
-        match index {
-            0 => self.op.set_freq_lowpass(
-                F::new(value.float().unwrap()),
-                F::from(ctx.sample_rate).unwrap(),
-            ),
-            _ => (),
-        }
+    #[param(kind = Frequency)]
+    fn cutoff_freq(&mut self, ctx: &AudioCtx, freq: PFloat) {
+        self.op
+            .set_freq_lowpass(F::new(freq), F::from(ctx.sample_rate).unwrap())
     }
 }
 
@@ -160,48 +136,33 @@ pub struct OnePoleHpf<F: Float> {
     /// The interval one pole filter implementation
     pub op: OnePole<F>,
 }
-impl<F: Float> OnePoleHpf<F> {
-    #[allow(missing_docs)]
-    pub fn new() -> Self {
-        Self { op: OnePole::new() }
-    }
-}
 
 impl<F: Float> Default for OnePoleHpf<F> {
     fn default() -> Self {
         Self::new()
     }
 }
-impl<F: Float> UGen for OnePoleHpf<F> {
-    type Sample = F;
-    type Inputs = U1;
-    type Outputs = U1;
-    type Parameters = U1;
-    fn process(
-        &mut self,
-        _ctx: &mut AudioCtx,
-        _flags: &mut UGenFlags,
-        input: Frame<Self::Sample, Self::Inputs>,
-    ) -> Frame<Self::Sample, Self::Outputs> {
-        [self.op.process_hp(input[0])].into()
+#[ugen]
+impl<F: Float> OnePoleHpf<F> {
+    #[allow(missing_docs)]
+    pub fn new() -> Self {
+        Self { op: OnePole::new() }
     }
 
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
-        ["cutoff_freq"].into()
-    }
-
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
-        [ParameterHint::float(|h| h.nyquist())].into()
-    }
-
-    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
-        #[allow(clippy::single_match)]
-        match index {
-            0 => self.op.set_freq_highpass(
-                F::new(value.float().unwrap()),
-                F::from(ctx.sample_rate).unwrap(),
-            ),
-            _ => (),
+    fn init(&mut self, sample_rate: u32, _block_size: usize) {
+        // Only assume b1 is frequency if a0 is set to its standard value
+        if self.op.a0 == F::ONE {
+            let freq = self.op.b1;
+            self.op.set_freq_highpass(freq, F::new(sample_rate as f32));
         }
+    }
+    fn process(&mut self, input: [F; 1]) -> [F; 1] {
+        [self.op.process_hp(input[0])]
+    }
+
+    #[param(kind = Frequency)]
+    fn cutoff_freq(&mut self, ctx: &AudioCtx, freq: PFloat) {
+        self.op
+            .set_freq_highpass(F::new(freq), F::from(ctx.sample_rate).unwrap())
     }
 }

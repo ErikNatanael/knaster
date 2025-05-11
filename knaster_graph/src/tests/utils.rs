@@ -1,50 +1,20 @@
 use knaster_core::{
-    typenum::{U0, U1}, AudioCtx, Float, ParameterHint, UGen, UGenFlags
+    AudioCtx, Float, ParameterHint, UGen, UGenFlags,
+    typenum::{U0, U1},
+    ugen,
 };
 
 /// Outputs a static number every frame
 pub(crate) struct TestNumUGen<F> {
     number: F,
 }
+#[ugen]
 impl<F: Float> TestNumUGen<F> {
     pub fn new(n: F) -> Self {
         Self { number: n }
     }
-}
-impl<F: Float> UGen for TestNumUGen<F> {
-    type Sample = F;
-
-    type Inputs = U0;
-
-    type Outputs = U1;
-
-    fn process(
-        &mut self,
-        _ctx: &mut knaster_core::AudioCtx,
-        _flags: &mut UGenFlags,
-        _input: knaster_core::Frame<Self::Sample, Self::Inputs>,
-    ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
-        [self.number].into()
-    }
-    type Parameters = U0;
-
-    fn param_descriptions(
-    ) -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
-        [].into()
-    }
-
-    fn param_hints(
-    ) -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::Parameters>
-    {
-        [].into()
-    }
-
-    fn param_apply(
-        &mut self,
-        _ctx: &mut knaster_core::AudioCtx,
-        _index: usize,
-        _value: knaster_core::ParameterValue,
-    ) {
+    fn process(&mut self) -> [F; 1] {
+        [self.number]
     }
 }
 
@@ -77,13 +47,13 @@ impl<F: Float> UGen for TestInPlusParamUGen<F> {
     }
     type Parameters = U1;
 
-    fn param_descriptions(
-    ) -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions()
+    -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
         ["number"].into()
     }
 
-    fn param_hints(
-    ) -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::Parameters>
+    fn param_hints()
+    -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::Parameters>
     {
         [ParameterHint::infinite_float()].into()
     }
