@@ -18,6 +18,11 @@ pub enum ArLogMessage {
     Timestamp(Seconds),
     End,
 }
+impl ArLogMessage {
+    pub fn is_end(&self) -> bool {
+        matches!(self, ArLogMessage::End)
+    }
+}
 impl Display for ArLogMessage {
     fn fmt(&self, f: &mut crate::core::fmt::Formatter<'_>) -> crate::core::fmt::Result {
         match self {
@@ -109,8 +114,11 @@ impl ArLogReceiver<U0> {
     }
 }
 impl<N: Size> ArLogReceiver<N> {
-    /// Receive messages and store them internally. Only full message chains are received ending
-    /// with `AtLogMessage::End`. Messages are passed to the log_handler. Each call to the log_handler may or may not contain a full message chain. If a message chain is not complete, the remaining messages are passed to the next call to log_handler.
+    /// Receive messages. Only full message chains are received ending
+    /// with `AtLogMessage::End`, but they may be split into two calls to the `log_handler`.
+    ///
+    /// Each call to the log_handler may or may not contain a full message chain. If a message chain is not complete,
+    /// the remaining messages are passed to the next call to log_handler.
     pub fn recv(&mut self, mut log_handler: impl FnMut(&[ArLogMessage])) {
         for rec in &mut self.receivers {
             let slots = rec.slots();
@@ -126,19 +134,19 @@ impl<N: Size> ArLogReceiver<N> {
                     let slice0 = if last_end >= s0.len() {
                         &[]
                     } else {
-                        &s0[last_end..pos.min(s0.len())]
+                        &s0[last_end..(last_end + pos + 1).min(s0.len())]
                     };
-                    let slice1 = if last_end + pos <= s0.len() {
+                    let slice1 = if last_end + pos < s0.len() {
                         &[]
                     } else {
-                        &s1[last_end + pos - s0.len()..pos]
+                        &s1[last_end - s0.len()..=(last_end + pos - s0.len())]
                     };
                     log_handler(slice0);
                     log_handler(slice1);
                     // for m in s0.iter().chain(s1).skip(last_end).take(pos) {
                     //     self.received_messages.push_back(*m);
                     // }
-                    last_end += pos;
+                    last_end += pos + 1;
                 }
                 read_chunk.commit(last_end);
             }
