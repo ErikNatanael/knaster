@@ -98,7 +98,7 @@ impl GraphInspection {
                 self.num_inputs
             ));
             for i in 0..self.num_inputs {
-                s.push_str(&format!("<td port='i{i}'>In {i}</td>"));
+                s.push_str(&format!("<td port='o{i}'>In {i}</td>"));
             }
             s.push_str("</tr></table>>];\n\n");
         }
