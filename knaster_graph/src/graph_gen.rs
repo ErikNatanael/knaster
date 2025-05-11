@@ -1,3 +1,5 @@
+use crate::core::collections::VecDeque;
+use crate::core::sync::Arc;
 use crate::{
     SchedulingEvent,
     core::{
@@ -8,8 +10,6 @@ use crate::{
     },
     dyngen::DynUGen,
 };
-use crate::core::collections::VecDeque;
-use crate::core::sync::Arc;
 
 use knaster_core::{
     AudioCtx, Float, Size, UGen, UGenFlags, numeric_array::NumericArray, rt_log, typenum::U0,
@@ -33,7 +33,7 @@ use crate::{
 /// while it can be accessed by the [`GraphGen`] through a Task. The [`GraphGen`]
 /// mustn't use the _arc_nodes field; it is only there to make sure the nodes
 /// don't get dropped.
-pub(super) struct GraphGen<F: Float, Inputs: Size, Outputs: Size> {
+pub struct GraphGen<F: Float, Inputs: Size, Outputs: Size> {
     // block_size with oversampling applied
     pub(super) block_size: usize,
     // sample_rate with oversampling applied
