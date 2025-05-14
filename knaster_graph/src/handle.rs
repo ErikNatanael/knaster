@@ -6,7 +6,7 @@
 use crate::{
     SchedulingEvent, SchedulingToken, SharedFrameClock, Time,
     connectable::{NodeOrGraph, NodeSubset},
-    core::{marker::PhantomData},
+    core::marker::PhantomData,
     graph::{GraphError, NodeId},
 };
 use alloc::{string::ToString, vec::Vec};
@@ -374,8 +374,8 @@ impl<H: HandleTrait> ParameterChange2<'_, H> {
         self.token = Some(v.into());
         self
     }
-    pub fn after(mut self, v: impl Into<Time>) -> Self {
-        self.time = Some(v.into());
+    pub fn after(mut self, v: impl Into<Seconds>) -> Self {
+        self.time = Some(Time::after(v.into()));
         self
     }
     pub fn at(mut self, v: impl Into<Time>) -> Self {

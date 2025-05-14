@@ -884,7 +884,7 @@ impl<F: Float> Graph<F> {
     /// graph.connect_replace(&multi_oscillator, [1, 2, 0], [0, 1, 2], Sink::Graph)?;
     /// ```
     #[deprecated(since = "0.1.0", note = "Deprecated in favour of the GraphEdit API")]
-    pub fn connect_replace<N: Size>(
+    fn connect_replace<N: Size>(
         &mut self,
         source: impl Into<Connectable>,
         source_channels: impl Into<Channels<N>>,
@@ -922,7 +922,7 @@ impl<F: Float> Graph<F> {
     /// Connect a source to a sink with the designated channels, addin it to any existing connections to the sink at those channels. If you want to replace
     /// existing inputs to the sink, use [`Graph::connect_replace`]
     #[deprecated(since = "0.1.0", note = "Deprecated in favour of the GraphEdit API")]
-    pub fn connect<N: Size>(
+    fn connect<N: Size>(
         &mut self,
         source: impl Into<Connectable>,
         source_channels: impl Into<Channels<N>>,
@@ -1205,6 +1205,41 @@ impl<F: Float> Graph<F> {
                     "There was an attempt to connect to a graph input to a  graph output via a feedback node. Feedback to or from graph outputs is non-sensical. Connection will be made without feedback."
                 );
                 self.connect_input_to_output(so_chan, si_chan, true)?;
+            }
+        }
+        Ok(())
+    }
+    /// Connect a source to a sink with the designated channels with feedback, adding to any existing connections to the sink at those channels. Feedback means that the signal data will be delayed by one block, breaking potential cycles in the graph.
+    pub fn connect2_feedback_replace(
+        &mut self,
+        source: NodeOrGraph,
+        source_channel: u16,
+        sink_channel: u16,
+        sink: NodeOrGraph,
+    ) -> Result<(), GraphError> {
+        let so_chan = source_channel;
+        let si_chan = sink_channel;
+        match (source, sink) {
+            (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
+                log::error!(
+                    "There was an attempt to connect a graph input to a node via a feedback node. Feedback to or from graph outputs is non-sensical. Connection will be made without feedback."
+                );
+                self.connect_input_to_node(sink, so_chan, si_chan, false)?;
+            }
+            (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
+                self.connect_nodes(source, sink, so_chan, si_chan, false, true)?;
+            }
+            (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
+                log::error!(
+                    "There was an attempt to connect a node to a graph output via a feedback node. Feedback to or from graph outputs is non-sensical. Connection will be made without feedback."
+                );
+                self.connect_node_to_output(source, so_chan, si_chan, false)?;
+            }
+            (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
+                log::error!(
+                    "There was an attempt to connect to a graph input to a  graph output via a feedback node. Feedback to or from graph outputs is non-sensical. Connection will be made without feedback."
+                );
+                self.connect_input_to_output(so_chan, si_chan, false)?;
             }
         }
         Ok(())
@@ -1629,7 +1664,7 @@ impl<F: Float> Graph<F> {
     }
 
     /// Applies the latest changes to connections and added nodes in the graph on the audio thread and updates the scheduler.
-    pub fn commit_changes(&mut self) -> Result<(), GraphError> {
+    pub(crate) fn commit_changes(&mut self) -> Result<(), GraphError> {
         // We need to run free_old to know if there are nodes to free and hence a recalculation required.
         self.free_old();
         self.graph_gen_communicator.free_old_task_data();
@@ -2024,6 +2059,7 @@ impl<F: Float> Graph<F> {
         self.self_node_id
     }
     /// Connectable for connecting the Graph to other nodes within its parent graph.
+    #[deprecated]
     pub fn as_node(&self) -> Connectable {
         Connectable::from_node(
             NodeSubset {
@@ -2040,6 +2076,7 @@ impl<F: Float> Graph<F> {
     }
     /// Connectable for connecting inside the graph. Note that inside the graph, the graph outputs
     /// are sinks/inputs and the graph outputs are sources/outputs.
+    #[deprecated]
     pub fn internal(&self) -> Connectable {
         Connectable::from_node(
             NodeSubset {

@@ -66,6 +66,18 @@ pub struct Time {
     absolute: bool,
 }
 impl Time {
+    pub fn at(secs: Seconds) -> Self {
+        Self {
+            seconds: secs,
+            absolute: true,
+        }
+    }
+    pub fn after(secs: Seconds) -> Self {
+        Self {
+            seconds: secs,
+            absolute: false,
+        }
+    }
     /// Returns the number of samples until this event should be applied. If the timing is
     /// relative, the counter is also decremented.
     pub fn to_samples_until_due(
@@ -118,14 +130,6 @@ impl Time {
         self
     }
 }
-impl From<Seconds> for Time {
-    fn from(value: Seconds) -> Self {
-        Time {
-            seconds: value,
-            absolute: false,
-        }
-    }
-}
 
 /// Attach this token to all changes that you want to be simultaneous. Then,
 /// send the token to the outermost graph that is affected. Use the top level
@@ -169,7 +173,8 @@ impl SchedulingToken {
     /// prefer [`SchedulingToken::activate`]. If activated outside of the audio
     /// thread changes aren't guaranteed to be applied in the same block.
     pub fn activate_inner(self) {
-        self.token.store(true, crate::core::sync::atomic::Ordering::SeqCst);
+        self.token
+            .store(true, crate::core::sync::atomic::Ordering::SeqCst);
     }
 }
 

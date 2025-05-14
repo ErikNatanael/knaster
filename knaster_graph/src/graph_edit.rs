@@ -16,7 +16,7 @@
 //! - [ ] API for scheduling parameter changes
 
 use core::mem::MaybeUninit;
-use core::ops::{BitOr, Div, Shr, Sub};
+use core::ops::{BitOr, Div, Index, Shr, Sub};
 
 use crate::core::sync::{Arc, Mutex};
 
@@ -39,7 +39,7 @@ use crate::{
 use ecow::EcoString;
 use knaster_core::math::MathUGen;
 use knaster_core::util::Constant;
-use knaster_core::{Done, ParameterSmoothing, ParameterValue};
+use knaster_core::{Done, ParameterSmoothing, ParameterValue, Seconds};
 use knaster_core::{Float, Param, Size, UGen, numeric_array::NumericArray, typenum::*};
 use smallvec::SmallVec;
 
@@ -264,6 +264,24 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
         }
         n
     }
+    /// Connect the output(s) of self to the input(s) of another node or nodes via a feedback edge, summing the output
+    /// of self with any existing connections.
+    pub fn to_feedback<S1: Static>(self, n: SH<'a, 'b, F, S1>) -> SH<'a, 'b, F, S1>
+    where
+        S1::Inputs: Same<S0::Outputs>,
+    {
+        let mut g = self.graph.write().unwrap();
+        for ((source, source_channel), (sink, sink_channel)) in
+            Static::iter_outputs(&self.nodes).zip(Static::iter_inputs(&n.nodes))
+        {
+            if let Err(e) = g.connect2_feedback(source, source_channel, sink_channel, sink) {
+                log::error!(
+                    "Failed to connect {source:?}:{source_channel} to {sink:?}:{sink_channel}: {e}"
+                );
+            }
+        }
+        n
+    }
 
     /// Connect the output(s) of self to the input(s) of another node or nodes, replacing any
     /// existing connections.
@@ -281,10 +299,33 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
         n
     }
 
+    /// Connect the output(s) of self to the input(s) of another node or nodes, replacing any
+    /// existing connections.
+    pub fn to_feedback_replace<S1: Static>(self, n: SH<'a, 'b, F, S1>) -> SH<'a, 'b, F, S1>
+    where
+        S1::Inputs: Same<S0::Outputs>,
+    {
+        let mut g = self.graph.write().unwrap();
+        for ((source, source_channel), (sink, sink_channel)) in
+            Static::iter_outputs(&self.nodes).zip(Static::iter_inputs(&n.nodes))
+        {
+            g.connect2_feedback_replace(source, source_channel, sink_channel, sink)
+                .expect("type safe interface should eliminate graph connection errors");
+        }
+        n
+    }
+
     pub fn to_graph_out(self) {
         let mut g = self.graph.write().unwrap();
         for (i, (source, source_channel)) in Static::iter_outputs(&self.nodes).enumerate() {
             g.connect2(source, source_channel, i as u16, NodeOrGraph::Graph)
+                .expect("Error connecting to graph output channel");
+        }
+    }
+    pub fn to_graph_out_replace(self) {
+        let mut g = self.graph.write().unwrap();
+        for (i, (source, source_channel)) in Static::iter_outputs(&self.nodes).enumerate() {
+            g.connect2_replace(source, source_channel, i as u16, NodeOrGraph::Graph)
                 .expect("Error connecting to graph output channel");
         }
     }
@@ -298,6 +339,18 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
             Static::iter_outputs(&self.nodes).zip(sink_channels.into())
         {
             g.connect2(source, source_channel, sink_channel, NodeOrGraph::Graph)
+                .expect("Error connecting to graph output channel.");
+        }
+    }
+    pub fn to_graph_out_channels_replace<N>(self, sink_channels: impl Into<Channels<N>>)
+    where
+        N: Size + Same<S0::Outputs>,
+    {
+        let mut g = self.graph.write().unwrap();
+        for ((source, source_channel), sink_channel) in
+            Static::iter_outputs(&self.nodes).zip(sink_channels.into())
+        {
+            g.connect2_replace(source, source_channel, sink_channel, NodeOrGraph::Graph)
                 .expect("Error connecting to graph output channel.");
         }
     }
@@ -391,6 +444,55 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
         }
         n
     }
+    /// Connect self to another node or nodes via a feedback edge.
+    ///
+    /// If there is an error connecting the nodes, that error is logged and subsequent connections
+    /// are made. If you want to handle
+    /// the error, use the `try_to` method instead.
+    pub fn to_feedback<S: Dynamic>(self, n: DH<'a, 'b, F, S>) -> DH<'a, 'b, F, S> {
+        let mut g = self.graph.write().unwrap();
+        for ((source, source_channel), (sink, sink_channel)) in
+            self.nodes.iter_outputs().zip(n.nodes.iter_inputs())
+        {
+            if let Err(e) = g.connect2_feedback(source, source_channel, sink_channel, sink) {
+                log::error!("Failed to connect nodes: {e}");
+            }
+        }
+        n
+    }
+    /// Connect self to another node or nodes, replacing any existing connections.
+    ///
+    /// If there is an error connecting the nodes, that error is logged and subsequent connections
+    /// are made. If you want to handle
+    /// the error, use the `try_to` method instead.
+    pub fn to_replace<S: Dynamic>(self, n: DH<'a, 'b, F, S>) -> DH<'a, 'b, F, S> {
+        let mut g = self.graph.write().unwrap();
+        for ((source, source_channel), (sink, sink_channel)) in
+            self.nodes.iter_outputs().zip(n.nodes.iter_inputs())
+        {
+            if let Err(e) = g.connect2_replace(source, source_channel, sink_channel, sink) {
+                log::error!("Failed to connect nodes: {e}");
+            }
+        }
+        n
+    }
+    /// Connect self to another node or nodes via a feedback edge, replacing any existing connections.
+    ///
+    /// If there is an error connecting the nodes, that error is logged and subsequent connections
+    /// are made. If you want to handle
+    /// the error, use the `try_to` method instead.
+    pub fn to_feedback_replace<S: Dynamic>(self, n: DH<'a, 'b, F, S>) -> DH<'a, 'b, F, S> {
+        let mut g = self.graph.write().unwrap();
+        for ((source, source_channel), (sink, sink_channel)) in
+            self.nodes.iter_outputs().zip(n.nodes.iter_inputs())
+        {
+            if let Err(e) = g.connect2_feedback_replace(source, source_channel, sink_channel, sink)
+            {
+                log::error!("Failed to connect nodes: {e}");
+            }
+        }
+        n
+    }
     /// Connect self to another node or nodes.
     ///
     /// If there is an error connecting the nodes, that error is returned and the connecting is
@@ -415,6 +517,18 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
             }
         }
     }
+    /// Connect to the graph output(s) in the order the channels are produced, replacing any existing connections.
+    ///
+    /// Any errors are logged and subsequent connections are made.
+    pub fn to_graph_out_replace(self) {
+        let mut g = self.graph.write().unwrap();
+        for (i, (source, source_channel)) in self.nodes.iter_outputs().enumerate() {
+            if let Err(e) = g.connect2_replace(source, source_channel, i as u16, NodeOrGraph::Graph)
+            {
+                log::error!("Failed to connect node to graph output: {e}");
+            }
+        }
+    }
 
     /// Connect to the graph output(s), selecting graph output channels from the channels provided.
     ///
@@ -425,6 +539,22 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
             self.nodes.iter_outputs().zip(sink_channels.into())
         {
             if let Err(e) = g.connect2(source, source_channel, sink_channel, NodeOrGraph::Graph) {
+                log::error!("Failed to connect node to graph output: {e}");
+            }
+        }
+    }
+    /// Connect to the graph output(s), selecting graph output channels from the channels provided,
+    /// replacing any existing connections.
+    ///
+    /// Any errors are logged and subsequent connections are made.
+    pub fn to_graph_out_channels_replace<N: Size>(self, sink_channels: impl Into<Channels<N>>) {
+        let mut g = self.graph.write().unwrap();
+        for ((source, source_channel), sink_channel) in
+            self.nodes.iter_outputs().zip(sink_channels.into())
+        {
+            if let Err(e) =
+                g.connect2_replace(source, source_channel, sink_channel, NodeOrGraph::Graph)
+            {
                 log::error!("Failed to connect node to graph output: {e}");
             }
         }
@@ -576,8 +706,12 @@ impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, Handle3<U>> {
     pub fn id(self) -> NodeId {
         self.nodes.node_id
     }
+    /// Get a parameter from the node this handle points to if it exists. Panics if the parameter doesn't exist.
+    pub fn param(self, p: impl Into<Param>) -> Parameter {
+        self.try_param(p).unwrap()
+    }
     /// Get a parameter from the node this handle points to if it exists.
-    pub fn param(self, p: impl Into<Param>) -> Option<Parameter> {
+    pub fn try_param(self, p: impl Into<Param>) -> Option<Parameter> {
         let p = p.into();
         match p {
             Param::Index(i) => {
@@ -646,8 +780,12 @@ impl<'a, 'b, F: Float> DH<'a, 'b, F, DynamicHandle3> {
     pub fn id(self) -> NodeId {
         self.nodes.node_id
     }
+    /// Get a parameter from the node this handle points to if it exists. Panics if the parameter doesn't exist.
+    pub fn param(self, p: impl Into<Param>) -> Parameter {
+        self.try_param(p).unwrap()
+    }
     /// Get a parameter from the node this handle points to if it exists.
-    pub fn param(self, p: impl Into<Param>) -> Option<Parameter> {
+    pub fn try_param(self, p: impl Into<Param>) -> Option<Parameter> {
         let p = p.into();
         match p {
             Param::Index(i) => {
@@ -1463,7 +1601,19 @@ pub struct Parameter {
     sender: SchedulingChannelSender,
 }
 impl Parameter {
-    pub fn set(
+    pub fn set(&mut self, value: impl Into<ParameterValue>) -> Result<(), GraphError> {
+        let value = value.into();
+        self.sender.send(crate::SchedulingEvent {
+            node_key: self.node.key(),
+            parameter: self.param_index as usize,
+            value: Some(value),
+            smoothing: None,
+            token: None,
+            time: None,
+        })?;
+        Ok(())
+    }
+    pub fn set_time(
         &mut self,
         value: impl Into<ParameterValue>,
         t: impl Into<Time>,
@@ -1479,7 +1629,51 @@ impl Parameter {
         })?;
         Ok(())
     }
-    pub fn smooth(
+    pub fn set_at(
+        &mut self,
+        value: impl Into<ParameterValue>,
+        t: impl Into<Seconds>,
+    ) -> Result<(), GraphError> {
+        let value = value.into();
+        self.sender.send(crate::SchedulingEvent {
+            node_key: self.node.key(),
+            parameter: self.param_index as usize,
+            value: Some(value),
+            smoothing: None,
+            token: None,
+            time: Some(Time::at(t.into())),
+        })?;
+        Ok(())
+    }
+    pub fn set_after(
+        &mut self,
+        value: impl Into<ParameterValue>,
+        t: impl Into<Seconds>,
+    ) -> Result<(), GraphError> {
+        let value = value.into();
+        self.sender.send(crate::SchedulingEvent {
+            node_key: self.node.key(),
+            parameter: self.param_index as usize,
+            value: Some(value),
+            smoothing: None,
+            token: None,
+            time: Some(Time::after(t.into())),
+        })?;
+        Ok(())
+    }
+    pub fn smooth(&mut self, s: impl Into<ParameterSmoothing>) -> Result<(), GraphError> {
+        let s = s.into();
+        self.sender.send(crate::SchedulingEvent {
+            node_key: self.node.key(),
+            parameter: self.param_index as usize,
+            value: None,
+            smoothing: Some(s),
+            token: None,
+            time: None,
+        })?;
+        Ok(())
+    }
+    pub fn smooth_time(
         &mut self,
         s: impl Into<ParameterSmoothing>,
         t: impl Into<Time>,
@@ -1495,7 +1689,50 @@ impl Parameter {
         })?;
         Ok(())
     }
-    pub fn trig(&mut self, t: impl Into<Time>) -> Result<(), GraphError> {
+    pub fn smooth_at(
+        &mut self,
+        s: impl Into<ParameterSmoothing>,
+        t: impl Into<Seconds>,
+    ) -> Result<(), GraphError> {
+        let s = s.into();
+        self.sender.send(crate::SchedulingEvent {
+            node_key: self.node.key(),
+            parameter: self.param_index as usize,
+            value: None,
+            smoothing: Some(s),
+            token: None,
+            time: Some(Time::at(t.into())),
+        })?;
+        Ok(())
+    }
+    pub fn smooth_after(
+        &mut self,
+        s: impl Into<ParameterSmoothing>,
+        t: impl Into<Seconds>,
+    ) -> Result<(), GraphError> {
+        let s = s.into();
+        self.sender.send(crate::SchedulingEvent {
+            node_key: self.node.key(),
+            parameter: self.param_index as usize,
+            value: None,
+            smoothing: Some(s),
+            token: None,
+            time: Some(Time::after(t.into())),
+        })?;
+        Ok(())
+    }
+    pub fn trig(&mut self) -> Result<(), GraphError> {
+        self.sender.send(crate::SchedulingEvent {
+            node_key: self.node.key(),
+            parameter: self.param_index as usize,
+            value: Some(ParameterValue::Trigger),
+            smoothing: None,
+            token: None,
+            time: None,
+        })?;
+        Ok(())
+    }
+    pub fn trig_time(&mut self, t: impl Into<Time>) -> Result<(), GraphError> {
         self.sender.send(crate::SchedulingEvent {
             node_key: self.node.key(),
             parameter: self.param_index as usize,
@@ -1503,6 +1740,28 @@ impl Parameter {
             smoothing: None,
             token: None,
             time: Some(t.into()),
+        })?;
+        Ok(())
+    }
+    pub fn trig_at(&mut self, t: impl Into<Seconds>) -> Result<(), GraphError> {
+        self.sender.send(crate::SchedulingEvent {
+            node_key: self.node.key(),
+            parameter: self.param_index as usize,
+            value: Some(ParameterValue::Trigger),
+            smoothing: None,
+            token: None,
+            time: Some(Time::at(t.into())),
+        })?;
+        Ok(())
+    }
+    pub fn trig_after(&mut self, t: impl Into<Seconds>) -> Result<(), GraphError> {
+        self.sender.send(crate::SchedulingEvent {
+            node_key: self.node.key(),
+            parameter: self.param_index as usize,
+            value: Some(ParameterValue::Trigger),
+            smoothing: None,
+            token: None,
+            time: Some(Time::after(t.into())),
         })?;
         Ok(())
     }
@@ -1664,12 +1923,12 @@ mod tests {
                 let ex = exciter * exciter_amp;
                 ((noise * noise_mix * ex + ex) >> exciter_lpf).to_graph_out_channels([1]);
 
-                let t = Time::absolute(Seconds::from_secs_f64(2.5));
+                let t = Time::at(Seconds::from_secs_f64(2.5));
                 // p.set("freq", 400., t).unwrap();
-                let mut freq = sine.param("freq").unwrap();
-                freq.set(400., t).unwrap();
+                let mut freq = sine.param("freq");
+                freq.set_time(400., t).unwrap();
 
-                let freq = sine.param("freq").unwrap();
+                let freq = sine.try_param("freq").unwrap();
                 // s = Some(sine);
                 let c = graph.push(Constant::new(0.2));
                 let c = sine * sine2 * c;

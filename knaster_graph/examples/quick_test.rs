@@ -13,6 +13,7 @@ use knaster_core::{
     typenum::{U0, U1, U2},
     wrappers_core::{UGenWrapperCoreExt, WrSmoothParams},
 };
+use knaster_graph::graph::GraphError;
 use knaster_graph::runner::RunnerOptions;
 use knaster_graph::{
     audio_backend::{
@@ -38,10 +39,11 @@ fn main() -> Result<()> {
     backend.start_processing(runner)?;
     // push some nodes
     loop {
-        let mut graph = top_level_graph.subgraph::<U0, U1>(GraphOptions::default());
-        top_level_graph.connect(graph.as_node(), [0, 0], [0, 1], top_level_graph.internal())?;
-
-        top_level_graph.commit_changes()?;
+        let mut graph = top_level_graph.edit(|g| {
+            let (gh, graph) = g.subgraph::<U0, U1>(GraphOptions::default(), |_| ());
+            gh.out([0, 0]).to_graph_out();
+            graph
+        });
 
         let mut ctx = AudioCtx::new(
             graph.sample_rate(),
@@ -49,48 +51,53 @@ fn main() -> Result<()> {
             ArLogSender::non_rt(),
         );
         let ctx = &mut ctx;
-        let mut rng = thread_rng();
-        let freq = rng.gen_range(200.0..800.);
-        dbg!(freq);
-        let mut osc1 = WrSmoothParams::new(SinNumeric::new(freq));
-        osc1.param(ctx, "freq", freq)?;
-        let osc1 = graph.push(osc1.wr_mul(0.2));
-        osc1.set(("freq", freq))?;
-        let mut osc2 = SinNumeric::new(freq * 1.5);
-        osc2.param(ctx, "freq", freq * 1.5)?;
-        let osc2 = graph.push(osc2.wr_mul(0.2));
-        let osc3 = graph.push(SinNumeric::new(freq * 4.).wr_mul(0.2));
-        osc3.set(("freq", freq * 4.))?;
-        let env = graph.push_with_done_action(EnvAsr::new(0.2, 0.2), Done::FreeParent);
-        env.set(("attack_time", 0.2))?;
-        env.set(("release_time", 0.2))?;
-        env.set(("t_restart", knaster_graph::PTrigger))?;
-        env.change("t_release")?
-            .trig()
-            .after(Seconds::from_secs_f64(0.5));
-        let mult = graph.push(MathUGen::<_, U1, Mul>::new());
-        let modulator = graph.push(SinNumeric::new(0.5).wr_powi(2).wr_mul(5000.).wr_add(freq));
-        modulator.set(("freq", 0.5))?;
-        let random_lin_modulator =
-            graph.push(RandomLin::new(4.0).wr_powi(2).wr_mul(5000.).wr_add(100.));
-        random_lin_modulator.set(("freq", 4.0))?;
-        let lpf = graph.push(OnePoleHpf::new().ar_params());
-        // graph.connect_node_to_parameter(&modulator, &lpf, 0, "cutoff_freq", false)?;
-        graph.connect_to_parameter(&random_lin_modulator, 0, "cutoff_freq", &lpf)?;
-        let noise = graph.push(WhiteNoise::new().wr_mul(0.2));
-        // let noise = graph.push(PinkNoise::new().wr_mul(0.2));
-        // let noise = graph.push(BrownNoise::new().wr_mul(0.2));
+        graph.edit(|graph| -> Result<(), GraphError> {
+            let mut rng = rand::rng();
+            let freq = rng.random_range(200.0..800.);
+            dbg!(freq);
+            let mut osc1 = WrSmoothParams::new(SinNumeric::new(freq));
+            osc1.param(ctx, "freq", freq)?;
+            let osc1 = graph.push(osc1.wr_mul(0.2));
+            osc1.param("freq").set(freq)?;
+            let mut osc2 = SinNumeric::new(freq * 1.5);
+            osc2.param(ctx, "freq", freq * 1.5)?;
+            let osc2 = graph.push(osc2.wr_mul(0.2));
+            let osc3 = graph.push(SinNumeric::new(freq * 4.).wr_mul(0.2));
+            osc3.param("freq").set(freq * 4.)?;
+            let env = graph.push_with_done_action(EnvAsr::new(0.2, 0.2), Done::FreeParent);
+            env.param("attack_time").set(0.2)?;
+            env.param("release_time").set(0.2)?;
+            env.param("t_restart").set(knaster_graph::PTrigger)?;
+            env.param("t_release")
+                .trig_after(Seconds::from_secs_f64(0.5));
+            let mult = graph.push(MathUGen::<_, U1, Mul>::new());
+            let modulator = graph.push(SinNumeric::new(0.5).wr_powi(2).wr_mul(5000.).wr_add(freq));
+            modulator.param("freq").set(0.5)?;
+            let random_lin_modulator =
+                graph.push(RandomLin::new(4.0).wr_powi(2).wr_mul(5000.).wr_add(100.));
+            random_lin_modulator.param("freq").set(4.0)?;
+            let lpf = graph.push(OnePoleHpf::new().ar_params());
+            // graph.connect_node_to_parameter(&modulator, &lpf, 0, "cutoff_freq", false)?;
+            lpf.link("cutoff_freq", random_lin_modulator);
+            // graph.connect_to_parameter(&random_lin_modulator, 0, "cutoff_freq", &lpf)?;
+            let noise = graph.push(WhiteNoise::new().wr_mul(0.2));
+            // let noise = graph.push(PinkNoise::new().wr_mul(0.2));
+            // let noise = graph.push(BrownNoise::new().wr_mul(0.2));
 
-        // connect them together
-        graph.connect(&osc1, 0, 0, &lpf)?;
-        graph.connect(&osc3, 0, 0, &lpf)?;
-        graph.connect(&osc2, 0, 0, &lpf)?;
-        graph.connect(&noise, 0, 0, &lpf)?;
-        graph.connect_replace(&lpf, 0, 0, &mult)?;
-        graph.connect_replace(&env, 0, 1, &mult)?;
-        graph.connect_replace(&mult, [0, 0], [0, 1], graph.internal())?;
-        graph.commit_changes()?;
-
+            // connect them together
+            (((osc1 + osc2 + osc3 + noise) >> lpf) * env)
+                .out([0, 0])
+                .to_graph_out();
+            // graph.connect(&osc1, 0, 0, &lpf)?;
+            // graph.connect(&osc3, 0, 0, &lpf)?;
+            // graph.connect(&osc2, 0, 0, &lpf)?;
+            // graph.connect(&noise, 0, 0, &lpf)?;
+            // graph.connect_replace(&lpf, 0, 0, &mult)?;
+            // graph.connect_replace(&env, 0, 1, &mult)?;
+            // graph.connect_replace(&mult, [0, 0], [0, 1], graph.internal())?;
+            // graph.commit_changes()?;
+            Ok(())
+        })?;
         // let inspection = top_level_graph.inspection();
         // let dot_string = inspection.to_dot_string();
         // let mut dot_command = Command::new("dot")

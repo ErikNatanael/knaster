@@ -16,7 +16,6 @@ mod core {
 }
 
 pub mod math_ugens;
-pub mod node_ops;
 pub mod prelude;
 pub mod preludef32;
 pub(crate) mod subprelude_fundamental_types;

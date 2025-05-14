@@ -35,30 +35,35 @@ fn main() -> Result<()> {
     let mut envs = vec![];
     let mut rng = thread_rng();
 
-    for _i in 0..300 {
-        let env = EnvAr::new(0.01, 0.1);
-        let env = g.push(env);
-        let sine =
-            g.push(SinWt::new(rng.gen_range(3000.0..10000.0)).wr_mul(rng.gen_range(0.01..0.015)));
-        let mul = g.push(MathUGen::<_, U1, Mul>::new());
-        let pan = g.push(Pan2::new(rng.gen_range(-1.0..1.0)));
-        g.connect(&env, 0, 0, &mul)?;
-        g.connect(&sine, 0, 1, &mul)?;
-        g.connect(&mul, 0, 0, &pan)?;
-        g.connect(&pan, 0, 0, g.internal())?;
-        g.connect(&pan, 1, 1, g.internal())?;
-        envs.push(env);
-    }
-    for _i in 0..300 {
-        let env = EnvAr::new(0.01, 0.1);
-        let env = g.push(env);
-        let sine = g.push(SinWt::new(rng.gen_range(6000.0..6500.0)).wr_mul(0.01));
-        let mul = g.push(MathUGen::<_, U1, Mul>::new());
-        g.connect(&env, 0, 0, &mul)?;
-        g.connect(&sine, 0, 1, &mul)?;
-        g.connect(&mul, [0, 0], [0, 1], g.internal())?;
-        envs.push(env);
-    }
+    g.edit(|g| {
+        for _i in 0..300 {
+            let env = EnvAr::new(0.01, 0.1);
+            let env = g.push(env);
+            let sine = g.push(
+                SinWt::new(rng.gen_range(3000.0..10000.0)).wr_mul(rng.gen_range(0.01..0.015)),
+            );
+            let mul = g.push(MathUGen::<_, U1, Mul>::new());
+            let pan = g.push(Pan2::new(rng.gen_range(-1.0..1.0)));
+            ((env * sine) >> pan).to_graph_out();
+            // g.connect(&env, 0, 0, &mul)?;
+            // g.connect(&sine, 0, 1, &mul)?;
+            // g.connect(&mul, 0, 0, &pan)?;
+            // g.connect(&pan, 0, 0, g.internal())?;
+            // g.connect(&pan, 1, 1, g.internal())?;
+            envs.push(env.param("t_restart"));
+        }
+        for _i in 0..300 {
+            let env = EnvAr::new(0.01, 0.1);
+            let env = g.push(env);
+            let sine = g.push(SinWt::new(rng.gen_range(6000.0..6500.0)).wr_mul(0.01));
+            let mul = g.push(MathUGen::<_, U1, Mul>::new());
+            // g.connect(&env, 0, 0, &mul)?;
+            // g.connect(&sine, 0, 1, &mul)?;
+            // g.connect(&mul, [0, 0], [0, 1], g.internal())?;
+            (env * sine).out([0, 0]).to_graph_out();
+            envs.push(env.param("t_restart"));
+        }
+    });
     // let sine = g.push({
     //     let mut s = SinWt::new().wr_mul(0.2);
     //     s.param(g.ctx(), "freq", 440.)?;
@@ -66,7 +71,6 @@ fn main() -> Result<()> {
     // });
     // g.connect_node_to_output(&sine, 0, 0, true);
     // g.connect_node_to_output(&sine, 0, 1, true);
-    g.commit_changes()?;
     let mut loops = 0;
     loop {
         // if loops % 16 == 0 {
@@ -99,10 +103,10 @@ fn main() -> Result<()> {
         let mut j = 0;
         while j < envs.len() {
             j = rng.gen_range(0..envs.len());
-            let env = &envs[j];
+            let env = &mut envs[j];
             // env.change("release_time")?
             //     .value(rng.gen::<f32>().powi(2) * 1.0 + 0.05);
-            env.change("t_restart")?.trig();
+            env.trig()?;
             j += rng.gen_range(0..10);
             std::thread::sleep(Duration::from_secs_f32(0.01));
         }

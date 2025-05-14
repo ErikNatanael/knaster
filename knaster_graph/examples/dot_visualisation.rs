@@ -41,19 +41,24 @@ fn main() -> Result<()> {
     );
     let ctx = &mut ctx;
     osc1.param(ctx, "freq", 200.)?;
-    let osc1 = graph.push(osc1.wr_mul(0.2));
-    osc1.set(("freq", 250.))?;
-    let mut osc2 = SinNumeric::new(250.);
-    osc2.param(ctx, "freq", 300.)?;
-    let osc2 = graph.push(osc2.wr_mul(0.2));
-    let osc3 = graph.push(SinNumeric::new(200. * 4.).wr_mul(0.2));
-    osc3.set(("freq", 200. * 4.))?;
-    // connect them together
-    graph.connect_replace(&osc1, 0, 0, graph.internal())?;
-    graph.connect(&osc1, 0, 1, graph.internal())?;
-    graph.connect(&osc3, 0, 0, graph.internal())?;
-    graph.connect(&osc2, 0, 0, graph.internal())?;
-    graph.commit_changes()?;
+    let (mut osc1_freq, mut osc2_freq, mut osc3_freq) = graph.edit(|graph| {
+        let osc1 = graph.push(osc1.wr_mul(0.2));
+        osc1.param("freq").set(250.).unwrap();
+        let mut osc2 = SinNumeric::new(250.);
+        osc2.param(ctx, "freq", 300.).unwrap();
+        let osc2 = graph.push(osc2.wr_mul(0.2));
+        let osc3 = graph.push(SinNumeric::new(200. * 4.).wr_mul(0.2));
+        osc3.param("freq").set(200. * 4.).unwrap();
+        // connect them together
+        osc1.out([0, 0]).to_graph_out();
+        osc3.to_graph_out();
+        osc2.to_graph_out();
+        // graph.connect_replace(&osc1, 0, 0, graph.internal())?;
+        // graph.connect(&osc1, 0, 1, graph.internal())?;
+        // graph.connect(&osc3, 0, 0, graph.internal())?;
+        // graph.connect(&osc2, 0, 0, graph.internal())?;
+        (osc1.param("freq"), osc2.param("freq"), osc3.param("freq"))
+    });
 
     let inspection = graph.inspection();
     let dot_string = inspection.to_dot_string();
@@ -74,9 +79,14 @@ fn main() -> Result<()> {
 
     let mut freq = 200.;
     for _ in 0..5 {
-        osc1.set(("freq", freq, ParameterSmoothing::Linear(0.5)))?;
-        osc2.set(("freq", (freq * (5. / 4.)), ParameterSmoothing::Linear(0.5)))?;
-        osc3.set(("freq", (freq * (3. / 2.))))?;
+        osc1_freq.smooth(ParameterSmoothing::Linear(0.5))?;
+        osc1_freq.set(freq)?;
+        osc2_freq.smooth(ParameterSmoothing::Linear(0.5))?;
+        osc2_freq.set(freq * (5. / 4.))?;
+        osc3_freq.set(freq * (3. / 2.))?;
+        // osc1.set(("freq", freq, ParameterSmoothing::Linear(0.5)))?;
+        // osc2.set(("freq", (freq * (5. / 4.)), ParameterSmoothing::Linear(0.5)))?;
+        // osc3.set(("freq", (freq * (3. / 2.))))?;
         freq *= 1.5;
         std::thread::sleep(Duration::from_secs_f32(1.));
     }
