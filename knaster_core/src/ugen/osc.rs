@@ -234,8 +234,8 @@ mod wavetable_vec {
 
         fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
             NumericArray::from([
-                ParameterHint::float(|h| h.logarithmic(true).minmax(0., 20000.)),
-                ParameterHint::float(|h| h.minmax(0., 1.)),
+                ParameterHint::new_float(|h| h.logarithmic(true).minmax(0., 20000.)),
+                ParameterHint::new_float(|h| h.minmax(0., 1.)),
                 ParameterHint::Trigger,
             ])
         }
@@ -389,7 +389,7 @@ impl<F: Float> UGen for SinNumeric<F> {
 
     fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         NumericArray::from([
-            ParameterHint::float(|h| h.logarithmic(true).nyquist()),
+            ParameterHint::new_float(|h| h.logarithmic(true).nyquist()),
             ParameterHint::infinite_float(),
             ParameterHint::Trigger,
         ])

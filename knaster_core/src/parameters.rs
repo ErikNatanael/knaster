@@ -33,8 +33,7 @@ pub trait PIntegerConvertible: From<PInteger> + Into<PInteger> {
     // fn to_pinteger(self) -> PInteger;
     // fn from_pinteger(val: PInteger) -> Self;
     fn pinteger_range() -> (PInteger, PInteger);
-    #[cfg(any(feature = "std", feature = "alloc"))]
-    fn pinteger_descriptions(v: PInteger) -> String;
+    fn pinteger_descriptions(v: PInteger) -> Option<&'static str>;
 }
 impl From<PInteger> for usize {
     fn from(val: PInteger) -> Self {
@@ -51,9 +50,8 @@ impl PIntegerConvertible for usize {
         (PInteger(usize::MIN), PInteger(usize::MAX))
     }
 
-    #[cfg(any(feature = "std", feature = "alloc"))]
-    fn pinteger_descriptions(v: PInteger) -> String {
-        v.0.to_string()
+    fn pinteger_descriptions(v: PInteger) -> Option<&'static str> {
+        None
     }
 }
 impl From<PInteger> for bool {
@@ -71,13 +69,8 @@ impl PIntegerConvertible for bool {
         (PInteger(0), PInteger(1))
     }
 
-    #[cfg(any(feature = "std", feature = "alloc"))]
-    fn pinteger_descriptions(v: PInteger) -> String {
-        if v.0 > 0 {
-            String::from("True")
-        } else {
-            String::from("False")
-        }
+    fn pinteger_descriptions(v: PInteger) -> Option<&'static str> {
+        Some(if v.0 > 0 { "True" } else { "False" })
     }
 }
 
@@ -114,7 +107,7 @@ impl From<&'static str> for Param {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct PFloatHint {
     pub default: Option<PFloat>,
     pub range: Option<FloatParameterRange>,
@@ -132,6 +125,14 @@ impl PFloatHint {
     }
     pub fn default(mut self, v: PFloat) -> Self {
         self.default = Some(v);
+        self
+    }
+    pub fn range(mut self, range: impl Into<FloatParameterRange>) -> Self {
+        self.range = Some(range.into());
+        self
+    }
+    pub fn kind(mut self, kind: FloatParameterKind) -> Self {
+        self.kind = Some(kind);
         self
     }
     pub fn minmax(mut self, min: PFloat, max: PFloat) -> Self {
@@ -176,24 +177,30 @@ impl Default for PFloatHint {
 pub struct PIntegerHint {
     pub default: Option<PInteger>,
     pub range: (PInteger, PInteger),
-    #[cfg(any(feature = "std", feature = "alloc"))]
-    value_descriptions: Option<fn(PInteger) -> crate::core::string::String>,
+    value_descriptions: Option<fn(PInteger) -> Option<&'static str>>,
 }
 impl PIntegerHint {
     pub fn new(range: (PInteger, PInteger)) -> Self {
         Self {
             default: None,
             range,
-            #[cfg(any(feature = "alloc", feature = "std"))]
             value_descriptions: None,
         }
+    }
+    pub fn description(&self, v: PInteger) -> Option<&'static str> {
+        self.value_descriptions.and_then(|func| func(v))
     }
     #[cfg(any(feature = "std", feature = "alloc"))]
     /// Returns descriptions of the values for this parameter.
     pub fn descriptions(&self) -> Option<crate::core::vec::Vec<(PInteger, String)>> {
         self.value_descriptions.map(|func| {
             (self.range.0.0..self.range.1.0)
-                .map(|pi| (PInteger(pi), func(PInteger(pi))))
+                .map(|pi| {
+                    (
+                        PInteger(pi),
+                        func(PInteger(pi)).map_or_else(|| pi.to_string(), |s| s.to_string()),
+                    )
+                })
                 .collect()
         })
     }
@@ -208,12 +215,12 @@ pub enum ParameterHint {
     Integer(PIntegerHint),
 }
 impl ParameterHint {
-    pub fn float(with: impl FnOnce(PFloatHint) -> PFloatHint) -> Self {
+    pub fn new_float(with: impl FnOnce(PFloatHint) -> PFloatHint) -> Self {
         let hint = with(PFloatHint::new());
         Self::Float(hint)
     }
     /// Manually set the hints for an integer parameter
-    pub fn integer(
+    pub fn new_integer(
         range: (PInteger, PInteger),
         with: impl FnOnce(PIntegerHint) -> PIntegerHint,
     ) -> Self {
@@ -225,25 +232,25 @@ impl ParameterHint {
         ParameterHint::Integer(PIntegerHint {
             default: Some(T::default().into()),
             range: T::pinteger_range(),
-            #[cfg(any(feature = "alloc", feature = "std"))]
             value_descriptions: Some(T::pinteger_descriptions),
         })
     }
     // TODO: deprecate these helpers and use the proper syntax
+    #[deprecated]
     pub fn nyquist() -> Self {
-        Self::float(|h| h.nyquist())
+        Self::new_float(|h| h.nyquist())
     }
     pub fn infinite_float() -> Self {
-        Self::float(|h| h.infinite())
+        Self::new_float(|h| h.infinite())
     }
     pub fn positive_infinite_float() -> Self {
-        Self::float(|h| h.positive_infinite())
+        Self::new_float(|h| h.positive_infinite())
     }
     pub fn negative_infinite_float() -> Self {
-        Self::float(|h| h.negative_infinite())
+        Self::new_float(|h| h.negative_infinite())
     }
     pub fn one() -> Self {
-        Self::float(|h| h.minmax(0.0, 1.))
+        Self::new_float(|h| h.minmax(0.0, 1.))
     }
     pub fn boolean() -> Self {
         Self::from_pinteger_enum::<bool>()
@@ -255,9 +262,15 @@ impl ParameterHint {
             ParameterHint::Integer(_) => ParameterType::Integer,
         }
     }
-    pub fn get_float(&self) -> Option<&PFloatHint> {
+    pub fn float_hint(&self) -> Option<&PFloatHint> {
         match self {
             ParameterHint::Float(hint) => Some(hint),
+            _ => None,
+        }
+    }
+    pub fn integer_hint(&self) -> Option<&PIntegerHint> {
+        match self {
+            ParameterHint::Integer(hint) => Some(hint),
             _ => None,
         }
     }

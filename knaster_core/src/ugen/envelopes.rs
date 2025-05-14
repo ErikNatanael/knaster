@@ -306,8 +306,8 @@ impl<F: Float> UGen for EnvAr<F> {
     }
     fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         [
-            ParameterHint::float(|h| h.logarithmic(true).minmax(0.0, 20.0)),
-            ParameterHint::float(|h| h.logarithmic(true).minmax(0.0, 20.0)),
+            ParameterHint::new_float(|h| h.logarithmic(true).minmax(0.0, 20.0)),
+            ParameterHint::new_float(|h| h.logarithmic(true).minmax(0.0, 20.0)),
             ParameterHint::Trigger,
         ]
         .into()
@@ -495,8 +495,8 @@ mod alloc_envelopes {
         }
         fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
             [
-                ParameterHint::float(|h| h.logarithmic(true).minmax(0.0, 20.0)),
-                ParameterHint::integer((PInteger::ZERO, PInteger::MAX), |h| h),
+                ParameterHint::new_float(|h| h.logarithmic(true).minmax(0.0, 20.0)),
+                ParameterHint::new_integer((PInteger::ZERO, PInteger::MAX), |h| h),
                 ParameterHint::Trigger,
                 ParameterHint::Trigger,
             ]

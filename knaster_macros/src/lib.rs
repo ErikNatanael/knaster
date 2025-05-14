@@ -12,20 +12,30 @@ use syn::{
 
 #[proc_macro_derive(KnasterIntegerParameter)]
 pub fn knaster_integer_parameter(input: TokenStream) -> TokenStream {
+    let crate_ident = get_knaster_crate_name();
     // Parse the input tokens into a syntax tree
     let input = parse_macro_input!(input as DeriveInput);
 
     let ident = input.ident;
 
-    let len = match input.data {
-        syn::Data::Enum(enum_item) => enum_item.variants.len(),
+    let (len, descriptions) = match input.data {
+        syn::Data::Enum(enum_item) => {
+            let descriptions = enum_item.variants.iter().map(|v| v.ident.to_string()).collect::<Vec<_>>();
+            (enum_item.variants.len(), descriptions)
+        }
         _ => panic!("KnasterIntegerParameter only works on Enums"),
     };
+    let description_matches = descriptions.iter().enumerate().map(|(i, d)| {
+        quote! {
+            PInteger(#i) => Some(#d),
+        }
+    });
+
 
     // Build the output, possibly using quasi-quotation
     let expanded = quote! {
-    impl From<PInteger> for #ident {
-        fn from(value: PInteger) -> Self {
+    impl From<#crate_ident::PInteger> for #ident {
+        fn from(value: #crate_ident::PInteger) -> Self {
             <Self as num_traits::FromPrimitive>::from_usize(value.0).unwrap_or( #ident ::default())
         }
     }
@@ -34,16 +44,18 @@ pub fn knaster_integer_parameter(input: TokenStream) -> TokenStream {
             PInteger(value as usize)
         }
     }
-    impl PIntegerConvertible for #ident {
+    impl #crate_ident::PIntegerConvertible for #ident {
         fn pinteger_range() -> (PInteger, PInteger) {
             (
                 PInteger(0),
                 PInteger(#len),
             )
         }
-            #[cfg(any(feature="std", feature="alloc"))]
-        fn pinteger_descriptions(v: PInteger) -> std::string::String {
-            format!("{:?}", #ident ::from(v))
+        fn pinteger_descriptions(v: PInteger) -> Option<&'static str> {
+                match v {
+                    #(#description_matches)*
+                    _ => None,
+                }
         }
     }
             };
@@ -412,15 +424,40 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
                 } else {
                     quote! {}
                 };
-                quote! { #crate_ident::ParameterHint::float(|h| h #range ) }
+                let kind = if let Some(kind) = &p.kind {
+                    let kind = match kind {
+                        FloatParameterKind::Amplitude => quote! { #crate_ident::FloatParameterKind::Amplitude },
+                        FloatParameterKind::Frequency => quote! { #crate_ident::FloatParameterKind::Frequency },                        
+                        FloatParameterKind::Q => quote! { #crate_ident::FloatParameterKind::Q },
+                    };
+                    quote! { .kind(#kind) }
+                } else {
+                    quote! {}
+                };
+                let logarithmic = if p.logarithmic {
+                    quote! { .logarithmic(true) }
+                } else {
+                    quote! {}
+                };
+                let default = if let Some(default) = &p.default {
+                    quote! { .default(#default) }
+                } else {
+                    quote! {}
+                };
+                quote! { #crate_ident::ParameterHint::new_float(|h| h #range #kind #logarithmic #default ) }
             }
             ParameterType::Integer => {
-                let range = if let Some(range) = &p.range {
-                    quote! { #range }
+                if p.from_pinteger_convertible.is_some() {
+                    let from = p.from_pinteger_convertible.as_ref().unwrap();
+                    quote! { #crate_ident::ParameterHint::from_pinteger_enum::<#from>() }
                 } else {
-                    quote! { (#crate_ident::PInteger::MIN, #crate_ident::PInteger::MAX) }
-                };
-                quote! { #crate_ident::ParameterHint::integer(#range , |h| h) }
+                    let range = if let Some(range) = &p.range {
+                        quote! { #range }
+                    } else {
+                        quote! { (#crate_ident::PInteger::MIN, #crate_ident::PInteger::MAX) }
+                    };
+                    quote! { #crate_ident::ParameterHint::new_integer(#range , |h| h) }
+                }
             }
             ParameterType::Trigger => quote! { #crate_ident::ParameterHint::Trigger },
         })
@@ -487,6 +524,8 @@ struct ParameterAttribute {
     default: Option<syn::Expr>,
     range: Option<syn::Expr>,
     kind: Option<syn::Path>,
+    logarithmic: Option<bool>,
+    from: Option<syn::Path>,
 }
 
 fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<ParameterData>> {
@@ -494,11 +533,17 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
     let mut params = Vec::new();
     for f in param_fns {
         let name = f.sig.ident.to_string();
-        let mut arguments = Vec::new();
-        let mut ty = None;
-        let mut default = None;
-        let mut range = None;
-        let mut kind = None;
+        let mut pdata = ParameterData {
+            name,
+            ty: ParameterType::Trigger,
+            arguments: vec![],
+            fn_name: f.sig.ident.clone(),
+            default: None,
+            range: None,
+            kind: None,
+            logarithmic: false,
+            from_pinteger_convertible: None,
+        };
         let mut attrs = None;
         for attr in &f.attrs {
             if attr.path().is_ident("param") {
@@ -525,47 +570,6 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
                 }
             }
         }
-        if let Some(attrs) = attrs {
-            if let Some(akind) = attrs.kind {
-                kind = {
-                    if akind.segments.len() != 1 {
-                        return Err(syn::Error::new(akind.span(), "Invalid parameter kind"));
-                    }
-                    let ident = akind.segments.first().unwrap().ident.to_string();
-                    match ident.as_str() {
-                        "Frequency" => Some(FloatParameterKind::Frequency),
-                        "Amplitude" => Some(FloatParameterKind::Amplitude),
-                        "Q" => Some(FloatParameterKind::Q),
-                        _ => {
-                            return Err(syn::Error::new(akind.span(), "Invalid parameter kind"));
-                        }
-                    }
-                };
-            }
-            if let Some(arange) = attrs.range {
-                if let Expr::Range(range) = arange {
-                    if range.start.is_none() {
-                        return Err(syn::Error::new(
-                            range.span(),
-                            "Parameter range must have a start value",
-                        ));
-                    }
-                    if range.end.is_none() {
-                        return Err(syn::Error::new(
-                            range.span(),
-                            "Parameter range must have an end value",
-                        ));
-                    }
-                    if let syn::RangeLimits::HalfOpen(_) = range.limits {
-                        return Err(syn::Error::new(
-                            range.span(),
-                            "Parameter range must be inclusive/closed",
-                        ));
-                    }
-                }
-            }
-            default = attrs.default;
-        }
         let mut num_parameter_value_arguments = 0;
         for input in &f.sig.inputs {
             if let syn::FnArg::Typed(pat_type) = input {
@@ -573,14 +577,14 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
                     syn::Type::Reference(ref_type) => match &*ref_type.elem {
                         syn::Type::Path(path) => {
                             if path.path.segments.iter().any(|seg| seg.ident == "AudioCtx") {
-                                arguments.push(ParameterArgumentTypes::Ctx);
+                                pdata.arguments.push(ParameterArgumentTypes::Ctx);
                             } else if path
                                 .path
                                 .segments
                                 .iter()
                                 .any(|seg| seg.ident == "UGenFlags")
                             {
-                                arguments.push(ParameterArgumentTypes::Flags);
+                                pdata.arguments.push(ParameterArgumentTypes::Flags);
                             } else {
                                 return Err(syn::Error::new(
                                     input.span(),
@@ -603,23 +607,27 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
                             ));
                         }
                         if path.path.segments.iter().any(|seg| seg.ident == "PFloat") {
-                            ty = Some(ParameterType::PFloat);
-                            arguments
+                            pdata.ty = ParameterType::PFloat;
+                            pdata
+                                .arguments
                                 .push(ParameterArgumentTypes::Parameter(ParameterType::PFloat));
                             num_parameter_value_arguments += 1;
                         } else if path.path.segments.iter().any(|seg| seg.ident == "f32") {
-                            ty = Some(ParameterType::Float32);
-                            arguments
+                            pdata.ty = ParameterType::Float32;
+                            pdata
+                                .arguments
                                 .push(ParameterArgumentTypes::Parameter(ParameterType::Float32));
                             num_parameter_value_arguments += 1;
                         } else if path.path.segments.iter().any(|seg| seg.ident == "f64") {
-                            ty = Some(ParameterType::Float64);
-                            arguments
+                            pdata.ty = ParameterType::Float64;
+                            pdata
+                                .arguments
                                 .push(ParameterArgumentTypes::Parameter(ParameterType::Float64));
                             num_parameter_value_arguments += 1;
                         } else if path.path.segments.iter().any(|seg| seg.ident == "PInteger") {
-                            ty = Some(ParameterType::Integer);
-                            arguments
+                            pdata.ty = ParameterType::Integer;
+                            pdata
+                                .arguments
                                 .push(ParameterArgumentTypes::Parameter(ParameterType::Integer));
                             num_parameter_value_arguments += 1;
                         } else {
@@ -638,16 +646,68 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
                 }
             }
         }
+        if let Some(attrs) = attrs {
+            if let Some(akind) = attrs.kind {
+                if !matches!(pdata.ty, ParameterType::Float32 | ParameterType::PFloat | ParameterType::Float64) {
+                    return Err(syn::Error::new(
+                        akind.span(),
+                        "`kind` is only supported for float parameters. Use `from` to derive PInteger hints from a PIntegerConvertible type.",
+                    ));
+                }
+                pdata.kind = {
+                    if akind.segments.len() != 1 {
+                        return Err(syn::Error::new(akind.span(), "Invalid parameter kind"));
+                    }
+                    let ident = akind.segments.first().unwrap().ident.to_string();
+                    match ident.as_str() {
+                        "Frequency" => Some(FloatParameterKind::Frequency),
+                        "Amplitude" => Some(FloatParameterKind::Amplitude),
+                        "Q" => Some(FloatParameterKind::Q),
+                        _ => {
+                            return Err(syn::Error::new(akind.span(), "Invalid parameter kind"));
+                        }
+                    }
+                };
+            }
+            if let Some(from) = attrs.from{
+                if !matches!(pdata.ty, ParameterType::Integer) {
+                    return Err(syn::Error::new(
+                        from.span(),
+                        "`from` is only supported for integer parameters.",
+                    ));
+                }
+                pdata.from_pinteger_convertible = Some(from);
+            }
+            if let Some(arange) = attrs.range {
+                if let Expr::Range(range) = arange {
+                    if range.start.is_none() {
+                        return Err(syn::Error::new(
+                            range.span(),
+                            "Parameter range must have a start value",
+                        ));
+                    }
+                    if range.end.is_none() {
+                        return Err(syn::Error::new(
+                            range.span(),
+                            "Parameter range must have an end value",
+                        ));
+                    }
+                    if let syn::RangeLimits::HalfOpen(_) = range.limits {
+                        return Err(syn::Error::new(
+                            range.span(),
+                            "Parameter range must be inclusive/closed",
+                        ));
+                    }
+                    pdata.range = Some(range);
+                }
+            }
+            pdata.default = attrs.default;
+            if let Some(logarithmic) = attrs.logarithmic {
+                pdata.logarithmic = logarithmic;
+            }
+        }
 
-        params.push(ParameterData {
-            name,
-            ty: ty.unwrap_or(ParameterType::Trigger),
-            arguments,
-            fn_name: f.sig.ident.clone(),
-            default,
-            range,
-            kind,
-        })
+        params.push(pdata)
     }
     Ok(params)
 }
@@ -667,6 +727,8 @@ struct ParameterData {
     default: Option<Expr>,
     range: Option<ExprRange>,
     kind: Option<FloatParameterKind>,
+    from_pinteger_convertible: Option<syn::Path>,
+    logarithmic: bool,
 }
 enum ParameterType {
     PFloat,

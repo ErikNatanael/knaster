@@ -1,11 +1,25 @@
 use knaster_core::{
-    AudioCtx, Block, BlockRead, Float, PFloat, PInteger, ParameterValue, StaticBlock, UGen,
-    UGenFlags, log::ArLogSender, typenum::U64,
+    AudioCtx, Block, BlockRead, Float, KnasterIntegerParameter, PFloat, PFloatHint, PInteger,
+    ParameterValue, StaticBlock, UGen, UGenFlags, log::ArLogSender, num_derive::FromPrimitive,
+    num_derive::ToPrimitive, num_traits, typenum::U64,
 };
 
 /// Outputs a static number every frame
 pub(crate) struct TestInPlusParamGen<F> {
     number: F,
+}
+
+#[derive(
+    Default, Debug, PartialEq, Eq, Copy, Clone, FromPrimitive, ToPrimitive, KnasterIntegerParameter,
+)]
+#[num_traits = "num_traits"]
+#[repr(u8)]
+pub enum NumberEnum {
+    #[default]
+    Zero = 0,
+    One,
+    Two,
+    Three,
 }
 
 #[knaster_macros::impl_ugen]
@@ -17,15 +31,15 @@ impl<F: Float> TestInPlusParamGen<F> {
     pub fn number(&mut self, n: f64) {
         self.number = F::new(n);
     }
-    #[param(default = 0.0, range = 0.5..=1.0)]
+    #[param(default = 0.1, range = 0.5..=1.0)]
     pub fn number2(&mut self, ctx: &mut AudioCtx, n: f32) {
         self.number = F::new(n + ctx.block_size() as f32);
     }
-    #[param(default = 0.0, kind = Frequency)]
+    #[param(default = 100.0, kind = Frequency)]
     pub fn number3(&mut self, ctx: &AudioCtx, n: PFloat) {
         self.number = F::new(n * ctx.sample_rate() as PFloat);
     }
-    #[param(default = 0.0, kind = Frequency)]
+    #[param(default = 0.0, from = NumberEnum)]
     pub fn number4(&mut self, n: PInteger) {
         self.number = F::new(n.0 as PFloat);
     }
@@ -56,17 +70,32 @@ fn main() {
         "number2"
     );
     assert_eq!(
-        TestInPlusParamGen::<f32>::param_hints()[1].get_float(),
-        "number2"
+        TestInPlusParamGen::<f32>::param_hints()[1].float_hint(),
+        Some(&PFloatHint::new().minmax(0.5, 1.0).default(0.1))
     );
     assert_eq!(
         TestInPlusParamGen::<f32>::param_descriptions()[2],
         "number3"
     );
     assert_eq!(
+        TestInPlusParamGen::<f32>::param_hints()[2].float_hint(),
+        Some(
+            &PFloatHint::new()
+                .kind(knaster_core::FloatParameterKind::Frequency)
+                .default(100.)
+        )
+    );
+    assert_eq!(
         TestInPlusParamGen::<f32>::param_descriptions()[3],
         "number4"
     );
+    let p3_descriptions = TestInPlusParamGen::<f32>::param_hints()[3]
+        .integer_hint()
+        .unwrap()
+        .descriptions()
+        .unwrap();
+    assert_eq!(p3_descriptions[0].1, "Zero");
+    assert_eq!(p3_descriptions[3].1, "Three");
     let mut ctx = AudioCtx::new(44100, 64, ArLogSender::non_rt());
     let mut flags = UGenFlags::new();
     let mut ugen = TestInPlusParamGen::<f64>::new();

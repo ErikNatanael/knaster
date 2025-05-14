@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 
-use knaster_primitives::typenum::{U1, U2};
 use knaster_primitives::Float;
+use knaster_primitives::typenum::{U1, U2};
 
 use super::{AudioCtx, UGen};
 
@@ -43,14 +43,13 @@ impl<F: Float> UGen for Pan2<F> {
         [signal * left_gain, signal * right_gain].into()
     }
 
-    fn param_hints(
-    ) -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters>
-    {
-        [crate::ParameterHint::float(|h| h.minmax(-1., 1.))].into()
+    fn param_hints()
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+        [crate::ParameterHint::new_float(|h| h.minmax(-1., 1.))].into()
     }
 
-    fn param_descriptions(
-    ) -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions()
+    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
         ["pan"].into()
     }
 

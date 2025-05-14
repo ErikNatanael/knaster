@@ -235,7 +235,7 @@ impl<F: Float> UGen for SvfFilter<F> {
     }
     fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         [
-            ParameterHint::float(|h| h.nyquist()),
+            ParameterHint::new_float(|h| h.nyquist()),
             ParameterHint::positive_infinite_float(),
             ParameterHint::infinite_float(),
             ParameterHint::from_pinteger_enum::<SvfFilterType>(),

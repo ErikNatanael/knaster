@@ -88,7 +88,7 @@ where
         for i in 0..T::Parameters::USIZE {
             d[i] = gd[i];
         }
-        d[T::Parameters::USIZE] = ParameterHint::float(|h| h.logarithmic(true).infinite());
+        d[T::Parameters::USIZE] = ParameterHint::new_float(|h| h.logarithmic(true).infinite());
         d
     }
 
