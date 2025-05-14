@@ -5,7 +5,7 @@ use knaster_primitives::Float;
 pub struct SafetyLimiter<F: Float> {
     _float: PhantomData<F>,
 }
-#[knaster_macros::ugen]
+#[knaster_macros::impl_ugen]
 impl<F: Float> SafetyLimiter<F> {
     pub fn new() -> Self {
         Self {

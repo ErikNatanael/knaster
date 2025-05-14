@@ -53,7 +53,7 @@ pub fn knaster_integer_parameter(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn ugen(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn impl_ugen(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemImpl);
     parse_ugen_impl(input)
         .unwrap_or_else(syn::Error::into_compile_error)

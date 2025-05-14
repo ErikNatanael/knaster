@@ -129,7 +129,7 @@ pub struct LogProbe<F: Float> {
     name: &'static str,
     _phantom: PhantomData<F>,
 }
-#[knaster_macros::ugen]
+#[knaster_macros::impl_ugen]
 impl<F: Float> LogProbe<F> {
     pub fn new(name: &'static str) -> Self {
         Self {

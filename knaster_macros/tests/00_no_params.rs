@@ -5,7 +5,7 @@ pub(crate) struct TestInPlusParamGen<F> {
     number: F,
 }
 
-#[knaster_macros::ugen]
+#[knaster_macros::impl_ugen]
 impl<F: Float> TestInPlusParamGen<F> {
     pub fn new() -> Self {
         Self { number: F::ZERO }

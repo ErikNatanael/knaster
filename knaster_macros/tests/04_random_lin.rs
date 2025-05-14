@@ -12,7 +12,7 @@ pub struct RandomLin<F: Copy = f32> {
     freq_to_phase_inc: F,
 }
 
-#[knaster_macros::ugen]
+#[knaster_macros::impl_ugen]
 impl<F: Float> RandomLin<F> {
     /// Create a new RandomLin, seeding it from the global atomic seed.
     pub fn new(freq: F) -> Self {

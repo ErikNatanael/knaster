@@ -1,14 +1,13 @@
 use knaster_core::{
-    AudioCtx, Float, ParameterHint, UGen, UGenFlags,
+    AudioCtx, Float, ParameterHint, UGen, UGenFlags, impl_ugen,
     typenum::{U0, U1},
-    ugen,
 };
 
 /// Outputs a static number every frame
 pub(crate) struct TestNumUGen<F> {
     number: F,
 }
-#[ugen]
+#[impl_ugen]
 impl<F: Float> TestNumUGen<F> {
     pub fn new(n: F) -> Self {
         Self { number: n }

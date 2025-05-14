@@ -2,7 +2,7 @@
 //! It is also good for removing zipping from parameter changes.
 
 use crate::{AudioCtx, PFloat};
-use knaster_macros::ugen;
+use knaster_macros::impl_ugen;
 use knaster_primitives::Float;
 
 // To use it as a DC blocker:
@@ -103,7 +103,7 @@ pub struct OnePoleLpf<F: Float> {
     /// The interval one pole filter implementation
     pub op: OnePole<F>,
 }
-#[ugen]
+#[impl_ugen]
 impl<F: Float> OnePoleLpf<F> {
     #[allow(missing_docs)]
     pub fn new(cutoff_freq: F) -> Self {
@@ -142,7 +142,7 @@ impl<F: Float> Default for OnePoleHpf<F> {
         Self::new()
     }
 }
-#[ugen]
+#[impl_ugen]
 impl<F: Float> OnePoleHpf<F> {
     #[allow(missing_docs)]
     pub fn new() -> Self {
