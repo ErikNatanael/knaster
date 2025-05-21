@@ -39,4 +39,5 @@ pub enum FloatParameterKind {
     Amplitude,
     Frequency,
     Q,
+    Seconds,
 }
