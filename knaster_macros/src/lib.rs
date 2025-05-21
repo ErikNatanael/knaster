@@ -6,9 +6,13 @@ use proc_macro::TokenStream;
 use proc_macro_crate::{FoundCrate, crate_name};
 use quote::quote;
 use syn::{
-    DeriveInput, Expr, ExprRange, Ident, ImplItem, ImplItemFn, ItemImpl, Lit, MetaList, Type,
+    DeriveInput, Expr, ExprRange, Ident, ImplItem, ImplItemFn, ItemImpl, Lit, Type,
     parse_macro_input, spanned::Spanned,
 };
+
+// TODO: Allow passing process and process_block functions with the same signature as for the UGen
+// trait
+// TODO: Copy generics from type impl to UGen trait impl
 
 #[proc_macro_derive(KnasterIntegerParameter)]
 pub fn knaster_integer_parameter(input: TokenStream) -> TokenStream {
@@ -86,9 +90,18 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
     // optional
     let mut process_block_fn = None;
     let mut param_fns = Vec::new();
+    // Overrides the associated types of the UGen trait. `Parameters` cannot be overridden
+    let mut sample_type_override: Option<Type> = None;
+    let mut inputs_type_override: Option<Type> = None;
+    let mut outputs_type_override: Option<Type> = None;
+    // Set these to true if we copy the process and/or process_block functions to the UGen impl
+    let mut remove_process_fn = false;
+    let mut remove_process_block_fn = false;
 
     for item in &input.items {
-        if let ImplItem::Fn(method) = item {
+        match item {
+            ImplItem::Fn(method) => {
+
             match method.sig.ident.to_string().as_str() {
                 "init" => {
                     init_fn = Some(method);
@@ -112,8 +125,21 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
                     param_fns.push(method);
                 }
             }
+            }
+            ImplItem::Type(ty) => {
+                if ty.ident == "Sample" {
+                    sample_type_override = Some(ty.ty.clone());
+                } else if ty.ident == "Inputs" {
+                    inputs_type_override = Some(ty.ty.clone());
+                } else if ty.ident == "Outputs" {
+                    outputs_type_override = Some(ty.ty.clone());
+                }
+
+            }
+            _ => ()
         }
     }
+
 
     let init_impl = match init_fn {
         Some(init_fn) => {
@@ -133,10 +159,15 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
 
     let process_impl = match process_fn {
         Some(process_fn) => {
+            let mut matches_ugen_process_fn_sig = true;
+            
             match &process_fn.sig.output {
-                syn::ReturnType::Default => num_output_channels = Some(0),
+                syn::ReturnType::Default => {num_output_channels = Some(0); 
+                matches_ugen_process_fn_sig= false;
+                }
                 syn::ReturnType::Type(_rarrow, return_ty) => match &**return_ty {
                     syn::Type::Array(array) => {
+                            matches_ugen_process_fn_sig = false;
                         num_output_channels = if let Expr::Lit(el) = &array.len {
                             if let Lit::Int(i) = &el.lit {
                                 Some(i.base10_parse().unwrap())
@@ -153,17 +184,69 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
                             ));
                         };
                     }
+                    syn::Type::Path(ty_path) => {
+
+                        if !(ty_path.qself.is_none() && matches!(ty_path.path.segments.last(), Some(ps) if ps.ident == "Frame" || ps.ident == "NumericArray")) {
+                            matches_ugen_process_fn_sig = false;
+                        return Err(syn::Error::new(
+                            return_ty.span(),
+                            "process function must return an array of samples or match the UGen trait process method",
+                        ));
+                            
+                        }
+                        // else we match the UGen process dn sig
+
+                    }
                     _ => {
                         return Err(syn::Error::new(
                             return_ty.span(),
-                            "process function must return an array of samples",
+                            "process function must return an array of samples or match the UGen trait process method",
                         ));
                     }
                 },
             }
+
+            // Check if the arguments match the UGen process fn
+            for (index, input) in process_fn.sig.inputs.iter().enumerate() {
+                match (index, input) {
+                    (0, syn::FnArg::Receiver(rec)) => {
+                        if rec.mutability.is_none() {
+                        return Err(syn::Error::new(
+                            rec.span(),
+                            "process function must take &mut self",
+                        ));
+                        }
+                    }
+                    (index, syn::FnArg::Typed(ty)) => {
+                    match &*ty.ty {
+                        syn::Type::Reference(ref_type) => match &*ref_type.elem {
+                            syn::Type::Path(path) => {
+                        if index == 1 && !path.path.segments.iter().any(|seg| seg.ident == "AudioCtx") {
+                            matches_ugen_process_fn_sig = false;
+                        } else if index == 2 && !path.path.segments.iter().any(|seg| seg.ident == "UGenFlags") {
+                            matches_ugen_process_fn_sig = false;
+                        } 
+
+                                }
+                                _ => matches_ugen_process_fn_sig = false,
+                    }
+                                syn::Type::Path(path) => {
+if index == 3 && !path.path.segments.iter().any(|seg| seg.ident == "Frame" || seg.ident == "NumericArray") {
+                            matches_ugen_process_fn_sig = false;
+                        } 
+                            }
+                                _ => 
+                            matches_ugen_process_fn_sig = false,
+                    }
+                    }
+                    _ => matches_ugen_process_fn_sig = false,
+                }
+            }
+            let process_fn_name = &process_fn.sig.ident;
             let mut process_args = Vec::new();
 
-            let process_fn_name = &process_fn.sig.ident;
+            if !matches_ugen_process_fn_sig {
+
             for input in &process_fn.sig.inputs {
                 if let syn::FnArg::Typed(pat_type) = input {
                     match &*pat_type.ty {
@@ -236,7 +319,14 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
                         Self:: #process_fn_name (self,  #(#process_args)* ).into()
                 }
             }
-        }
+            } else {
+                remove_process_fn = true;
+                quote! {
+                    #process_fn
+                }
+            }
+
+            }
         None => quote! {
             fn process(
                 &mut self,
@@ -250,11 +340,61 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
     };
 
     let process_block_impl = match process_block_fn {
-        Some(process_fn) => {
+        Some(process_block_fn) => {
+            let mut matches_ugen_process_fn_sig = true;
+
+            // Check generics
+            if process_block_fn.sig.generics.params.len() != 2 {
+                            matches_ugen_process_fn_sig = false;
+            }
+            // Check if the arguments match the UGen process fn
+            for (index, input) in process_block_fn.sig.inputs.iter().enumerate() {
+                match (index, input) {
+                    (0, syn::FnArg::Receiver(rec)) => {
+                        if rec.mutability.is_none() {
+                        return Err(syn::Error::new(
+                            rec.span(),
+                            "process function must take &mut self",
+                        ));
+                        }
+                    }
+                    (index, syn::FnArg::Typed(ty)) => {
+                    match &*ty.ty {
+                        syn::Type::Reference(ref_type) => match &*ref_type.elem {
+                            syn::Type::Path(path) => {
+                        if index == 1 && !path.path.segments.iter().any(|seg| seg.ident == "AudioCtx") {
+                            matches_ugen_process_fn_sig = false;
+                        } else if index == 2 && !path.path.segments.iter().any(|seg| seg.ident == "UGenFlags") {
+                            matches_ugen_process_fn_sig = false;
+                        } else if index == 3 && (!ref_type.mutability.is_none() || !path.path.segments.iter().any(|seg| seg.ident == "InBlock")) {
+                            matches_ugen_process_fn_sig = false;
+                        } else if index == 4 && (!ref_type.mutability.is_some() || !path.path.segments.iter().any(|seg| seg.ident == "OutBlock")) {
+                            matches_ugen_process_fn_sig = false;
+                        }  else if index > 4 {
+                            matches_ugen_process_fn_sig = false;
+
+                                    }
+                                }
+                                _ => matches_ugen_process_fn_sig = false,
+                    }
+                                syn::Type::Path(path) => {
+if index == 3 && !path.path.segments.iter().any(|seg| seg.ident == "Frame" || seg.ident == "NumericArray") {
+                            matches_ugen_process_fn_sig = false;
+                        } 
+                            }
+                                _ => 
+                            matches_ugen_process_fn_sig = false,
+                    }
+                    }
+                    _ => matches_ugen_process_fn_sig = false,
+                }
+            }
+            if !matches_ugen_process_fn_sig {
+
             let mut process_args = Vec::new();
 
-            let process_block_fn_name = &process_fn.sig.ident;
-            for input in &process_fn.sig.inputs {
+            let process_block_fn_name = &process_block_fn.sig.ident;
+            for input in &process_block_fn.sig.inputs {
                 if let syn::FnArg::Typed(pat_type) = input {
                     match &*pat_type.ty {
                         syn::Type::Reference(ref_type) => match &*ref_type.elem {
@@ -365,6 +505,12 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
                             Self:: #process_block_fn_name (self,  #(#process_args)* ).into()
                         }
                     }
+            } else {
+                // The provided function matches the UGen process_block, paste it as is
+                remove_process_block_fn = true;
+                quote!{ #process_block_fn }
+                // quote! {}
+            }
         }
         None => quote! {},
     };
@@ -429,6 +575,7 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
                         FloatParameterKind::Amplitude => quote! { #crate_ident::FloatParameterKind::Amplitude },
                         FloatParameterKind::Frequency => quote! { #crate_ident::FloatParameterKind::Frequency },                        
                         FloatParameterKind::Q => quote! { #crate_ident::FloatParameterKind::Q },
+                        FloatParameterKind::Seconds => quote! { #crate_ident::FloatParameterKind::Seconds },
                     };
                     quote! { .kind(#kind) }
                 } else {
@@ -465,8 +612,15 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
 
     // Remove all parsed attributes from the impl block
     let mut input = input.clone();
-    for item in &mut input.items {
+    let mut items_to_remove = vec![];
+    for (index, item )in &mut input.items.iter_mut().enumerate() {
         if let ImplItem::Fn(method) = item {
+            if remove_process_fn && (method.sig.ident == "process" || method.attrs.iter().any(|attr| attr.path().is_ident("process"))) {
+                items_to_remove.push(index);
+            }
+            if remove_process_block_fn && (method.sig.ident == "process_block" || method.attrs.iter().any(|attr| attr.path().is_ident("process_block"))) {
+                items_to_remove.push(index);
+            }
             method.attrs.retain(|attr| {
                 !attr.path().is_ident("param")
                     && !attr.path().is_ident("init")
@@ -475,16 +629,36 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
             });
         }
     }
+    for i in items_to_remove.into_iter().rev() {
+        input.items.remove(i);
+    }
+    
+    // Remove associated types
+    input.items.retain(|item| if let ImplItem::Type(ty) = item {
+        !matches!(ty.ident.to_string().as_ref(), "Sample" | "Inputs" | "Outputs")
+    } else {true});
+
+    let atype_sample = if let Some(ty) = sample_type_override {
+    quote! {type Sample = #ty ;}
+} else {
+            quote!{ type Sample = F; }
+};
+    let atype_inputs = inputs_type_override.map(|ty| quote!{ type Inputs = #ty ; })
+        .unwrap_or(quote!{type Inputs = #crate_ident::typenum::#num_inputs ;});
+    let atype_outputs = outputs_type_override.map(|ty| quote!{ type Outputs = #ty ; })
+        .unwrap_or(quote!{type Outputs = #crate_ident::typenum::#num_outputs ;});
 
     Ok(quote! {
         impl #impl_block_generics #crate_ident::UGen for #struct_name {
-            type Sample = F;
-            type Inputs = #crate_ident::typenum::#num_inputs ;
-            type Outputs = #crate_ident::typenum::#num_outputs ;
+            #atype_sample
+            #atype_inputs
+            #atype_outputs
             type Parameters = #crate_ident::typenum::#num_params ;
 
             #init_impl
+
             #process_impl
+
             #process_block_impl
 
 
@@ -663,6 +837,7 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
                         "Frequency" => Some(FloatParameterKind::Frequency),
                         "Amplitude" => Some(FloatParameterKind::Amplitude),
                         "Q" => Some(FloatParameterKind::Q),
+                        "Seconds" => Some(FloatParameterKind::Seconds),
                         _ => {
                             return Err(syn::Error::new(akind.span(), "Invalid parameter kind"));
                         }
