@@ -477,6 +477,10 @@ mod tests {
         assert_eq!(Seconds::from_samples(2, 44100).to_samples(44100), 2);
         assert_eq!(Seconds::from_samples(3, 44100).to_samples(44100), 3);
         assert_eq!(Seconds::from_samples(4, 44100).to_samples(44100), 4);
+        assert_eq!(
+            Seconds::from_samples(22050, 44100),
+            Seconds::from_secs_f64(0.5)
+        );
         assert_eq!(Seconds::from_samples(44100, 44100).to_samples(88200), 88200);
         assert_eq!(
             Seconds::from_samples(44100 * 3 + 1, 44100).to_samples(88200),
@@ -486,6 +490,8 @@ mod tests {
             Seconds::from_samples(96000 * 3 + 8, 96000).to_samples(88200),
             3 * 88200 + 7
         );
+        assert_eq!(Seconds::ZERO.to_samples(48000), 0);
+        assert_eq!(Seconds::from_secs_f64(0.).to_samples(48000), 0);
     }
     #[test]
     fn arithmetic() {

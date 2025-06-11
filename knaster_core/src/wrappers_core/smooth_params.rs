@@ -203,7 +203,7 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
         }
         // Received a new parameter change.
         match value {
-            ParameterValue::Integer(_) | ParameterValue::Trigger => {
+            ParameterValue::Integer(_) | ParameterValue::Trigger | ParameterValue::Bool(_) => {
                 self.ugen.param_apply(ctx, index, value)
             }
             ParameterValue::Float(float_value) => {

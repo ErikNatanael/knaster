@@ -9,6 +9,7 @@ pub enum ParameterType {
     Float,
     Trigger,
     Integer,
+    Bool,
     // etc?
 }
 #[derive(Copy, Clone, Debug)]
@@ -16,6 +17,7 @@ pub enum ParameterValue {
     Float(PFloat),
     Trigger,
     Integer(PInteger),
+    Bool(bool),
     /// The smoothing setting for a Float parameter. Smoothing is not built into all UGens, you generally need a Wrapper to do smoothing for you.
     Smoothing(ParameterSmoothing, Rate),
 }
@@ -40,6 +42,11 @@ impl From<PTrigger> for ParameterValue {
         ParameterValue::Trigger
     }
 }
+impl From<bool> for ParameterValue {
+    fn from(_val: bool) -> Self {
+        ParameterValue::Bool(_val)
+    }
+}
 impl ParameterValue {
     pub fn float(self) -> Option<f64> {
         match self {
@@ -59,12 +66,19 @@ impl ParameterValue {
             _ => None,
         }
     }
+    pub fn bool(self) -> Option<bool> {
+        match self {
+            ParameterValue::Bool(value) => Some(value),
+            _ => None,
+        }
+    }
     pub fn ty(self) -> ParameterType {
         match self {
             ParameterValue::Float(_) => ParameterType::Float,
             ParameterValue::Trigger => ParameterType::Trigger,
             ParameterValue::Integer(_) => ParameterType::Integer,
             ParameterValue::Smoothing(_, _) => ParameterType::Float,
+            ParameterValue::Bool(_) => ParameterType::Bool,
         }
     }
 }

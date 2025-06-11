@@ -7,6 +7,7 @@ pub struct SafetyLimiter<F: Float> {
 }
 #[knaster_macros::impl_ugen]
 impl<F: Float> SafetyLimiter<F> {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             _float: PhantomData,

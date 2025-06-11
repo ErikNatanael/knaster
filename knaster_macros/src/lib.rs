@@ -444,19 +444,25 @@ if index == 3 && !path.path.segments.iter().any(|seg| seg.ident == "Frame" || se
                                     if ref_type2.mutability.is_some() {
                                         if let Some(num_output_channels) = num_output_channels {
                                             if num_channels != num_output_channels {
-                                                panic!(
+                                    return Err(syn::Error::new(
+                                        ref_type2.span(),
                                                     "number of output chanels in process and process_block methods don't match"
-                                                );
+                                                ));
                                             }
                                         }
                                         process_args.push(quote! { output_array, });
-                                    } else if let Some(num_input_channels) = num_input_channels {
+                                    } else 
+                                        {
+                                            if let Some(num_input_channels) = num_input_channels {
                                         if num_channels != num_input_channels {
-                                            panic!(
+                                    return Err(syn::Error::new(
+                                        ref_type2.span(),
                                                 "number of input chanels in process and process_block methods don't match"
-                                            );
+                                                ));
                                         }
+                                            }
                                         process_args.push(quote! { input_array, });
+
                                     }
                                     // TODO: check that it's a slice of F/f32/f64
                                 }
@@ -487,29 +493,44 @@ if index == 3 && !path.path.segments.iter().any(|seg| seg.ident == "Frame" || se
                 .map(|_i: usize| quote! { outputs.next().unwrap(), })
                 .collect::<Vec<_>>();
 
-            quote! {
-
-            fn process_block<InBlock, OutBlock>(
-                &mut self,
-                _ctx: &mut #crate_ident::AudioCtx,
-                _flags: &mut #crate_ident::UGenFlags,
-                input: &InBlock,
-                output: &mut OutBlock,
-            ) where
-                InBlock: #crate_ident::BlockRead<Sample = Self::Sample>,
-                OutBlock: #crate_ident::Block<Sample = Self::Sample>,
-            {
-                            let input_array: [&[F]; #num_input_channels ] = [ #(#input_array_elements)* ];
+            let input_array = if num_input_channels == 0 {
+                    quote!{}
+                } else {
+                    quote! {
+                    let input_array: [&[F]; #num_input_channels ] = [ #(#input_array_elements)* ];
+                    }
+                };
+            let output_array = if num_output_channels == 0 {
+                    quote!{}
+                } else {
+                    quote! {
                     let mut outputs = output.iter_mut();
                     let output_array: [&mut[F]; #num_output_channels ]= [ #(#output_array_elements)* ];
-                            Self:: #process_block_fn_name (self,  #(#process_args)* ).into()
-                        }
                     }
+                };
+
+            quote! {
+
+                fn process_block<InBlock, OutBlock>(
+                    &mut self,
+                    _ctx: &mut #crate_ident::AudioCtx,
+                    _flags: &mut #crate_ident::UGenFlags,
+                    input: &InBlock,
+                    output: &mut OutBlock,
+                ) where
+                    InBlock: #crate_ident::BlockRead<Sample = Self::Sample>,
+                    OutBlock: #crate_ident::Block<Sample = Self::Sample>,
+                {
+                    let input_array: [&[F]; #num_input_channels ] = [ #(#input_array_elements)* ];
+                    let mut outputs = output.iter_mut();
+                    let output_array: [&mut[F]; #num_output_channels ]= [ #(#output_array_elements)* ];
+                    Self:: #process_block_fn_name (self,  #(#process_args)* ).into()
+                }
+            }
             } else {
                 // The provided function matches the UGen process_block, paste it as is
                 remove_process_block_fn = true;
                 quote!{ #process_block_fn }
-                // quote! {}
             }
         }
         None => quote! {},
@@ -548,6 +569,7 @@ if index == 3 && !path.path.segments.iter().any(|seg| seg.ident == "Frame" || se
                     ParameterType::Float64 => quote! { _value.float().unwrap() as f64 },
                     ParameterType::Float32 => quote! { _value.float().unwrap() as f32 },
                     ParameterType::Integer => quote! { _value.integer().unwrap() },
+                    ParameterType::Bool => quote! { _value.bool().unwrap() },
                     ParameterType::Trigger => quote! {},
                 },
                 ParameterArgumentTypes::Ctx => quote! { ctx },
@@ -607,6 +629,7 @@ if index == 3 && !path.path.segments.iter().any(|seg| seg.ident == "Frame" || se
                 }
             }
             ParameterType::Trigger => quote! { #crate_ident::ParameterHint::Trigger },
+            ParameterType::Bool => quote! { #crate_ident::ParameterHint::Bool },
         })
         .collect::<Vec<_>>();
 
@@ -804,6 +827,12 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
                                 .arguments
                                 .push(ParameterArgumentTypes::Parameter(ParameterType::Integer));
                             num_parameter_value_arguments += 1;
+                        } else if path.path.segments.iter().any(|seg| seg.ident == "bool") {
+                            pdata.ty = ParameterType::Bool;
+                            pdata
+                                .arguments
+                                .push(ParameterArgumentTypes::Parameter(ParameterType::Bool));
+                            num_parameter_value_arguments += 1;
                         } else {
                             return Err(syn::Error::new(
                                 input.span(),
@@ -911,6 +940,7 @@ enum ParameterType {
     Float32,
     Trigger,
     Integer,
+    Bool,
 }
 fn get_knaster_crate_name() -> proc_macro2::TokenStream {
     match crate_name("knaster") {

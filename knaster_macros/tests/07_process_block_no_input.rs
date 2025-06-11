@@ -1,4 +1,7 @@
-use knaster_core::{AudioCtx, Float, PFloat, ParameterValue, UGen, UGenFlags, log::ArLogSender};
+use knaster_core::{
+    AudioCtx, Block, BlockRead, Float, PFloat, ParameterValue, StaticBlock, UGen, UGenFlags,
+    log::ArLogSender, typenum::*,
+};
 
 /// Outputs a static number every frame
 pub(crate) struct TestInPlusParamGen<F> {
@@ -23,17 +26,21 @@ impl<F: Float> TestInPlusParamGen<F> {
         self.number = F::new(n);
     }
     #[param]
-    pub fn keep_number(&mut self, t: bool) {
-        if !t {
-            self.number = F::ZERO;
-        }
-    }
-    #[param]
     pub fn t_reset(&mut self) {
         self.number = F::new(0.);
     }
-    fn process(&mut self, _ctx: &mut AudioCtx, _flags: &mut UGenFlags, input: [F; 1]) -> [F; 1] {
-        [self.number + input[0]]
+    fn process(&mut self, _ctx: &mut AudioCtx, _flags: &mut UGenFlags) -> [F; 1] {
+        [self.number]
+    }
+    fn process_block(
+        &mut self,
+        _ctx: &mut AudioCtx,
+        _flags: &mut UGenFlags,
+        outputs: [&mut [F]; 1],
+    ) {
+        for out in outputs[0].iter_mut() {
+            *out = self.number;
+        }
     }
 }
 
@@ -49,24 +56,19 @@ fn main() {
     );
     assert_eq!(
         TestInPlusParamGen::<f32>::param_descriptions()[3],
-        "keep_number"
-    );
-    assert_eq!(
-        TestInPlusParamGen::<f32>::param_descriptions()[4],
         "t_reset"
     );
     let mut ctx = AudioCtx::new(44100, 64, ArLogSender::non_rt());
     let mut flags = UGenFlags::new();
-    let mut ugen = TestInPlusParamGen::<f32>::new();
-    assert_eq!(ugen.process(&mut ctx, &mut flags, [7.]), [7.]);
+    let mut ugen = TestInPlusParamGen::<f64>::new();
     ugen.number(2.);
-    assert_eq!(
-        UGen::process(&mut ugen, &mut ctx, &mut flags, [17.].into())[0],
-        17. + 2.
-    );
     ugen.param_apply(&mut ctx, 0, ParameterValue::Float(3.));
     assert_eq!(
-        UGen::process(&mut ugen, &mut ctx, &mut flags, [17.].into())[0],
-        17. + 3.
+        UGen::process(&mut ugen, &mut ctx, &mut flags, [].into())[0],
+        3.
     );
+    let mut input = StaticBlock::<f64, U1, U64>::new();
+    input.channel_as_slice_mut(0).fill(17.0);
+    let mut output = StaticBlock::<f64, U1, U64>::new();
+    UGen::process_block(&mut ugen, &mut ctx, &mut flags, &input, &mut output);
 }

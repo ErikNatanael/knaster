@@ -4,10 +4,8 @@
 
 use crate::core::marker::PhantomData;
 use crate::core::sync::atomic::AtomicU64;
-use crate::numeric_array::NumericArray;
-use crate::typenum::{U0, U1};
-use crate::{AudioCtx, PFloat, ParameterHint, ParameterValue, UGen, UGenFlags};
-use knaster_primitives::{Float, Frame};
+use crate::{AudioCtx, PFloat, UGenFlags};
+use knaster_primitives::Float;
 
 /// Used to seed random number generating Gens to create a deterministic result as long as all Gens are created in the same order from start.
 static NEXT_SEED: AtomicU64 = AtomicU64::new(0);
@@ -29,6 +27,7 @@ pub struct WhiteNoise<F: Copy = f32> {
     rng: fastrand::Rng,
     _marker: PhantomData<F>,
 }
+#[knaster_macros::impl_ugen]
 impl<F: Float> WhiteNoise<F> {
     #[allow(missing_docs)]
     pub fn new() -> Self {
@@ -38,33 +37,15 @@ impl<F: Float> WhiteNoise<F> {
             _marker: PhantomData,
         }
     }
+    fn process(&mut self) -> [F; 1] {
+        [F::new(self.rng.f32() * 2.0 - 1.0)]
+    }
 }
 
 impl<F: Float> Default for WhiteNoise<F> {
     fn default() -> Self {
         Self::new()
     }
-}
-impl<F: Float> UGen for WhiteNoise<F> {
-    type Sample = F;
-    type Inputs = U0;
-    type Outputs = U1;
-    type Parameters = U0;
-
-    fn process(
-        &mut self,
-        _ctx: &mut AudioCtx,
-        _flags: &mut UGenFlags,
-        _input: Frame<Self::Sample, Self::Inputs>,
-    ) -> Frame<Self::Sample, Self::Outputs> {
-        [F::new(self.rng.f32() * 2.0 - 1.0)].into()
-    }
-
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
-        [].into()
-    }
-
-    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: ParameterValue) {}
 }
 const PINK_NOISE_OCTAVES: u32 = 9;
 /// Pink noise

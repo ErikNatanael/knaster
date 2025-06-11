@@ -54,25 +54,6 @@ impl PIntegerConvertible for usize {
         None
     }
 }
-impl From<PInteger> for bool {
-    fn from(val: PInteger) -> Self {
-        val.0 > 0
-    }
-}
-impl From<bool> for PInteger {
-    fn from(val: bool) -> Self {
-        PInteger(if val { 1 } else { 0 })
-    }
-}
-impl PIntegerConvertible for bool {
-    fn pinteger_range() -> (PInteger, PInteger) {
-        (PInteger(0), PInteger(1))
-    }
-
-    fn pinteger_descriptions(v: PInteger) -> Option<&'static str> {
-        Some(if v.0 > 0 { "True" } else { "False" })
-    }
-}
 
 #[derive(Debug, Clone, Error)]
 pub enum ParameterError {
@@ -213,6 +194,8 @@ pub enum ParameterHint {
     /// Triggers do not have a range
     Trigger,
     Integer(PIntegerHint),
+    /// Boolean hints are unnecessary
+    Bool,
 }
 impl ParameterHint {
     pub fn new_float(with: impl FnOnce(PFloatHint) -> PFloatHint) -> Self {
@@ -253,13 +236,14 @@ impl ParameterHint {
         Self::new_float(|h| h.minmax(0.0, 1.))
     }
     pub fn boolean() -> Self {
-        Self::from_pinteger_enum::<bool>()
+        Self::Bool
     }
     pub fn ty(self) -> ParameterType {
         match self {
             ParameterHint::Float(_) => ParameterType::Float,
             ParameterHint::Trigger => ParameterType::Trigger,
             ParameterHint::Integer(_) => ParameterType::Integer,
+            ParameterHint::Bool => ParameterType::Bool,
         }
     }
     pub fn float_hint(&self) -> Option<&PFloatHint> {

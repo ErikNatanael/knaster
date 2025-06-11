@@ -1,9 +1,11 @@
+//! This module contains UGens for basic maths on a signal. These are usually used through methods
+//! or operators, rather than manually pushing and connecting UGens.
 use core::marker::PhantomData;
 
 use knaster_primitives::{
+    Float, Size,
     numeric_array::NumericArray,
     typenum::{Double, U0, U1},
-    Float, Size,
 };
 
 use crate::UGen;
@@ -84,11 +86,13 @@ impl<T: Float> Operation<T> for Pow {
 /// Inputs are arranged in the order a0, a1, a2, b0, b1, b2 such that a and b
 /// are arguments (usually from different UGens). E.g. for addition: a0 + b0, a1
 /// + b1, a2 + b2. `Channels` is the number of output channels or the number of
+///
 /// pairs of input channels.
 pub struct MathUGen<F: Float, Channels: Size, Op: Operation<F>> {
     marker: PhantomData<(NumericArray<F, Channels>, Op)>,
 }
 impl<F: Float, Channels: Size, Op: Operation<F>> MathUGen<F, Channels, Op> {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             marker: PhantomData,
@@ -153,8 +157,7 @@ where
     fn param_hints() -> NumericArray<crate::ParameterHint, Self::Parameters> {
         NumericArray::from([])
     }
-    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: crate::ParameterValue) {
-    }
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: crate::ParameterValue) {}
 }
 
 /// Mathematical operation applied to a single number (e.g. sqrt, fract, ceil)
@@ -240,13 +243,14 @@ impl<T: Float> Operation1<T> for Exp {
 /// Applies standard mathematical operations, selected by `Op`, on its inputs.
 ///
 /// Inputs are arranged in the order a0, a1, a2, b0, b1, b2 such that a and b
-/// are arguments (usually from different UGens). E.g. for addition: a0 + b0, a1
-/// + b1, a2 + b2. `Channels` is the number of output channels or the number of
+/// are arguments (usually from different UGens). E.g. for addition: a0 + b0, a1 + b1, a2 + b2. `Channels` is the number of output channels or the number of
 /// pairs of input channels.
+///
 pub struct Math1UGen<F: Float, Op: Operation1<F>> {
     marker: PhantomData<(F, Op)>,
 }
 impl<F: Float, Op: Operation1<F>> Math1UGen<F, Op> {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             marker: PhantomData,
@@ -294,6 +298,5 @@ impl<F: Float, Op: Operation1<F>> UGen for Math1UGen<F, Op> {
     fn param_hints() -> NumericArray<crate::ParameterHint, Self::Parameters> {
         NumericArray::from([])
     }
-    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: crate::ParameterValue) {
-    }
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: crate::ParameterValue) {}
 }

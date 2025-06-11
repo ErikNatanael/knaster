@@ -1,9 +1,8 @@
-use core::marker::PhantomData;
-
 use crate::numeric_array::NumericArray;
-use crate::{AudioCtx, PInteger, ParameterHint, ParameterValue, UGen, UGenFlags};
-use knaster_primitives::typenum::{U0, U1, U3, U4};
-use knaster_primitives::{Block, BlockRead, Float, Frame};
+use crate::{AudioCtx, ParameterHint, ParameterValue, UGen, UGenFlags};
+use knaster_macros::impl_ugen;
+use knaster_primitives::typenum::{U0, U1, U3};
+use knaster_primitives::{Block, BlockRead, Float, Frame, PFloat};
 
 #[derive(Debug, Clone, Copy)]
 enum AsrState {
@@ -25,11 +24,9 @@ pub struct EnvAsr<F: Copy> {
     /// On early release, we need to scale the release value by the value we were on because the curves are different
     release_scale: F,
 }
+
+#[impl_ugen]
 impl<F: Float> EnvAsr<F> {
-    pub const ATTACK_TIME: usize = 0;
-    pub const RELEASE_TIME: usize = 1;
-    pub const T_RELEASE: usize = 2;
-    pub const T_RESTART: usize = 3;
     pub fn new(attack_time: F, release_time: F) -> Self {
         Self {
             state: AsrState::Stopped,
@@ -75,13 +72,54 @@ impl<F: Float> EnvAsr<F> {
         }
         out
     }
-}
 
-impl<F: Float> UGen for EnvAsr<F> {
-    type Sample = F;
-    type Inputs = U0;
-    type Outputs = U1;
-    type Parameters = U4;
+    #[param(kind = Seconds)]
+    pub fn attack_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
+        let atk = F::new(seconds);
+        if self.attack_seconds != atk {
+            self.attack_seconds = atk;
+            if atk == F::ZERO {
+                self.attack_rate = F::ONE;
+            } else {
+                self.attack_rate =
+                    F::ONE / (self.attack_seconds * F::from(ctx.sample_rate).unwrap());
+            }
+        }
+    }
+    #[param(kind = Seconds)]
+    pub fn release_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
+        let rel = F::new(seconds);
+        if self.release_seconds != rel {
+            self.release_seconds = rel;
+            if rel == F::ZERO {
+                self.release_rate = F::ONE;
+            } else {
+                self.release_rate =
+                    F::ONE / (self.release_seconds * F::from(ctx.sample_rate).unwrap());
+            }
+        }
+    }
+    #[param]
+    pub fn t_release(&mut self) {
+        match self.state {
+            AsrState::Stopped => {}
+            AsrState::Attacking => {
+                self.release_scale = F::new(self.t);
+                self.state = AsrState::Releasing;
+                self.t = F::ONE;
+            }
+            AsrState::Sustaining => {
+                self.release_scale = F::ONE;
+                self.state = AsrState::Releasing;
+                self.t = F::ONE;
+            }
+            AsrState::Releasing => {}
+        }
+    }
+    #[param]
+    pub fn t_restart(&mut self) {
+        self.trig_start();
+    }
 
     fn init(&mut self, sample_rate: u32, _block_size: usize) {
         // Init rate based on the seconds if the rate hasn't already been set through a param
@@ -101,90 +139,18 @@ impl<F: Float> UGen for EnvAsr<F> {
         }
     }
 
-    fn process(
-        &mut self,
-        _ctx: &mut AudioCtx,
-        flags: &mut UGenFlags,
-        _input: Frame<Self::Sample, Self::Inputs>,
-    ) -> Frame<Self::Sample, Self::Outputs> {
+    fn process(&mut self, _ctx: &mut AudioCtx, flags: &mut UGenFlags) -> [F; 1] {
         let out = self.next_sample(flags, 0);
-        [out].into()
+        [out]
     }
-    fn process_block<InBlock, OutBlock>(
-        &mut self,
-        _ctx: &mut AudioCtx,
-        flags: &mut UGenFlags,
-        _input: &InBlock,
-        output: &mut OutBlock,
-    ) where
-        InBlock: BlockRead<Sample = Self::Sample>,
-        OutBlock: Block<Sample = Self::Sample>,
-    {
-        for (i, out) in output.channel_as_slice_mut(0).iter_mut().enumerate() {
+
+    fn process_block(&mut self, _ctx: &mut AudioCtx, flags: &mut UGenFlags, output: [&mut [F]; 1]) {
+        for (i, out) in output[0].iter_mut().enumerate() {
             *out = self.next_sample(flags, i as u32);
         }
     }
-
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
-        ["attack_time", "release_time", "t_release", "t_restart"].into()
-    }
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
-        [
-            ParameterHint::positive_infinite_float(),
-            ParameterHint::positive_infinite_float(),
-            ParameterHint::Trigger,
-            ParameterHint::Trigger,
-        ]
-        .into()
-    }
-
-    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
-        match index {
-            Self::ATTACK_TIME => {
-                let atk = F::new(value.float().unwrap());
-                if self.attack_seconds != atk {
-                    self.attack_seconds = atk;
-                    if atk == F::ZERO {
-                        self.attack_rate = F::ONE;
-                    } else {
-                        self.attack_rate =
-                            F::ONE / (self.attack_seconds * F::from(ctx.sample_rate).unwrap());
-                    }
-                }
-            }
-            Self::RELEASE_TIME => {
-                let rel = F::new(value.float().unwrap());
-                if self.release_seconds != rel {
-                    self.release_seconds = rel;
-                    if rel == F::ZERO {
-                        self.release_rate = F::ONE;
-                    } else {
-                        self.release_rate =
-                            F::ONE / (self.release_seconds * F::from(ctx.sample_rate).unwrap());
-                    }
-                }
-            }
-            Self::T_RELEASE => match self.state {
-                AsrState::Stopped => {}
-                AsrState::Attacking => {
-                    self.release_scale = F::new(self.t);
-                    self.state = AsrState::Releasing;
-                    self.t = F::ONE;
-                }
-                AsrState::Sustaining => {
-                    self.release_scale = F::ONE;
-                    self.state = AsrState::Releasing;
-                    self.t = F::ONE;
-                }
-                AsrState::Releasing => {}
-            },
-            Self::T_RESTART => {
-                self.trig_start();
-            }
-            _ => (),
-        }
-    }
 }
+
 #[derive(Debug, Clone, Copy)]
 enum ArState {
     Stopped,
@@ -410,6 +376,7 @@ mod alloc_envelopes {
         current_segment: usize,
         time_scale: f64,
         base_scale: f64,
+        looping: bool,
         _float: PhantomData<F>,
     }
     impl<F: Float> Envelope<F> {
@@ -422,11 +389,16 @@ mod alloc_envelopes {
                 current_segment: 0,
                 time_scale: 1.0,
                 base_scale: 0.0,
+                looping: false,
                 _float: PhantomData,
             }
         }
         pub fn time_scale(mut self, time_scale: f64) -> Self {
             self.time_scale = time_scale;
+            self
+        }
+        pub fn looping(mut self, looping: bool) -> Self {
+            self.looping = looping;
             self
         }
     }
@@ -483,8 +455,15 @@ mod alloc_envelopes {
                     } else {
                         self.from_value = self.segments[current_segment].value;
                         out = F::new(self.from_value);
-                        self.state = EnvelopeState::Stopped;
-                        flags.mark_done(0);
+                        if self.looping {
+                            self.state = EnvelopeState::Running {
+                                current_segment: 0,
+                                current_time: 0.,
+                            };
+                        } else {
+                            self.state = EnvelopeState::Stopped;
+                            flags.mark_done(0);
+                        }
                     }
                 }
             }

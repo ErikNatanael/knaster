@@ -4,14 +4,10 @@
 //!
 
 use crate::num_derive::{FromPrimitive, ToPrimitive};
-use crate::numeric_array::NumericArray;
-use crate::typenum::{U1, U5};
-use crate::{
-    AudioCtx, PInteger, PIntegerConvertible, ParameterHint, ParameterValue, UGen, UGenFlags,
-};
-use knaster_macros::KnasterIntegerParameter;
-use knaster_primitives::num_traits;
-use knaster_primitives::{Float, Frame};
+use crate::{AudioCtx, PInteger};
+use knaster_macros::{KnasterIntegerParameter, impl_ugen};
+use knaster_primitives::Float;
+use knaster_primitives::{PFloat, num_traits};
 use std::prelude::v1::*;
 
 /// Different supported filter types
@@ -62,12 +58,8 @@ pub struct SvfFilter<F: Copy> {
     m2: F,
 }
 
+#[impl_ugen]
 impl<F: Float> SvfFilter<F> {
-    const CUTOFF_FREQ: usize = 0;
-    const Q: usize = 1;
-    const GAIN: usize = 2;
-    const FILTER: usize = 3;
-    const T_CALCULATE_COEFFICIENTS: usize = 4;
     #[allow(missing_docs)]
     pub fn new(ty: SvfFilterType, cutoff_freq: F, q: F, gain_db: F) -> Self {
         Self {
@@ -84,6 +76,66 @@ impl<F: Float> SvfFilter<F> {
             q,
             gain_db,
         }
+    }
+    #[param(kind = Frequency)]
+    pub fn cutoff_freq(&mut self, cutoff_freq: PFloat, ctx: &AudioCtx) {
+        self.cutoff_freq = F::new(cutoff_freq);
+        self.set_coeffs(
+            self.cutoff_freq,
+            self.q,
+            self.gain_db,
+            F::from(ctx.sample_rate).unwrap(),
+        );
+    }
+    #[param]
+    pub fn q(&mut self, q: PFloat, ctx: &AudioCtx) {
+        self.q = F::new(q);
+        self.set_coeffs(
+            self.cutoff_freq,
+            self.q,
+            self.gain_db,
+            F::from(ctx.sample_rate).unwrap(),
+        );
+    }
+    #[param]
+    pub fn gain(&mut self, gain_db: PFloat, ctx: &AudioCtx) {
+        self.gain_db = F::new(gain_db);
+        self.set_coeffs(
+            self.cutoff_freq,
+            self.q,
+            self.gain_db,
+            F::from(ctx.sample_rate).unwrap(),
+        );
+    }
+    #[param]
+    pub fn filter(&mut self, filter: PInteger, ctx: &AudioCtx) {
+        self.ty = SvfFilterType::from(filter);
+        self.set_coeffs(
+            self.cutoff_freq,
+            self.q,
+            self.gain_db,
+            F::from(ctx.sample_rate).unwrap(),
+        );
+    }
+    #[param]
+    pub fn t_calculate_coefficients(&mut self, ctx: &AudioCtx) {
+        self.set_coeffs(
+            self.cutoff_freq,
+            self.q,
+            self.gain_db,
+            F::from(ctx.sample_rate).unwrap(),
+        );
+    }
+    fn init(&mut self, sample_rate: u32, _block_size: usize) {
+        self.set_coeffs(
+            self.cutoff_freq,
+            self.q,
+            self.gain_db,
+            F::from(sample_rate).unwrap(),
+        );
+    }
+    fn process(&mut self, input: [F; 1]) -> [F; 1] {
+        [self.process_sample(input[0])]
     }
     /// Set the coefficients for the currently set filter type. `gain_db` is only used for Bell, HighShelf and LowShelf.
     pub fn set_coeffs(&mut self, cutoff: F, q: F, gain_db: F, sample_rate: F) {
@@ -208,98 +260,6 @@ impl<F: Float> SvfFilter<F> {
 
                 *m0 * v0 + *m1 * v1 + *m2 * v2
             })
-        }
-    }
-}
-impl<F: Float> UGen for SvfFilter<F> {
-    type Sample = F;
-    type Inputs = U1;
-    type Outputs = U1;
-    type Parameters = U5;
-
-    fn init(&mut self, sample_rate: u32, _block_size: usize) {
-        self.set_coeffs(
-            self.cutoff_freq,
-            self.q,
-            self.gain_db,
-            F::from(sample_rate).unwrap(),
-        );
-    }
-    fn process(
-        &mut self,
-        _ctx: &mut AudioCtx,
-        _flags: &mut UGenFlags,
-        input: Frame<Self::Sample, Self::Inputs>,
-    ) -> Frame<Self::Sample, Self::Outputs> {
-        [self.process_sample(input[0])].into()
-    }
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
-        [
-            ParameterHint::new_float(|h| h.nyquist()),
-            ParameterHint::positive_infinite_float(),
-            ParameterHint::infinite_float(),
-            ParameterHint::from_pinteger_enum::<SvfFilterType>(),
-            ParameterHint::Trigger,
-        ]
-        .into()
-    }
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
-        [
-            "cutoff_freq",
-            "q",
-            "gain_db",
-            "filter",
-            "t_calculate_coefficients",
-        ]
-        .into()
-    }
-
-    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
-        match index {
-            Self::CUTOFF_FREQ => {
-                self.cutoff_freq = F::new(value.float().unwrap());
-                self.set_coeffs(
-                    self.cutoff_freq,
-                    self.q,
-                    self.gain_db,
-                    F::from(ctx.sample_rate).unwrap(),
-                );
-            }
-            Self::Q => {
-                self.q = F::new(value.float().unwrap());
-                self.set_coeffs(
-                    self.cutoff_freq,
-                    self.q,
-                    self.gain_db,
-                    F::from(ctx.sample_rate).unwrap(),
-                );
-            }
-            Self::GAIN => {
-                self.gain_db = F::new(value.float().unwrap());
-
-                self.set_coeffs(
-                    self.cutoff_freq,
-                    self.q,
-                    self.gain_db,
-                    F::from(ctx.sample_rate).unwrap(),
-                );
-            }
-            Self::FILTER => {
-                self.ty = SvfFilterType::from(value.integer().unwrap());
-                self.set_coeffs(
-                    self.cutoff_freq,
-                    self.q,
-                    self.gain_db,
-                    F::from(ctx.sample_rate).unwrap(),
-                );
-            }
-            Self::T_CALCULATE_COEFFICIENTS => self.set_coeffs(
-                self.cutoff_freq,
-                self.q,
-                self.gain_db,
-                F::from(ctx.sample_rate).unwrap(),
-            ),
-            _ => (),
         }
     }
 }

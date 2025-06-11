@@ -1,125 +1,60 @@
 use crate::core::marker::PhantomData;
-use crate::{ParameterHint, ParameterValue, rt_log};
+use crate::rt_log;
 
-use knaster_primitives::{
-    Float, Frame,
-    numeric_array::NumericArray,
-    typenum::{U0, U1},
-};
+use knaster_macros::impl_ugen;
+use knaster_primitives::Float;
+use knaster_primitives::PFloat;
 
-use crate::{AudioCtx, UGen, UGenFlags};
+use crate::{AudioCtx, UGenFlags};
 
 /// Sets the done flag when it receives a trigger. Use in combination with `Graph::push_with_done_action` or [`WrDone`] and a [`Done`] which frees more than the current node.
 pub struct DoneOnTrig<F> {
     triggered: bool,
     _phantom: PhantomData<F>,
 }
+#[knaster_macros::impl_ugen]
 impl<F: Float> DoneOnTrig<F> {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             triggered: false,
             _phantom: PhantomData,
         }
     }
-}
-impl<F: Float> UGen for DoneOnTrig<F> {
-    type Sample = F;
-
-    type Inputs = U0;
-
-    type Outputs = U0;
-
-    type Parameters = U1;
-
-    fn process(
-        &mut self,
-        _ctx: &mut AudioCtx,
-        flags: &mut UGenFlags,
-        _input: Frame<Self::Sample, Self::Inputs>,
-    ) -> Frame<Self::Sample, Self::Outputs> {
+    #[param]
+    pub fn t_done(&mut self) {
+        self.triggered = true;
+    }
+    pub fn process(&mut self, flags: &mut UGenFlags, _input: [F; 0]) -> [F; 0] {
         if self.triggered {
             flags.mark_done(0);
         }
-        [].into()
-    }
-    fn process_block<InBlock, OutBlock>(
-        &mut self,
-        ctx: &mut AudioCtx,
-        flags: &mut UGenFlags,
-        _input: &InBlock,
-        _output: &mut OutBlock,
-    ) where
-        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
-    {
-        if self.triggered {
-            flags.mark_done(ctx.block_start_offset() as u32);
-        }
-    }
-
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
-        [ParameterHint::Trigger].into()
-    }
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
-        ["t_done"].into()
-    }
-
-    fn param_apply(&mut self, _ctx: &mut AudioCtx, index: usize, _value: ParameterValue) {
-        if index == 0 {
-            self.triggered = true
-        }
+        []
     }
 }
 
 pub struct Constant<F: Float> {
     value: F,
 }
+#[impl_ugen]
 impl<F: Float> Constant<F> {
     pub fn new(value: F) -> Self {
         Self { value }
     }
-}
-impl<F: Float> UGen for Constant<F> {
-    type Sample = F;
-
-    type Inputs = U0;
-
-    type Outputs = U1;
-
-    type Parameters = U1;
-
-    fn process(
+    #[param]
+    pub fn value(&mut self, value: PFloat) {
+        self.value = F::new(value);
+    }
+    pub fn process(
         &mut self,
         _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
-        _input: Frame<Self::Sample, Self::Inputs>,
-    ) -> Frame<Self::Sample, Self::Outputs> {
-        [self.value].into()
+        _input: [F; 0],
+    ) -> [F; 1] {
+        [self.value]
     }
-    fn process_block<InBlock, OutBlock>(
-        &mut self,
-        _ctx: &mut AudioCtx,
-        _flags: &mut UGenFlags,
-        _input: &InBlock,
-        output: &mut OutBlock,
-    ) where
-        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
-    {
-        output.channel_as_slice_mut(0).fill(self.value);
-    }
-
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
-        [ParameterHint::infinite_float()].into()
-    }
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
-        ["value"].into()
-    }
-
-    fn param_apply(&mut self, _ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
-        if index == 0 {
-            self.value = value.f().unwrap();
-        }
+    pub fn process_block(&mut self, output: [&mut [F]; 1]) {
+        output[0].fill(self.value);
     }
 }
 

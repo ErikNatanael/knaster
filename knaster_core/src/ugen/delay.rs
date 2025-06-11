@@ -1,7 +1,6 @@
-use crate::numeric_array::NumericArray;
-use crate::typenum::{U1, U2};
-use crate::{AudioCtx, PFloat, ParameterHint, ParameterValue, UGen, UGenFlags};
-use knaster_primitives::{Float, Frame, Seconds};
+use crate::{AudioCtx, PFloat, UGenFlags};
+use knaster_macros::impl_ugen;
+use knaster_primitives::{Float, Seconds};
 use std::prelude::v1::*;
 
 /// Delay by an integer number of samples, no interpolation. This is good for e.g. triggers.
@@ -14,6 +13,7 @@ pub struct SampleDelay<F: Copy = f32> {
     max_delay_length: Seconds,
 }
 
+#[impl_ugen]
 impl<F: Float> SampleDelay<F> {
     pub const DELAY_TIME: usize = 0;
     /// Create a new SampleDelay with a maximum delay time.
@@ -25,45 +25,21 @@ impl<F: Float> SampleDelay<F> {
             delay_samples: 0,
         }
     }
-}
-impl<F: Float> UGen for SampleDelay<F> {
-    type Sample = F;
-    type Inputs = U1;
-    type Outputs = U1;
-    type Parameters = U1;
-    fn process(
-        &mut self,
-        _ctx: &mut AudioCtx,
-        _flags: &mut UGenFlags,
-        input: Frame<Self::Sample, Self::Inputs>,
-    ) -> Frame<Self::Sample, Self::Outputs> {
+    #[param]
+    pub fn delay_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
+        self.delay_samples = (seconds * ctx.sample_rate as PFloat) as usize;
+    }
+    fn process(&mut self, _ctx: &mut AudioCtx, _flags: &mut UGenFlags, input: [F; 1]) -> [F; 1] {
         self.buffer[self.write_position] = input[0];
         let out = self.buffer
             [(self.write_position + self.buffer.len() - self.delay_samples) % self.buffer.len()];
         self.write_position = (self.write_position + 1) % self.buffer.len();
-        [out].into()
+        [out]
     }
     fn init(&mut self, sample_rate: u32, _block_size: usize) {
         self.buffer =
             vec![F::ZERO; (self.max_delay_length.to_secs_f64() * sample_rate as f64) as usize];
         self.write_position = 0;
-    }
-
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
-        ["delay_time"].into()
-    }
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
-        [ParameterHint::positive_infinite_float()].into()
-    }
-
-    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
-        #[allow(clippy::single_match)]
-        match index {
-            0 => {
-                self.delay_samples = (value.float().unwrap() * ctx.sample_rate as PFloat) as usize;
-            }
-            _ => (),
-        }
     }
 }
 
@@ -118,6 +94,7 @@ pub struct AllpassDelay<F: Copy = f32> {
     max_delay_seconds: Seconds,
 }
 
+#[impl_ugen]
 impl<F: Float> AllpassDelay<F> {
     pub const DELAY_TIME: usize = 0;
     pub fn new(max_delay_seconds: Seconds) -> Self {
@@ -132,9 +109,21 @@ impl<F: Float> AllpassDelay<F> {
             max_delay_seconds,
         }
     }
-    pub fn init(&mut self, sample_rate: u64) {
-        let max_delay_samples = self.max_delay_seconds.to_samples(sample_rate);
+    pub fn init(&mut self, sample_rate: u32, _block_size: usize) {
+        let max_delay_samples = self.max_delay_seconds.to_samples(sample_rate as u64);
         self.buffer = vec![F::ZERO; max_delay_samples as usize];
+    }
+    fn process(&mut self, _ctx: &mut AudioCtx, _flags: &mut UGenFlags, input: [F; 1]) -> [F; 1] {
+        let out = self.read();
+        self.write_and_advance(input[0]);
+        [out]
+    }
+    #[param]
+    pub fn delay_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
+        let delay_frames = seconds * ctx.sample_rate as PFloat;
+        if (delay_frames as usize) < self.buffer.len() {
+            self.set_delay_in_frames(F::new(delay_frames));
+        }
     }
     /// Read the current frame from the delay and allpass interpolate. Read before `write_and_advance` for the correct sample.
     #[inline]
@@ -199,40 +188,6 @@ impl<F: Float> AllpassDelay<F> {
         self.write_frame = (self.write_frame + 1) % self.buffer.len();
     }
 }
-impl<F: Float> UGen for AllpassDelay<F> {
-    type Sample = F;
-    type Inputs = U1;
-    type Outputs = U1;
-    type Parameters = U1;
-
-    fn process(
-        &mut self,
-        _ctx: &mut AudioCtx,
-        _flags: &mut UGenFlags,
-        input: Frame<Self::Sample, Self::Inputs>,
-    ) -> Frame<Self::Sample, Self::Outputs> {
-        let out = self.read();
-        self.write_and_advance(input[0]);
-        [out].into()
-    }
-
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
-        [ParameterHint::positive_infinite_float()].into()
-    }
-
-    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
-        #[allow(clippy::single_match)]
-        match index {
-            Self::DELAY_TIME => {
-                let delay_frames = value.float().unwrap() * ctx.sample_rate as PFloat;
-                if (delay_frames as usize) < self.buffer.len() {
-                    self.set_delay_in_frames(F::new(delay_frames));
-                }
-            }
-            _ => (),
-        }
-    }
-}
 
 /// A Schroeder allpass delay with feedback. Wraps the `AllpassDelay`
 #[derive(Clone, Debug)]
@@ -242,6 +197,7 @@ pub struct AllpassFeedbackDelay<F: Copy = f32> {
     previous_delay_time: F,
     allpass_delay: AllpassDelay<F>,
 }
+#[impl_ugen]
 impl<F: Float> AllpassFeedbackDelay<F> {
     pub const DELAY_TIME: usize = 0;
     pub const FEEDBACK: usize = 1;
@@ -255,6 +211,22 @@ impl<F: Float> AllpassFeedbackDelay<F> {
             allpass_delay,
             previous_delay_time: F::from(max_delay_time.to_secs_f64()).unwrap(),
         }
+    }
+    #[param]
+    pub fn delay_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
+        self.set_delay_in_frames(F::new(seconds * ctx.sample_rate as f64));
+        self.previous_delay_time = F::new(seconds);
+    }
+    #[param]
+    pub fn feedback(&mut self, feedback: PFloat) {
+        self.feedback = F::new(feedback);
+    }
+    fn init(&mut self, sample_rate: u32, _block_size: usize) {
+        self.allpass_delay.init(sample_rate, _block_size);
+    }
+
+    fn process(&mut self, _ctx: &mut AudioCtx, _flags: &mut UGenFlags, input: [F; 1]) -> [F; 1] {
+        [self.process_sample(input[0])]
     }
     /// Set the delay length counted in frames/samples
     pub fn set_delay_in_frames(&mut self, delay_length: F) {
@@ -277,46 +249,6 @@ impl<F: Float> AllpassFeedbackDelay<F> {
         self.allpass_delay.write_and_advance(delay_write);
 
         delayed_sig - self.feedback * delay_write
-    }
-}
-impl<F: Float> UGen for AllpassFeedbackDelay<F> {
-    type Sample = F;
-    type Inputs = U1;
-    type Outputs = U1;
-    type Parameters = U2;
-
-    fn init(&mut self, sample_rate: u32, _block_size: usize) {
-        self.allpass_delay.init(sample_rate as u64);
-    }
-
-    fn process(
-        &mut self,
-        _ctx: &mut AudioCtx,
-        _flags: &mut UGenFlags,
-        input: Frame<Self::Sample, Self::Inputs>,
-    ) -> Frame<Self::Sample, Self::Outputs> {
-        [self.process_sample(input[0])].into()
-    }
-
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
-        [
-            ParameterHint::positive_infinite_float(),
-            ParameterHint::one(),
-        ]
-        .into()
-    }
-
-    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
-        match index {
-            0 => {
-                self.set_delay_in_frames(F::new(value.float().unwrap() * ctx.sample_rate as f64));
-                self.previous_delay_time = F::new(value.float().unwrap());
-            }
-            1 => {
-                self.feedback = F::new(value.float().unwrap());
-            }
-            _ => (),
-        }
     }
 }
 /// A sample delay with a static number of samples of delay

@@ -22,14 +22,11 @@ Permission has been granted to release this port under the WDL/IPlug license:
     3. This notice may not be removed or altered from any source distribution.
 */
 
+use crate::PInteger;
 use crate::core::ops::Mul;
 use crate::num_derive::{FromPrimitive, ToPrimitive};
-use crate::numeric_array::NumericArray;
-use crate::{
-    AudioCtx, PInteger, PIntegerConvertible, ParameterHint, ParameterValue, UGen, UGenFlags,
-};
-use knaster_macros::KnasterIntegerParameter;
-use knaster_primitives::{Float, Frame};
+use knaster_macros::{KnasterIntegerParameter, impl_ugen};
+use knaster_primitives::{Float, PFloat};
 use std::prelude::v1::*;
 
 fn square_number<T: Mul + Copy>(num: T) -> <T as Mul>::Output {
@@ -66,7 +63,6 @@ fn blamp<F: Float>(mut t: F, dt: F) -> F {
 fn bitwise_or_zero<F: Float>(t: F) -> F {
     t.trunc()
 }
-use crate::typenum::{U0, U1, U3};
 use knaster_primitives::num_traits;
 
 #[derive(
@@ -110,56 +106,8 @@ pub struct PolyBlep<F: Copy = f32> {
     pulse_width: F, // [0.0..1.0]
     t: F,           // The current phase [0.0..1.0) of the oscillator.
 }
-impl<F: Float> UGen for PolyBlep<F> {
-    type Sample = F;
-    type Inputs = U0;
-    type Outputs = U1;
-    type Parameters = U3;
-    fn init(&mut self, sample_rate: u32, _block_size: usize) {
-        self.sample_rate = F::from(sample_rate).unwrap();
-        if self.freq_in_seconds_per_sample == F::ZERO && self.freq_in_hz != F::ZERO {
-            self.set_frequency(self.freq_in_hz);
-        }
-    }
-
-    fn process(
-        &mut self,
-        _ctx: &mut AudioCtx,
-        _flags: &mut UGenFlags,
-        _input: Frame<Self::Sample, Self::Inputs>,
-    ) -> Frame<Self::Sample, Self::Outputs> {
-        [self.get_and_inc()].into()
-    }
-
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
-        [
-            ParameterHint::nyquist(),
-            ParameterHint::one(),
-            ParameterHint::from_pinteger_enum::<Waveform>(),
-        ]
-        .into()
-    }
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
-        ["freq", "pulse_width", "waveform"].into()
-    }
-
-    fn param_apply(&mut self, _ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
-        match index {
-            Self::FREQ => self.set_frequency(F::new(value.float().unwrap())),
-            Self::PULSE_WIDTH => {
-                self.set_pulse_width(F::new(value.float().unwrap()));
-            }
-            Self::WAVEFORM => {
-                self.waveform = Waveform::from(value.integer().unwrap());
-            }
-            _ => (),
-        }
-    }
-}
+#[impl_ugen]
 impl<F: Float> PolyBlep<F> {
-    pub const FREQ: usize = 0;
-    pub const PULSE_WIDTH: usize = 1;
-    pub const WAVEFORM: usize = 2;
     pub fn new(waveform: Waveform, freq: F) -> Self {
         Self {
             waveform,
@@ -170,27 +118,48 @@ impl<F: Float> PolyBlep<F> {
             t: F::ZERO,
         }
     }
+    fn init(&mut self, sample_rate: u32, _block_size: usize) {
+        self.sample_rate = F::from(sample_rate).unwrap();
+        if self.freq_in_seconds_per_sample == F::ZERO && self.freq_in_hz != F::ZERO {
+            self.set_freq(self.freq_in_hz);
+        }
+    }
+    pub fn process(&mut self) -> [F; 1] {
+        [self.get_and_inc()]
+    }
+
+    #[param(kind = Frequency)]
+    pub fn freq(&mut self, freq_in_hz: PFloat) {
+        self.set_freq(F::new(freq_in_hz));
+    }
+    #[param]
+    pub fn pulse_width(&mut self, pulse_width: PFloat) {
+        self.pulse_width = F::new(pulse_width);
+    }
+    #[param]
+    pub fn waveform(&mut self, waveform: PInteger) {
+        self.waveform = Waveform::from(waveform);
+    }
     pub fn set_dt(&mut self, time: F) {
         self.freq_in_seconds_per_sample = time;
     }
-
-    pub fn set_frequency(&mut self, freq_in_hz: F) {
-        self.freq_in_hz = freq_in_hz;
+    pub fn set_waveform(&mut self, waveform: Waveform) {
+        self.waveform = waveform;
+    }
+    #[inline]
+    pub fn set_freq(&mut self, freq_in_hz: F) {
+        self.freq_in_hz = F::new(freq_in_hz);
         self.set_dt(freq_in_hz / self.sample_rate);
     }
 
     pub fn set_sample_rate(&mut self, sample_rate: F) {
         let freq_in_hz = self.get_freq_in_hz();
         self.sample_rate = sample_rate;
-        self.set_frequency(freq_in_hz);
+        self.set_freq(freq_in_hz);
     }
 
     pub fn get_freq_in_hz(&self) -> F {
         self.freq_in_seconds_per_sample * self.sample_rate
-    }
-
-    pub fn set_pulse_width(&mut self, pulse_width: F) {
-        self.pulse_width = pulse_width;
     }
 
     pub fn sync(&mut self, phase: F) {
@@ -200,10 +169,6 @@ impl<F: Float> PolyBlep<F> {
         } else {
             self.t += F::ONE - bitwise_or_zero(self.t);
         }
-    }
-
-    pub fn set_waveform(&mut self, waveform: Waveform) {
-        self.waveform = waveform;
     }
 
     pub fn get(&mut self) -> F {
@@ -494,7 +459,7 @@ impl<F: Float> PolyBlep<F> {
         let mut y = F::new(2.0) * _t - F::ONE;
         y -= blep(_t, self.freq_in_seconds_per_sample);
 
-        return y;
+        y
     }
 
     fn ramp(&mut self) -> F {
@@ -504,6 +469,6 @@ impl<F: Float> PolyBlep<F> {
         let mut y = F::ONE - F::new(2.0) * _t;
         y += blep(_t, self.freq_in_seconds_per_sample);
 
-        return y;
+        y
     }
 }
