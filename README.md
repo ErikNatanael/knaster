@@ -34,6 +34,6 @@ Any contributions will, unless otherwise explicitly stated, be submitted and lic
 
 ## License
 
-Mostly MIT + Apache 2.0, but some crates are GPL. See each crate for more info.
+Knaster is licensed under MIT + Apache 2.0. Some crates in this repo, not necessary to use Knaster, are licensed under the GPL. See each crate for more info.
 
 The crates that are licensed under GPL are crates that port GPL DSP code as Knaster UGens.
