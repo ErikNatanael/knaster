@@ -270,7 +270,8 @@ fn apply_parameter_change<'a, 'b, F: Float>(
     let mut ready_to_apply = event.token.as_ref().is_none_or(|t| t.ready());
     let mut delay_in_block = 0;
     if let Some(time) = &mut event.time {
-        delay_in_block = time.to_samples_until_due(block_size, sample_rate, ctx.frame_clock());
+        delay_in_block =
+            time.to_samples_until_due(block_size, sample_rate, ctx.frame_clock(), ctx.logger());
         ready_to_apply = ready_to_apply && (delay_in_block < block_size);
     }
 
@@ -283,10 +284,10 @@ fn apply_parameter_change<'a, 'b, F: Float>(
                     g.set_delay_within_block_for_param(ctx, event.parameter, delay_in_block as u16);
                 }
                 if let Some(smoothing) = event.smoothing {
-                    g.param_apply(ctx.into(), event.parameter, smoothing.into());
+                    g.param_apply(ctx, event.parameter, smoothing.into());
                 }
                 if let Some(value) = event.value {
-                    g.param_apply(ctx.into(), event.parameter, value);
+                    g.param_apply(ctx, event.parameter, value);
                 }
                 return None;
             }

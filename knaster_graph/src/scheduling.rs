@@ -20,7 +20,8 @@ use crate::{
     graph::NodeKey,
 };
 
-use knaster_core::{ParameterError, ParameterSmoothing, ParameterValue, Seconds};
+use knaster_core::log::ArLogSender;
+use knaster_core::{ParameterError, ParameterSmoothing, ParameterValue, Seconds, rt_log};
 
 #[derive(Debug, Clone)]
 pub struct SchedulingEvent {
@@ -85,21 +86,26 @@ impl Time {
         block_size: u64,
         sample_rate: u64,
         frame_clock: u64,
+        logger: &mut ArLogSender,
     ) -> u64 {
         if self.absolute {
             let t = self.seconds.to_samples(sample_rate);
-            // TODO: Real logging
             #[cfg(debug_assertions)]
             if t < frame_clock {
-                log::warn!("Event was scheduled late {}, {}", t, frame_clock);
+                rt_log!(logger; "Event was scheduled late. Scheduled for ", t, ", current time is ", frame_clock);
             }
             t.saturating_sub(frame_clock)
         } else {
-            let samples = self.seconds.to_samples(sample_rate);
-            self.seconds = self
-                .seconds
-                .saturating_sub(Seconds::from_samples(block_size, sample_rate));
-            samples
+            #[allow(clippy::collapsible_else_if)]
+            if self.seconds == Seconds::ZERO {
+                0
+            } else {
+                let samples = self.seconds.to_samples(sample_rate);
+                self.seconds = self
+                    .seconds
+                    .saturating_sub(Seconds::from_samples(block_size, sample_rate));
+                samples
+            }
         }
     }
     pub fn absolute(seconds: Seconds) -> Self {
