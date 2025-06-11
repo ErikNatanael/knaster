@@ -1,4 +1,4 @@
-use crate::log::{ArLogReceiver, ArLogSender};
+use crate::log::ArLogSender;
 use crate::tests::utils::TestNumUGen;
 use crate::wrappers_core::UGenWrapperCoreExt;
 use crate::{AudioCtx, UGen, UGenFlags};

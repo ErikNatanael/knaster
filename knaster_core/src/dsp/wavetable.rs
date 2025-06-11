@@ -66,7 +66,6 @@ mod wavetable_vec {
     use super::*;
     use crate::core::f64::consts::PI;
     use crate::dsp::xorrng::XOrShift32Rng;
-    use std::prelude::v1::*;
 
     use knaster_primitives::Float;
 
@@ -266,7 +265,7 @@ mod wavetable_vec {
             for i in 0..num_harmonics {
                 let start_phase = match i {
                     0 => 0.0,
-                    _ => (-1.0 as f64).powi(i as i32 + 2),
+                    _ => (-1.0_f64).powi(i as i32 + 2),
                 };
                 // an amp_falloff of 2.0 gives triangle wave approximation
                 let harmonic_amp = 1.0 / ((i * 2 + 1) as f64).powf(amp_falloff);

@@ -1,7 +1,7 @@
 use crate::log::ArLogReceiver;
 use crate::math::{Add, Div, MathUGen, Mul, Sub};
 use crate::typenum::{U1, U2};
-use crate::{AudioCtx, BlockMetadata, UGen, UGenFlags};
+use crate::{AudioCtx, UGen, UGenFlags};
 use knaster_primitives::typenum::U4;
 use knaster_primitives::{Block, StaticBlock};
 
@@ -9,8 +9,8 @@ use knaster_primitives::{Block, StaticBlock};
 fn gen_arithmetics() {
     const SR: u32 = 48000;
     const BLOCK: usize = 4;
-    let mut log_receiver = ArLogReceiver::new();
-    let (logger, log_receiver) = log_receiver.sender();
+    let log_receiver = ArLogReceiver::new();
+    let (logger, _log_receiver) = log_receiver.sender();
     let mut ctx = AudioCtx::new(SR, BLOCK, logger);
     let ctx = &mut ctx;
     let mut flags = UGenFlags::new();
@@ -52,8 +52,8 @@ fn gen_arithmetics() {
 fn gen_arithmetics_multichannel() {
     const SR: u32 = 48000;
     const BLOCK: usize = 4;
-    let mut log_receiver = ArLogReceiver::new();
-    let (logger, log_receiver) = log_receiver.sender();
+    let log_receiver = ArLogReceiver::new();
+    let (logger, _log_receiver) = log_receiver.sender();
     let mut ctx = AudioCtx::new(SR, BLOCK, logger);
     let ctx = &mut ctx;
     let mut flags = UGenFlags::new();

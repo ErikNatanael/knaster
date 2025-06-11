@@ -50,7 +50,7 @@ impl PIntegerConvertible for usize {
         (PInteger(usize::MIN), PInteger(usize::MAX))
     }
 
-    fn pinteger_descriptions(v: PInteger) -> Option<&'static str> {
+    fn pinteger_descriptions(_v: PInteger) -> Option<&'static str> {
         None
     }
 }

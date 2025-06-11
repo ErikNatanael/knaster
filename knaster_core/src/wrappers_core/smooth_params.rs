@@ -140,8 +140,7 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
         let org_block = ctx.block;
         // TODO: set the Rate  of a parameter
         for p in &self.parameters {
-            there_is_an_ar_parameter =
-                there_is_an_ar_parameter || matches!(*p, Rate::AudioRate { .. });
+            there_is_an_ar_parameter = there_is_an_ar_parameter || matches!(*p, Rate::AudioRate);
         }
         if there_is_an_ar_parameter {
             //  run sample by sample for as long as needed
@@ -157,7 +156,7 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
                     for (j, state) in self.smoothing_state.iter_mut().enumerate() {
                         if let Some(new_value) = state.next_value(ctx.block_size(), i) {
                             self.ugen
-                                .param_apply(ctx.into(), j, ParameterValue::Float(new_value))
+                                .param_apply(ctx, j, ParameterValue::Float(new_value))
                         }
                     }
                     let input = input.partial(i, 1);
@@ -181,7 +180,7 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
             for (j, state) in self.smoothing_state.iter_mut().enumerate() {
                 if let Some(new_value) = state.next_value(ctx.block_size(), 0) {
                     self.ugen
-                        .param_apply(ctx.into(), j, ParameterValue::Float(new_value))
+                        .param_apply(ctx, j, ParameterValue::Float(new_value))
                 }
             }
             self.ugen.process_block(ctx, flags, input, output);
@@ -208,7 +207,7 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
             }
             ParameterValue::Float(float_value) => {
                 // With an audio rate parameter, ignore other incoming parameter changes
-                if !matches!(self.parameters[index], Rate::AudioRate { .. }) {
+                if !matches!(self.parameters[index], Rate::AudioRate) {
                     match &mut self.smoothing_state[index] {
                         ParameterSmoothingState::None { .. } => {
                             self.ugen.param_apply(ctx, index, value)

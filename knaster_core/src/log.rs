@@ -113,6 +113,12 @@ impl ArLogReceiver<U0> {
         }
     }
 }
+
+impl Default for ArLogReceiver<U0> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl<N: Size> ArLogReceiver<N> {
     /// Receive messages. Only full message chains are received ending
     /// with `AtLogMessage::End`, but they may be split into two calls to the `log_handler`.

@@ -1,6 +1,6 @@
 use knaster_primitives::{Frame, numeric_array::NumericArray};
 
-use crate::{rt_log, AudioCtx, ParameterValue, UGen, UGenFlags};
+use crate::{AudioCtx, ParameterValue, UGen, UGenFlags, rt_log};
 
 /// Enables sample accurate parameter changes within a block. Changes must be
 /// scheduled in the order they are to be applied.
@@ -71,7 +71,7 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
     {
         let mut block_i = 0;
         let mut change_i = 0;
-        let org_block = ctx.block.clone();
+        let org_block = ctx.block;
         let num_changes_scheduled = self.next_delay_i;
         loop {
             let mut local_frames_to_process = ctx.frames_to_process() - block_i;
@@ -79,7 +79,7 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
             while change_i < num_changes_scheduled {
                 if let Some((delay, index, value)) = &self.waiting_changes[change_i] {
                     if (*delay as usize) <= block_i + ctx.block_start_offset() {
-                        self.ugen.param_apply(ctx.into(), *index, *value);
+                        self.ugen.param_apply(ctx, *index, *value);
                         self.waiting_changes[change_i] = None;
                     } else {
                         local_frames_to_process = local_frames_to_process
@@ -139,7 +139,7 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
         unsafe { self.ugen.set_ar_param_buffer(ctx, index, buffer) }
     }
 
-    fn set_delay_within_block_for_param(&mut self, ctx: &mut AudioCtx, index: usize, delay: u16) {
+    fn set_delay_within_block_for_param(&mut self, _ctx: &mut AudioCtx, index: usize, delay: u16) {
         self.next_delay[index] = delay;
     }
 }

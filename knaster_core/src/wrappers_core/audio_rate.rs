@@ -153,7 +153,7 @@ where
             for i in 0..Self::Inputs::USIZE {
                 in_frame[i] = input.read(i, frame);
             }
-            let out_frame = self.process(ctx.into(), flags, in_frame);
+            let out_frame = self.process(ctx, flags, in_frame);
             for i in 0..Self::Outputs::USIZE {
                 output.write(out_frame[i], i, frame);
             }
