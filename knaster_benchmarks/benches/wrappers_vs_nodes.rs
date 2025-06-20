@@ -1,10 +1,9 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use knaster::Block;
+use knaster::runner::{Runner, RunnerOptions};
+use knaster::typenum::*;
+use knaster::wrappers_core::UGenWrapperCoreExt;
 use knaster_benchmarks::TestNumUGen;
-use knaster_graph::Block;
-use knaster_graph::math::{MathUGen, Mul};
-use knaster_graph::runner::{Runner, RunnerOptions};
-use knaster_graph::typenum::*;
-use knaster_graph::wrappers_core::UGenWrapperCoreExt;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let block_size = 32;
@@ -34,7 +33,6 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     graph.edit(|graph| {
         let g = graph.push(TestNumUGen::new(2.0));
         let v = graph.push(TestNumUGen::new(0.5));
-        let m = graph.push(MathUGen::<_, U1, Mul>::new());
         (g * v).to_graph_out();
         // graph.connect(&g, 0, 0, &m).unwrap();
         // graph.connect(&v, 0, 1, &m).unwrap();

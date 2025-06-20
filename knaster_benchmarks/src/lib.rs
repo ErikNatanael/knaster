@@ -1,6 +1,6 @@
-use knaster_graph::numeric_array::NumericArray;
-use knaster_graph::typenum::{U0, U1};
-use knaster_graph::{AudioCtx, Float, Frame, ParameterHint, ParameterValue, UGen, UGenFlags};
+use knaster::numeric_array::NumericArray;
+use knaster::typenum::{U0, U1};
+use knaster::{AudioCtx, Float, Frame, ParameterHint, ParameterValue, UGen, UGenFlags};
 
 pub fn add(signal: &[f32], rhs: f32, output: &mut [f32]) {
     for (sig, out) in signal.iter().zip(output.iter_mut()) {
