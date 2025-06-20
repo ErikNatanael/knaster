@@ -15,7 +15,14 @@
 - [x] Merge Source and Sink
 - [x] Write an interface to get node_id and channel from a NodeSeries based on the channel requested.
 - [x] Make Inputs and Outputs u16 everywhere to save memory?
-- [ ] Removing edges from a Graph
+- [x] Removing edges from a Graph
+- [ ] Deprecate Graph node edits in favour of GraphEdit
+- [x] macro: parameter ranges
+- [ ] macro: Move all UGen impls to use macro
+- [ ] Control rate UGens
+- [ ] UGen -> parameter change
+- [ ] Parameter change chains
+- [ ] Any Parameter value
 
 UGen
 UnitGenerator

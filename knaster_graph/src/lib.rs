@@ -39,7 +39,7 @@ pub mod block;
 mod buffer_allocator;
 pub mod connectable;
 pub mod connectable2;
-mod dyngen;
+pub mod dynugen;
 mod edge;
 pub mod graph;
 pub mod graph_edit;

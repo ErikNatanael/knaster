@@ -1,5 +1,6 @@
 use crate::core::collections::VecDeque;
 use crate::core::sync::Arc;
+use crate::task::Task;
 use crate::{
     SchedulingEvent,
     core::{
@@ -8,7 +9,7 @@ use crate::{
         slice,
         sync::atomic::{AtomicBool, Ordering},
     },
-    dyngen::DynUGen,
+    dynugen::DynUGen,
 };
 
 use knaster_core::{
@@ -93,7 +94,7 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
         if num_new_task_data > 0 {
             if let Ok(td_chunk) = self.new_task_data_consumer.read_chunk(num_new_task_data) {
                 for mut td in td_chunk {
-                    td.apply_self_on_audio_thread(ctx);
+                    td.apply_self_on_audio_thread(ctx, &mut self.current_task_data);
                     let old_td = crate::core::mem::replace(&mut self.current_task_data, td);
                     match self.task_data_to_be_dropped_producer.push(old_td) {
                         Ok(_) => (),
@@ -107,7 +108,8 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
         // Apply parameter changes
         if !self.waiting_parameter_changes.is_empty() {
             let num_waiting_parameter_changes = self.waiting_parameter_changes.len();
-            let gens = &mut self.current_task_data.gens;
+            let keys = &self.current_task_data.node_task_order;
+            let tasks = &mut self.current_task_data.tasks;
             for _i in 0..num_waiting_parameter_changes {
                 let (event, num_blocks_waiting) = self
                     .waiting_parameter_changes
@@ -126,7 +128,8 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
                     ctx.block_size() as u64,
                     ctx.sample_rate() as u64,
                     ctx,
-                    gens,
+                    keys,
+                    tasks,
                 ) {
                     self.waiting_parameter_changes
                         .push_back((unapplied, num_blocks_waiting + 1));
@@ -140,14 +143,16 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
             .scheduling_event_receiver
             .read_chunk(parameter_changes_waiting)
         {
-            let gens = &mut self.current_task_data.gens;
+            let keys = &self.current_task_data.node_task_order;
+            let tasks = &mut self.current_task_data.tasks;
             for event in pm_chunk {
                 if let Some(event) = apply_parameter_change(
                     event,
                     ctx.block_size() as u64,
                     ctx.sample_rate() as u64,
                     ctx,
-                    gens,
+                    keys,
+                    tasks,
                 ) {
                     if self.waiting_parameter_changes.len()
                         < self.waiting_parameter_changes.capacity()
@@ -169,7 +174,7 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
             graph_input_channels_to_nodes,
             applied: _,
             ar_parameter_changes: _,
-            gens: _,
+            node_task_order,
         } = task_data;
 
         if let Some(buffer_allocation) = new_buffer_allocation.take() {
@@ -265,7 +270,8 @@ fn apply_parameter_change<'a, 'b, F: Float>(
     sample_rate: u64,
     ctx: &mut AudioCtx,
     // replace implicit 'static with 'b
-    gens: &'a mut [(NodeKey, *mut (dyn DynUGen<F> + 'b))],
+    keys: &'a [NodeKey],
+    tasks: &'a mut [Task<F>],
 ) -> Option<SchedulingEvent> {
     let mut ready_to_apply = event.token.as_ref().is_none_or(|t| t.ready());
     let mut delay_in_block = 0;
@@ -277,9 +283,9 @@ fn apply_parameter_change<'a, 'b, F: Float>(
 
     let node_key = event.node_key;
     if ready_to_apply {
-        for (key, ugen) in gens.iter_mut() {
+        for (key, task) in keys.iter().zip(tasks.iter_mut()) {
             if *key == node_key {
-                let g = unsafe { &mut (**ugen) };
+                let g = &mut task.ugen;
                 if delay_in_block > 0 {
                     g.set_delay_within_block_for_param(ctx, event.parameter, delay_in_block as u16);
                 }

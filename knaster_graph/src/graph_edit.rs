@@ -746,6 +746,23 @@ impl<'a, 'b, F: Float> From<DH<'a, 'b, F, DynamicHandle3>> for NodeId {
     }
 }
 impl<'a, 'b, F: Float> DH<'a, 'b, F, DynamicHandle3> {
+    pub fn to_channels_handle(self) -> DH<'a, 'b, F, DynamicChannelsHandle> {
+        let mut in_channels = SmallVec::with_capacity(self.nodes.inputs() as usize);
+        let mut out_channels = SmallVec::with_capacity(self.nodes.outputs() as usize);
+        for chan in Dynamic::iter_inputs(&self.nodes) {
+            in_channels.push(chan);
+        }
+        for chan in Dynamic::iter_outputs(&self.nodes) {
+            out_channels.push(chan);
+        }
+        DH {
+            nodes: DynamicChannelsHandle {
+                in_channels,
+                out_channels,
+            },
+            graph: self.graph,
+        }
+    }
     /// Change the name of the node in the [`Graph`].
     pub fn name(self, n: impl Into<EcoString>) -> Self {
         self.graph

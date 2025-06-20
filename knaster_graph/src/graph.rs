@@ -1441,9 +1441,9 @@ impl<F: Float> Graph<F> {
         let mut tasks = vec![];
         // Safety: No other thread will access the SlotMap. All we're doing with the buffers is taking pointers; there's no manipulation.
         let nodes = unsafe { &mut *self.nodes.get() };
-        for &node_key in &self.node_order {
-            let node = &nodes[node_key];
-            tasks.push(node.to_task());
+        for (i, &node_key) in self.node_order.iter().enumerate() {
+            let node = &mut nodes[node_key];
+            tasks.push(node.to_task(i));
         }
         tasks
     }
@@ -1523,12 +1523,6 @@ impl<F: Float> Graph<F> {
     ) -> TaskData<F> {
         let tasks = self.generate_tasks().into_boxed_slice();
         let output_task = self.generate_output_tasks();
-        let nodes = self.get_nodes();
-        let gens: Vec<_> = self
-            .node_order
-            .iter()
-            .map(|key| (*key, nodes[*key].ugen))
-            .collect();
         let ar_parameter_changes = self.generate_ar_parameter_changes();
         TaskData {
             applied: applied_flag,
@@ -1536,8 +1530,8 @@ impl<F: Float> Graph<F> {
             output_task,
             current_buffer_allocation: Some(self.buffer_allocator.buffer()),
             ar_parameter_changes,
-            gens,
             graph_input_channels_to_nodes,
+            node_task_order: self.node_order.clone(),
         }
     }
     /// Assign buffers to nodes maximizing buffer reuse and cache locality

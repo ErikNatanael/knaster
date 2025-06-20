@@ -3,18 +3,19 @@ use crate::buffer_allocator::AllocationCopy;
 use crate::core::sync::Arc;
 use crate::core::sync::atomic::AtomicBool;
 use crate::core::sync::atomic::Ordering;
+use crate::dynugen::UGenEnum;
 use alloc::{boxed::Box, vec::Vec};
 
 use knaster_core::AudioCtx;
+use knaster_core::Float;
 use knaster_core::UGenFlags;
-use knaster_core::{Float};
 
 use crate::block::RawBlock;
-use crate::dyngen::DynUGen;
+use crate::dynugen::DynUGen;
 use crate::graph::{NodeKey, OwnedRawBuffer};
 
-pub struct Task<F> {
-    pub(crate) ugen: *mut dyn DynUGen<F>,
+pub struct Task<F: Float> {
+    pub(crate) ugen: UGenEnum<F>,
     // Pointers to buffers of block size, one for each input
     pub(crate) in_buffers: Vec<*const F>,
     pub(crate) out_buffer: *mut F,
@@ -25,9 +26,7 @@ impl<F: Float> Task<F> {
         let input = unsafe { AggregateBlockRead::new(&self.in_buffers, ctx.block_size()) };
         let mut output =
             unsafe { RawBlock::new(self.out_buffer, self.output_channels, ctx.block_size()) };
-        unsafe {
-            (*self.ugen).process_block(ctx, flags, &input, &mut output);
-        }
+        self.ugen.process_block(ctx, flags, &input, &mut output);
     }
 }
 /// # Safety
@@ -83,11 +82,14 @@ pub(crate) struct TaskData<F: Float> {
     /// audio passing through the graph. Changes get applied from this list at
     /// the point where the new schedule is received.
     pub(crate) ar_parameter_changes: Vec<ArParameterChange<F>>,
-    /// Direct pointers to all the gens used in `tasks` in node execution order,
-    /// and to the NodeKey that points to them in the Graph. This is used to
-    /// apply parameter changes directly by function calls before any tasks are
-    /// applied.
-    pub(crate) gens: Vec<(NodeKey, *mut dyn DynUGen<F>)>,
+    /// The order in which the nodes are executed and the tasks are stored in the `tasks` field.
+    /// Used to apply parameter changes directly by function calls before any tasks are run.
+    pub(crate) node_task_order: Vec<NodeKey>,
+    // /// Direct pointers to all the gens used in `tasks` in node execution order,
+    // /// and to the NodeKey that points to them in the Graph. This is used to
+    // /// apply parameter changes directly by function calls before any tasks are
+    // /// applied.
+    // pub(crate) gens: Vec<(NodeKey, *mut dyn DynUGen<F>)>,
     /// (node_index_in_order, Vec<(graph_input_channel, node_input_channel))
     pub(crate) graph_input_channels_to_nodes: Vec<(usize, Vec<(usize, usize)>)>,
 }
@@ -95,11 +97,29 @@ pub(crate) struct TaskData<F: Float> {
 impl<F: Float> TaskData<F> {
     /// Run this when the TaskData is received on the audio thread and is
     /// applied to be the new current TaskData.
-    pub fn apply_self_on_audio_thread(&mut self, ctx: &mut AudioCtx) {
+    pub fn apply_self_on_audio_thread(
+        &mut self,
+        ctx: &mut AudioCtx,
+        old_task_data: &mut TaskData<F>,
+    ) {
+        // Move ugens from old_task_data to self
+        for task in self.tasks.iter_mut() {
+            if let UGenEnum::TakeFromTask(j) = task.ugen {
+                task.ugen = old_task_data.tasks[j].ugen.take();
+            }
+        }
+        // Apply ar parameter changes
         for apc in &self.ar_parameter_changes {
             unsafe {
-                (*self.gens[apc.node].1).set_ar_param_buffer(ctx, apc.parameter_index, apc.buffer)
+                (self.tasks[apc.node].ugen).set_ar_param_buffer(
+                    ctx,
+                    apc.parameter_index,
+                    apc.buffer,
+                )
             };
+            // unsafe {
+            //     (*self.gens[apc.node].1).set_ar_param_buffer(ctx, apc.parameter_index, apc.buffer)
+            // };
         }
         // Setting `applied` to true signals that the new
         // TaskData have been received and old data can be
