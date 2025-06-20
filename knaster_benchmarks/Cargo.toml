@@ -3,16 +3,39 @@ name = "knaster_benchmarks"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "fm_bench"
+[[bin]]
+name = "fm_bench2"
+[[bin]]
+name = "fm_bench_stand_alone"
+
 [dependencies]
-knaster_graph = { path = "../knaster_graph" }
+color-eyre = "0.6.5"
+knaster = { path = "../knaster", features = ["std"] }
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = "0.6"
+
+[profile.release]
+debug = false
+lto = "fat"
+codegen-units = 1
+opt-level = 3
+
+[profile.bench]
+debug = false
+lto = "fat"
+codegen-units = 1
+opt-level = 3
+
 
 [[bench]]
-name = "wrappers_vs_nodes"
+name = "graph_dsp_performance"
 harness = false
+# [[bench]]
+# name = "wrappers_vs_nodes"
+# harness = false
 #[[bench]]
 #name = "auto_vectorisation"
 #harness = false
-
