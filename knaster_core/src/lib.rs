@@ -1,4 +1,5 @@
 #![no_std]
+#![cfg_attr(feature = "unstable", feature(portable_simd))]
 
 //! # Knaster Core
 //!
