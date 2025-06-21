@@ -16,6 +16,7 @@ knaster = { path = "../knaster", features = ["std"] }
 
 [dev-dependencies]
 criterion = "0.6"
+iai = { git = "https://github.com/sigaloid/iai", rev = "6c83e942" }
 
 [profile.release]
 debug = false
@@ -30,8 +31,11 @@ codegen-units = 1
 opt-level = 3
 
 
+# [[bench]]
+# name = "graph_dsp_performance"
+# harness = false
 [[bench]]
-name = "graph_dsp_performance"
+name = "lai_graph_dsp_performance"
 harness = false
 # [[bench]]
 # name = "wrappers_vs_nodes"
