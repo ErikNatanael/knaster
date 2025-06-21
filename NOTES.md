@@ -57,7 +57,7 @@ This requires copying a block of data every block, but since blocks for anything
 
 # [ ] Error reporting
 
-- [ ] macros for warnings and errors, maybe different for control and audio thread.
+- [x] macros for warnings and errors, maybe different for control and audio thread.
 - [x] Many/most errors don't need Result, but can be logged instead. We never want to crash.
 - [ ] Feature for enabling backtraces
 - [ ] Feature for panic on error
@@ -225,3 +225,20 @@ impl<F: Float> Sine<F> {
 
 
 ```
+
+# [X] Special case arithmetic operators
+
+Use an enum to represent some known common stateless operations, e.g. maths, as well as any UGen. This should allow for much faster running of those UGens. Maybe use enum_dispatch https://docs.rs/enum_dispatch/latest/enum_dispatch/
+
+```rust
+enum AnyUGen {
+  Mul(MathUGen<U1, Mul>),
+  Add(MathUGen<U1, Add>),
+  // ...
+  Other(Box<dyn DynUGen>),
+}
+```
+
+## Result
+
+After benchmarking, this is actually slower unless all the UGens used have their own variants. Even then, the performance benefits are very small.
