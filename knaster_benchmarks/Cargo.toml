@@ -31,12 +31,12 @@ codegen-units = 1
 opt-level = 3
 
 
-# [[bench]]
-# name = "graph_dsp_performance"
-# harness = false
 [[bench]]
-name = "lai_graph_dsp_performance"
+name = "graph_dsp_performance"
 harness = false
+# [[bench]]
+# name = "lai_graph_dsp_performance"
+# harness = false
 # [[bench]]
 # name = "wrappers_vs_nodes"
 # harness = false
