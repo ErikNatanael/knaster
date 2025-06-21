@@ -987,6 +987,7 @@ dependencies = [
  "num-traits",
  "numeric-array",
  "serde",
+ "target-features",
 ]
 
 [[package]]
