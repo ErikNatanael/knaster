@@ -1,5 +1,4 @@
 use crate::block::AggregateBlockRead;
-use crate::buffer_allocator::AllocationCopy;
 use crate::core::sync::Arc;
 use crate::core::sync::atomic::AtomicBool;
 use crate::core::sync::atomic::Ordering;

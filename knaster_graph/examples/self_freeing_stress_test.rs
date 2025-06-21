@@ -5,13 +5,12 @@ use knaster_core::envelopes::EnvAsr;
 use knaster_core::math::{MathUGen, Mul};
 use knaster_core::typenum::U1;
 use knaster_core::{
-    Done, PTrigger,
+    Done,
     osc::SinNumeric,
     typenum::{U0, U2},
     wrappers_core::{UGenWrapperCoreExt, WrSmoothParams},
 };
 use knaster_graph::graph_edit::Parameter;
-use knaster_graph::handle::AnyHandle;
 use knaster_graph::runner::RunnerOptions;
 use knaster_graph::{
     audio_backend::{

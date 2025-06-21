@@ -1,7 +1,7 @@
 use knaster_core::numeric_array::NumericArray;
 use knaster_core::typenum::{Add1, B1, Unsigned};
 use knaster_core::{
-    AudioCtx, Block, BlockMetadata, BlockRead, Done, Frame, ParameterHint, ParameterValue, Size,
+    AudioCtx, Block, BlockRead, Done, Frame, ParameterHint, ParameterValue, Size,
     UGen, UGenFlags,
 };
 use crate::core::ops::Add;

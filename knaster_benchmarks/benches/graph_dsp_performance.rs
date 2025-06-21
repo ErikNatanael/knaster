@@ -2,7 +2,7 @@ use std::hint::black_box;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use knaster::Block;
-use knaster::graph_edit::{DH, SH};
+use knaster::graph_edit::DH;
 use knaster::osc::SinWt;
 use knaster::runner::{Runner, RunnerOptions};
 use knaster::typenum::*;

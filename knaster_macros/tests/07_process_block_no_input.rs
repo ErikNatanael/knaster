@@ -1,5 +1,5 @@
 use knaster_core::{
-    AudioCtx, Block, BlockRead, Float, PFloat, ParameterValue, StaticBlock, UGen, UGenFlags,
+    AudioCtx, Block, Float, PFloat, ParameterValue, StaticBlock, UGen, UGenFlags,
     log::ArLogSender, typenum::*,
 };
 

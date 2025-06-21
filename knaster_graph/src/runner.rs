@@ -1,10 +1,10 @@
 use knaster_core::Seconds;
-use knaster_core::log::{ArLogReceiver, ArLogSender};
+use knaster_core::log::ArLogReceiver;
 use knaster_core::typenum::U1;
 use knaster_core::{AudioCtx, Float, Size, UGenFlags, typenum::NonZero};
 
 use crate::SharedFrameClock;
-use crate::dynugen::{DynUGen, UGenEnum};
+use crate::dynugen::DynUGen;
 use crate::graph::NodeId;
 use crate::{
     block::{AggregateBlockRead, RawBlock},

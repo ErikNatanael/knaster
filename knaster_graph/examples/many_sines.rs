@@ -15,7 +15,6 @@ use knaster_graph::{
         AudioBackend,
         cpal::{CpalBackend, CpalBackendOptions},
     },
-    handle::HandleTrait,
     runner::Runner,
 };
 use rand::{Rng, thread_rng};

@@ -3,11 +3,10 @@
 //! Metadata from the structs in this module can be used to visualise and/or
 //! manipulate a graph based on the whole graph structure.
 
-use crate::core::sync::{Arc, Mutex};
 
 use crate::graph::{GraphId, NodeId, NodeKey};
 use crate::handle::{AnyHandle, RawHandle, SchedulingChannelSender};
-use crate::{SchedulingChannelProducer, SharedFrameClock};
+use crate::SharedFrameClock;
 use alloc::{format, string::String, string::ToString, vec::Vec};
 use ecow::EcoString;
 use knaster_core::ParameterHint;

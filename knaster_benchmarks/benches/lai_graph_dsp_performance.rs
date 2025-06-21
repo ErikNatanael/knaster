@@ -1,7 +1,7 @@
 use iai::black_box;
 
 use knaster::Block;
-use knaster::graph_edit::{DH, SH};
+use knaster::graph_edit::DH;
 use knaster::osc::SinWt;
 use knaster::runner::{Runner, RunnerOptions};
 use knaster::typenum::*;

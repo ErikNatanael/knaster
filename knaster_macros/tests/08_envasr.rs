@@ -1,4 +1,4 @@
-use knaster_core::{AudioCtx, Float, PFloat, UGenFlags, impl_ugen};
+use knaster_core::{AudioCtx, Float, UGenFlags, impl_ugen};
 
 #[derive(Debug, Clone, Copy)]
 enum AsrState {

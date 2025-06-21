@@ -4,8 +4,8 @@ use crate::core::{
     sync::{Arc, Mutex},
 };
 use crate::{
-    SchedulingChannelProducer, SharedFrameClock, Time,
-    buffer_allocator::{AllocationCopy, BufferAllocator},
+    SharedFrameClock, Time,
+    buffer_allocator::BufferAllocator,
     connectable::{Channels, NodeOrGraph, NodeSubset},
     core::sync::atomic::AtomicU64,
     edge::{Edge, NodeKeyOrGraph, ParameterEdge},
@@ -17,15 +17,12 @@ use crate::{
 };
 use crate::{
     connectable::Connectable,
-    core::ptr::null_mut,
-    core::rc::Rc,
     core::{
-        cell::UnsafeCell,
-        dbg, format,
-        sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+        cell::UnsafeCell, format,
+        sync::atomic::{AtomicBool, Ordering},
     },
 };
-use alloc::{borrow::ToOwned, boxed::Box, string::String, string::ToString, vec, vec::Vec};
+use alloc::{boxed::Box, string::String, string::ToString, vec, vec::Vec};
 use core::cell::Cell;
 use ecow::EcoString;
 

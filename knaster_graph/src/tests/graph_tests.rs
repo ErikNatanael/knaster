@@ -1,5 +1,5 @@
 use crate::Time;
-use crate::connectable::{Connectable, NodeOrGraph};
+use crate::connectable::NodeOrGraph;
 use crate::runner::RunnerOptions;
 use crate::tests::utils::TestNumUGen;
 use crate::{handle::HandleTrait, runner::Runner, tests::utils::TestInPlusParamUGen};

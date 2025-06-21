@@ -1,6 +1,6 @@
 use knaster_core::{
     AudioCtx, Float, ParameterHint, UGen, UGenFlags, impl_ugen,
-    typenum::{U0, U1},
+    typenum::U1,
 };
 
 /// Outputs a static number every frame

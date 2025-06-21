@@ -16,9 +16,8 @@
 //! - [ ] API for scheduling parameter changes
 
 use core::mem::MaybeUninit;
-use core::ops::{BitOr, Div, Index, Shr, Sub};
+use core::ops::{BitOr, Div, Shr, Sub};
 
-use crate::core::sync::{Arc, Mutex};
 
 use crate::Time;
 use crate::graph::{GraphError, GraphOptions};
@@ -26,15 +25,12 @@ use crate::graph_gen::GraphGen;
 use crate::handle::SchedulingChannelSender;
 use crate::node::NodeData;
 use crate::wrappers_graph::done::WrDone;
-use crate::{
-    SchedulingChannelProducer,
-    core::{
+use crate::core::{
         clone::Clone,
         marker::PhantomData,
         ops::{Add, Mul},
         sync::RwLock,
-    },
-};
+    };
 
 use ecow::EcoString;
 use knaster_core::math::MathUGen;
@@ -1892,11 +1888,10 @@ impl Parameter {
 
 #[cfg(test)]
 mod tests {
-    use core::ops::Mul;
+    
 
     use crate::{
         Time,
-        graph::{GraphOptions, NodeId},
         runner::{Runner, RunnerOptions},
     };
     use knaster_core::{
@@ -1904,11 +1899,11 @@ mod tests {
         util::Constant, wrappers_core::UGenWrapperCoreExt,
     };
 
-    use super::{Dynamic, GraphEdit, Static};
+    
     #[test]
     fn scope() {
         let block_size = 16;
-        let (mut graph, mut runner, log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
+        let (mut graph, runner, log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
             block_size,
             sample_rate: 48000,
             ring_buffer_size: 50,

@@ -11,7 +11,7 @@ use core::ops::Mul;
 use knaster_core::{Float, Size, UGen, math::MathUGen, numeric_array::NumericArray, typenum::*};
 
 use crate::{
-    connectable::{Connectable, NodeOrGraph, NodeSubset},
+    connectable::NodeOrGraph,
     graph::Graph,
     handle::{Handle, HandleTrait},
 };

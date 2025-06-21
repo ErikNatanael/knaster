@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 // A UGen with a generic number of channels. This requires overriding the associated type.
 use knaster_core::{
     AudioCtx, Block, BlockRead, Float, Frame, KnasterIntegerParameter, PFloat, PFloatHint,
-    PInteger, ParameterValue, Size, StaticBlock, UGen, UGenFlags,
+    PInteger, Size, StaticBlock, UGen, UGenFlags,
     log::ArLogSender,
     num_derive::{FromPrimitive, ToPrimitive},
     num_traits,
