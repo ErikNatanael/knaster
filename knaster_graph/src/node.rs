@@ -3,13 +3,14 @@ use core::iter::FromFn;
 use crate::core::sync::Arc;
 use crate::core::sync::atomic::AtomicBool;
 use crate::core::{vec, vec::Vec};
+use crate::dynugen::UGenEnum;
 use alloc::{boxed::Box, string::String};
 
 use ecow::EcoString;
 use knaster_core::{AudioCtx, Float, ParameterHint};
 
 use crate::graph::{GraphId, NodeKey};
-use crate::{buffer_allocator::BufferAllocator, dyngen::DynUGen, task::Task};
+use crate::{buffer_allocator::BufferAllocator, dynugen::DynUGen, task::Task};
 
 #[derive(Clone, Copy, Debug)]
 pub struct NodeData {
@@ -38,6 +39,13 @@ impl NodeData {
     }
 }
 
+enum NodeUGen<F: Float> {
+    /// The UGen is stored here and has not yet been moved to the audio thread.
+    Local(UGenEnum<F>),
+    /// The UGen is stored on the audio thread at the given index (updated after task generation).
+    Live(usize),
+}
+
 /// `Node` wraps a [`DynUGen`] for storage in a graph. It is used to hold a pointer to the
 /// UGen allocation and some metadata about it.
 ///
@@ -46,7 +54,7 @@ impl NodeData {
 /// - The Node may not be dropped while its gen pointer is accessible on the graph, e.g. via a Task
 /// - Dereferencing the gen pointer from a thread other than the audio thread is a data race.
 /// - Every other field of this struct can be accessed from the Graph directly.
-pub(crate) struct Node<F> {
+pub(crate) struct Node<F: Float> {
     /// ACCESSIBILITY AND QOL
     // TODO: option to disable this and other optional QOL features in shipped builds
     pub(crate) name: EcoString,
@@ -54,7 +62,6 @@ pub(crate) struct Node<F> {
 
     /// STATIC DATA (won't change after the node has been created)
     pub(crate) data: NodeData,
-    pub(crate) ugen: *mut dyn DynUGen<F>,
     /// true if the node was not pushed manually to the Graph. Such nodes may
     /// also be removed automatically when no longer needed.
     pub(crate) auto_math_node: bool,
@@ -65,6 +72,7 @@ pub(crate) struct Node<F> {
     pub(crate) strong_dependent: Option<NodeKey>,
 
     /// STATE FOR TASK GENERATION etc.
+    pub(crate) ugen: NodeUGen<F>,
     pub(crate) node_inputs: Vec<*const F>,
     pub(crate) node_output: NodeOutput<F>,
     /// The number of channels in potentially different nodes that depend
@@ -83,8 +91,9 @@ impl<F: Float> Node<F> {
         let parameters = ugen.parameters();
         let inputs = ugen.inputs();
         let outputs = ugen.outputs();
-        let boxed_gen = Box::new(ugen);
-        let ptr = Box::into_raw(boxed_gen);
+        let ugen = NodeUGen::Local(UGenEnum::from_ugen(ugen));
+        // let boxed_gen = Box::new(ugen);
+        // let ptr = Box::into_raw(boxed_gen);
 
         Self {
             name,
@@ -95,7 +104,7 @@ impl<F: Float> Node<F> {
                 outputs,
                 parameters,
             },
-            ugen: ptr,
+            ugen,
             node_inputs: vec![crate::core::ptr::null_mut(); inputs as usize],
             node_output: NodeOutput::Offset(0),
             remove_me: None,
@@ -107,18 +116,37 @@ impl<F: Float> Node<F> {
         }
     }
     pub fn init(&mut self, sample_rate: u32, block_size: usize) {
-        unsafe { &mut *(self.ugen) }.init(sample_rate, block_size);
+        if let NodeUGen::Local(ugen) = &mut self.ugen {
+            ugen.init(sample_rate, block_size);
+        }
     }
-    pub(super) fn to_task(&self) -> Task<F> {
+    pub fn ugen(&mut self) -> Option<&mut UGenEnum<F>> {
+        match &mut self.ugen {
+            NodeUGen::Local(ugen) => Some(ugen),
+            NodeUGen::Live(_) => None,
+        }
+    }
+    /// Generates a Task from this Node. The TaskData is generated in the order of the Graph, so
+    /// `node_order_index` is the index of this node in the order of the TaskData that is currently
+    /// generated when this function is called.
+    ///
+    /// The [`Node`] will save the index in order to transfer the UGen during the next update.
+    pub(super) fn to_task(&mut self, node_order_index: usize) -> Task<F> {
         let in_buffers = self.node_inputs.clone();
         let out_buffer = self
             .node_output_ptr()
             .expect("The node output ptr should have been created at this point");
+        let new_ugen = NodeUGen::Live(node_order_index);
+        let ugen = std::mem::replace(&mut self.ugen, new_ugen);
+        let ugen = match ugen {
+            NodeUGen::Local(ugen) => ugen,
+            NodeUGen::Live(index) => UGenEnum::TakeFromTask(index),
+        };
 
         Task {
             in_buffers,
             out_buffer,
-            ugen: self.ugen,
+            ugen,
             output_channels: self.data.outputs as usize,
         }
     }
@@ -165,4 +193,4 @@ pub(crate) enum NodeOutput<F> {
 /// Nodes are only accessed from Graph which maintains the pointers within. Nodes own their DynGen
 /// and an atomic flag is used to make sure nothing else points to the same allocation before it is
 /// dropped. See Graph::node_keys_to_free_when_safe and references to it for implementation info.
-unsafe impl<F> Send for Node<F> {}
+unsafe impl<F: Float> Send for Node<F> {}

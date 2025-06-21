@@ -4,6 +4,7 @@ use knaster_core::typenum::U1;
 use knaster_core::{AudioCtx, Float, Size, UGenFlags, typenum::NonZero};
 
 use crate::SharedFrameClock;
+use crate::dynugen::{DynUGen, UGenEnum};
 use crate::graph::NodeId;
 use crate::{
     block::{AggregateBlockRead, RawBlock},
@@ -103,14 +104,12 @@ impl<F: Float> Runner<F> {
         assert!(input_pointers.len() == self.inputs() as usize);
         self.ctx.block.set_frame_clock(self.frame_clock);
         let mut flags = UGenFlags::new();
-        let ugen = self.graph_node.ugen;
+        let ugen = self
+            .graph_node
+            .ugen()
+            .expect("The top level graph should be guaranteed to be local to its node");
         let input = unsafe { AggregateBlockRead::new(input_pointers, self.block_size) };
-        unsafe { &mut (*ugen) }.process_block(
-            &mut self.ctx,
-            &mut flags,
-            &input,
-            &mut self.output_block,
-        );
+        ugen.process_block(&mut self.ctx, &mut flags, &input, &mut self.output_block);
         self.frame_clock += self.block_size as u64;
         self.shared_frame_clock
             .store_new_time(Seconds::from_samples(

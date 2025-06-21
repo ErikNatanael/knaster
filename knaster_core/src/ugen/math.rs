@@ -13,15 +13,6 @@ use crate::UGen;
 use super::{AudioCtx, UGenFlags};
 
 pub trait Operation<T> {
-    #[cfg(feature = "unstable")]
-    const SIMD_WIDTH: usize =
-        if let Some(size) = target_features::CURRENT_TARGET.suggested_simd_width::<f32>() {
-            size
-        } else {
-            // If SIMD isn't supported natively, we use a vector of 1 element.
-            // This is effectively a scalar value.
-            1
-        };
     fn apply(a: &[T], b: &[T], out: &mut [T]);
 }
 // TODO: Implement SIMD operations for different architectures using portable-simd or intrinsics
@@ -30,10 +21,15 @@ impl<T: crate::core::ops::Add<Output = T> + Float> Operation<T> for Add {
     #[inline(always)]
     fn apply(a: &[T], b: &[T], out: &mut [T]) {
         debug_assert!(a.len() == b.len() && a.len() == out.len());
-        // Scalar implementation
+        // Scalar implementation which auto-vectorizes well
         for ((a, b), out) in a.iter().zip(b.iter()).zip(out.iter_mut()) {
             *out = *a + *b;
         }
+        // The auto-vectorisation is faster than the hand-written SIMD code in benchmarks, so I'm disabling it for now.
+        // #[cfg(feature = "unstable")]
+        // {
+        //     T::simd_add(a, b, out);
+        // }
     }
 }
 pub struct Mul;
@@ -162,15 +158,6 @@ where
 
 /// Mathematical operation applied to a single number (e.g. sqrt, fract, ceil)
 pub trait Operation1<T> {
-    #[cfg(feature = "unstable")]
-    const SIMD_WIDTH: usize =
-        if let Some(size) = target_features::CURRENT_TARGET.suggested_simd_width::<f32>() {
-            size
-        } else {
-            // If SIMD isn't supported natively, we use a vector of 1 element.
-            // This is effectively a scalar value.
-            1
-        };
     fn apply(a: &[T], out: &mut [T]);
 }
 pub struct Ceil;

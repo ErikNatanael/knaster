@@ -10,7 +10,11 @@ alloc = ["knaster_primitives/alloc", "no-std-compat/alloc", "dep:embassy-sync"]
 # Enables the standard library. `alloc` does nothing if `std` is enabled.
 std = ["knaster_primitives/std", "no-std-compat/std"]
 # Enables unstable Rust features that may speed up execution
-unstable = ["dep:target-features", "no-std-compat/unstable"]
+unstable = [
+  "dep:target-features",
+  "no-std-compat/unstable",
+  "knaster_primitives/unstable",
+]
 # Requires std to be enabled
 symphonia = ["dep:symphonia"]
 # Requires std to be enabled
