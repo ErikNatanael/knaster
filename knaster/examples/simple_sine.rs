@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use color_eyre::Result;
 use knaster::preludef32::*;
 fn main() -> Result<()> {
@@ -18,8 +16,8 @@ fn main() -> Result<()> {
         freq.set(440.0 + i as f32 * 44.0)?;
         // Flip between 0.1 and 0.5 every other cycle
         amp.set(if i % 2 == 0 { 0.1 } else { 0.5 })?;
-        std::thread::sleep(Duration::from_secs_f32(0.25));
+        std::thread::sleep(std::time::Duration::from_secs_f32(0.25));
     }
-    std::thread::sleep(Duration::from_secs(2));
+    std::thread::sleep(std::time::Duration::from_secs(2));
     Ok(())
 }

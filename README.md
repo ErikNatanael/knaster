@@ -14,9 +14,32 @@ Knaster is a real time sound synthesis framework focused on a balance between pe
 - - Parameter smoothing of manual parameter changes.
 - - Audio rate parameter changes, automatically switching to sample by sample processing for only the destination UGen.
 
+## Example
+
+The following example starts a stereo audio graph with the default backend, adds a simple sine wave with a constant amplitude of 0.2, and plays it in stereo for 2 seconds.
+
+```rust
+use knaster::preludef32::*;
+fn main() {
+    // Start a new stereo audio graph with the default backend
+    let mut graph = knaster::knaster().start()?;
+    graph.edit(|g| {
+        // Create a sine wave with a frequency of 440 Hz
+        let sine = g.push(SinWt::new(440.0));
+        // Multiply the sine wave by a constant amplitude of 0.2
+        let sig = sine * 0.2;
+        // Send the same sine wave signal to the left and right channels of the output
+        sig.out([0, 0]).to_graph_out();
+    });
+    // Wait for 2 seconds
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    Ok(())
+}
+```
+
 ## Project structure
 
-Note: As a user of the framework, you only need to depend on `knaster`
+As a user of the framework, you only need to depend on `knaster`, which re-exports the other crates.
 
 Knaster is split into several crates for modularity and to allow for more flexibility.
 The crates are defined in the following chain, where each crate imports and re-exports the previous to reduce the risk of dependency version mismatches.

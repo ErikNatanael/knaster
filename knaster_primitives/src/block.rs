@@ -203,8 +203,10 @@ where
 pub trait BlockRead {
     type Sample: Float;
 
+    /// Return an immutable slice of the samples in a specific channel.
     fn channel_as_slice(&self, channel: usize) -> &[Self::Sample];
 
+    /// Return the sample at a specific frame in a specific channel.
     fn read(&self, channel: usize, frame: usize) -> Self::Sample;
 
     /// The number of channels supported by this block buffer
@@ -241,6 +243,10 @@ impl<T: Block> BlockRead for &T {
     }
 }
 
+/// A block which is a subset of another (immutable) block.
+///
+/// This is used to implement the [`BlockRead`] trait for a block which is a subset of another
+/// block, e.g. when doing partial block processing with parameter changes in the middle.
 pub struct PartialBlock<'a, F, T: 'a + BlockRead<Sample = F> + ?Sized> {
     block: &'a T,
     start_offset: usize,
@@ -265,6 +271,10 @@ impl<'a, F: Float, T: 'a + BlockRead<Sample = F>> BlockRead for PartialBlock<'a,
         self.length
     }
 }
+/// A block which is a subset of another mutable block.
+///
+/// This is used to implement the [`Block`] trait for a block which is a subset of another
+/// block, e.g. when doing partial block processing with parameter changes in the middle.
 pub struct PartialBlockMut<'a, T: Block + ?Sized> {
     block: &'a mut T,
     start_offset: usize,
@@ -298,6 +308,7 @@ impl<T: Block> Block for PartialBlockMut<'_, T> {
         self.length
     }
 }
+/// Iterator over the channels of a [`PartialBlockMut`].
 pub struct PartialBlockIterkMut<'a, T: Block + ?Sized> {
     block: &'a mut T,
     start_offset: usize,
@@ -323,6 +334,7 @@ where
     }
 }
 
+/// A block which has no data in it, i.e. there are zero channels.
 pub struct EmptyBlock<F>(PhantomData<F>);
 impl<F: Float> Default for EmptyBlock<F> {
     fn default() -> Self {
@@ -450,6 +462,16 @@ where
         Self {
             buffer: NumericArray::default(),
         }
+    }
+}
+
+impl<BLOCK_SIZE: Size, CHANNELS: Size, F: Float> Default for StaticBlock<F, CHANNELS, BLOCK_SIZE>
+where
+    BLOCK_SIZE: Mul<CHANNELS>,
+    Prod<BLOCK_SIZE, CHANNELS>: Size,
+{
+    fn default() -> Self {
+        Self::new()
     }
 }
 #[allow(non_camel_case_types)]
