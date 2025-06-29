@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use knaster_core::envelopes::EnvAr;
-use knaster_core::osc::SinWt;
-use knaster_core::pan::Pan2;
-use knaster_core::{
+use knaster::envelopes::EnvAr;
+use knaster::osc::SinWt;
+use knaster::pan::Pan2;
+use knaster::{
     typenum::{U0, U2},
     wrappers_core::UGenWrapperCoreExt,
 };

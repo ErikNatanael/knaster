@@ -4,16 +4,16 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use anyhow::Result;
-use knaster_core::AudioCtx;
-use knaster_core::log::ArLogSender;
-use knaster_core::{
+use knaster::AudioCtx;
+use knaster::log::ArLogSender;
+use knaster::runner::RunnerOptions;
+use knaster::{
     ParameterSmoothing, UGen,
     osc::SinNumeric,
     typenum::{U0, U2},
     wrappers_core::{UGenWrapperCoreExt, WrSmoothParams},
 };
-use knaster_graph::runner::RunnerOptions;
-use knaster_graph::{
+use knaster::{
     audio_backend::{
         AudioBackend,
         cpal::{CpalBackend, CpalBackendOptions},

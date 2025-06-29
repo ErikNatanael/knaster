@@ -3,12 +3,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
-use knaster_core::buffer::BufferReader;
-use knaster_core::dsp::buffer::Buffer;
-use knaster_core::typenum::{U0, U2};
-use knaster_core::util::Constant;
-use knaster_graph::runner::RunnerOptions;
-use knaster_graph::{
+use knaster::buffer::BufferReader;
+use knaster::dsp::buffer::Buffer;
+use knaster::runner::RunnerOptions;
+use knaster::typenum::{U0, U2};
+use knaster::util::Constant;
+use knaster::{
     audio_backend::{
         AudioBackend,
         cpal::{CpalBackend, CpalBackendOptions},

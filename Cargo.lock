@@ -900,9 +900,13 @@ dependencies = [
 name = "knaster"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "color-eyre",
+ "env_logger",
  "knaster_graph",
  "log",
+ "open",
+ "rand",
 ]
 
 [[package]]
@@ -956,7 +960,6 @@ dependencies = [
  "jack",
  "knaster_core",
  "log",
- "open",
  "paste",
  "rand",
  "rtrb",
