@@ -32,7 +32,7 @@ fn sample_accurate_parameters_test() {
     let in_block = StaticBlock::<f32, U2, U16>::new();
     let mut out_block = StaticBlock::<f32, U2, U16>::new();
 
-    g.process_block(ctx, &mut flags, &&in_block, &mut out_block);
+    g.process_block(ctx, &mut flags, &in_block, &mut out_block);
 
     let o = out_block.channel_as_slice(0);
     assert_eq!(
@@ -76,7 +76,7 @@ fn sample_accurate_parameters_with_wrappers_test() {
     let in_block = StaticBlock::<f32, U2, U16>::new();
     let mut out_block = StaticBlock::<f32, U2, U16>::new();
 
-    g.process_block(ctx, &mut flags, &&in_block, &mut out_block);
+    g.process_block(ctx, &mut flags, &in_block, &mut out_block);
 
     let o = out_block.channel_as_slice(0);
     assert_eq!(

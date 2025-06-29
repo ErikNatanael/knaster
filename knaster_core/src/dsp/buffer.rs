@@ -6,7 +6,7 @@
 
 #[cfg(feature = "std")]
 use crate::core::path::PathBuf;
-use crate::core::{string::String, string::ToString, vec, vec::Vec};
+use crate::core::{string::String, vec::Vec};
 use std::prelude::v1::*;
 
 #[allow(unused)]

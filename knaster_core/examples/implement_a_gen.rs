@@ -2,8 +2,8 @@
 
 use anyhow::Result;
 use knaster_core::{
-    AudioCtx, Block, Float, Frame, Param, ParameterError, ParameterHint, ParameterType,
-    ParameterValue, StaticBlock, UGen, UGenFlags, empty_block,
+    AudioCtx, Block, EmptyBlock, Float, Frame, Param, ParameterError, ParameterHint, ParameterType,
+    ParameterValue, StaticBlock, UGen, UGenFlags,
     log::ArLogSender,
     numeric_array::NumericArray,
     typenum::{U0, U1, U3, U64, Unsigned},
@@ -25,7 +25,8 @@ fn main() -> Result<()> {
     assert_eq!(output[0], 0.0);
     // Or in blocks
     let mut output_block = StaticBlock::<_, U1, U64>::new();
-    osc.process_block(&mut ctx, &mut flags, &&empty_block(), &mut output_block);
+    // The double referece is needed for
+    osc.process_block(&mut ctx, &mut flags, &EmptyBlock::new(), &mut output_block);
     assert!(
         (output_block.read(0, 63)
             - ((200.0 / ctx.sample_rate() as f32) * core::f32::consts::TAU * 64.).sin())
@@ -67,7 +68,7 @@ impl<F: Float> UGen for Osc<F> {
     type Inputs = U0;
     type Outputs = U1;
 
-    fn init(&mut self, sample_rate: u32, block_size: usize) {}
+    fn init(&mut self, _sample_rate: u32, _block_size: usize) {}
 
     fn process(
         &mut self,

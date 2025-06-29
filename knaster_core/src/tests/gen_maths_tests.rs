@@ -22,28 +22,28 @@ fn gen_arithmetics() {
     // Addition
     let mut m = MathUGen::<f32, U1, Add>::new();
     assert_eq!(m.process(ctx, &mut flags, [3.0, 2.0].into())[0], 5.0);
-    m.process_block(ctx, &mut flags, &&b0, &mut b1);
+    m.process_block(ctx, &mut flags, &b0, &mut b1);
     for &sample in b1.channel_as_slice(0) {
         assert_eq!(sample, 5.0);
     }
     //Sub
     let mut m = MathUGen::<f32, U1, Sub>::new();
     assert_eq!(m.process(ctx, &mut flags, [3.0, 2.0].into())[0], 1.0);
-    m.process_block(ctx, &mut flags, &&b0, &mut b1);
+    m.process_block(ctx, &mut flags, &b0, &mut b1);
     for &sample in b1.channel_as_slice(0) {
         assert_eq!(sample, 1.0);
     }
     // Div
     let mut m = MathUGen::<f32, U1, Div>::new();
     assert_eq!(m.process(ctx, &mut flags, [3.0, 2.0].into())[0], 1.5);
-    m.process_block(ctx, &mut flags, &&b0, &mut b1);
+    m.process_block(ctx, &mut flags, &b0, &mut b1);
     for &sample in b1.channel_as_slice(0) {
         assert_eq!(sample, 1.5);
     }
     // Mul
     let mut m = MathUGen::<f32, U1, Mul>::new();
     assert_eq!(m.process(ctx, &mut flags, [3.0, 2.0].into())[0], 6.0);
-    m.process_block(ctx, &mut flags, &&b0, &mut b1);
+    m.process_block(ctx, &mut flags, &b0, &mut b1);
     for &sample in b1.channel_as_slice(0) {
         assert_eq!(sample, 6.0);
     }
@@ -71,7 +71,7 @@ fn gen_arithmetics_multichannel() {
         m.process(ctx, &mut flags, [3.0, 7.0, 2.0, 4.0].into())[0..2],
         [5.0, 11.0]
     );
-    m.process_block(ctx, &mut flags, &&b0, &mut b1);
+    m.process_block(ctx, &mut flags, &b0, &mut b1);
     for &sample in b1.channel_as_slice(0) {
         assert_eq!(sample, 5.0);
     }
