@@ -1,12 +1,11 @@
-use knaster_core::numeric_array::NumericArray;
-use knaster_core::typenum::{Add1, B1, Unsigned};
-use knaster_core::{
-    AudioCtx, Block, BlockRead, Done, Frame, ParameterHint, ParameterValue, Size,
-    UGen, UGenFlags,
-};
 use crate::core::ops::Add;
 use crate::core::sync::Arc;
 use crate::core::sync::atomic::AtomicBool;
+use knaster_core::numeric_array::NumericArray;
+use knaster_core::typenum::{Add1, B1, Unsigned};
+use knaster_core::{
+    AudioCtx, Block, BlockRead, Done, Frame, ParameterHint, ParameterValue, Size, UGen, UGenFlags,
+};
 
 /// Wrapper that can free a node once it has been marked as done. Unlike most wrappers_graph, this one
 /// can only be added by the [`Graph`] when pushing a node using the corresponding function.

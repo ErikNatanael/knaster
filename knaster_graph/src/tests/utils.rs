@@ -1,7 +1,4 @@
-use knaster_core::{
-    AudioCtx, Float, ParameterHint, UGen, UGenFlags, impl_ugen,
-    typenum::U1,
-};
+use knaster_core::{AudioCtx, Float, ParameterHint, UGen, UGenFlags, impl_ugen, typenum::U1};
 
 /// Outputs a static number every frame
 pub(crate) struct TestNumUGen<F> {

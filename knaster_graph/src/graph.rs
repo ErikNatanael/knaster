@@ -18,7 +18,8 @@ use crate::{
 use crate::{
     connectable::Connectable,
     core::{
-        cell::UnsafeCell, format,
+        cell::UnsafeCell,
+        format,
         sync::atomic::{AtomicBool, Ordering},
     },
 };

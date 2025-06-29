@@ -24,7 +24,11 @@ pub fn knaster_integer_parameter(input: TokenStream) -> TokenStream {
 
     let (len, descriptions) = match input.data {
         syn::Data::Enum(enum_item) => {
-            let descriptions = enum_item.variants.iter().map(|v| v.ident.to_string()).collect::<Vec<_>>();
+            let descriptions = enum_item
+                .variants
+                .iter()
+                .map(|v| v.ident.to_string())
+                .collect::<Vec<_>>();
             (enum_item.variants.len(), descriptions)
         }
         _ => panic!("KnasterIntegerParameter only works on Enums"),
@@ -34,7 +38,6 @@ pub fn knaster_integer_parameter(input: TokenStream) -> TokenStream {
             PInteger(#i) => Some(#d),
         }
     });
-
 
     // Build the output, possibly using quasi-quotation
     let expanded = quote! {
@@ -101,30 +104,29 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
     for item in &input.items {
         match item {
             ImplItem::Fn(method) => {
-
-            match method.sig.ident.to_string().as_str() {
-                "init" => {
-                    init_fn = Some(method);
+                match method.sig.ident.to_string().as_str() {
+                    "init" => {
+                        init_fn = Some(method);
+                    }
+                    "process" => {
+                        process_fn = Some(method);
+                    }
+                    "process_block" => {
+                        process_block_fn = Some(method);
+                    }
+                    _ => (),
                 }
-                "process" => {
-                    process_fn = Some(method);
+                for attr in &method.attrs {
+                    if attr.path().is_ident("init") {
+                        init_fn = Some(method);
+                    } else if attr.path().is_ident("process") {
+                        process_fn = Some(method);
+                    } else if attr.path().is_ident("process_block") {
+                        process_block_fn = Some(method);
+                    } else if attr.path().is_ident("param") {
+                        param_fns.push(method);
+                    }
                 }
-                "process_block" => {
-                    process_block_fn = Some(method);
-                }
-                _ => (),
-            }
-            for attr in &method.attrs {
-                if attr.path().is_ident("init") {
-                    init_fn = Some(method);
-                } else if attr.path().is_ident("process") {
-                    process_fn = Some(method);
-                } else if attr.path().is_ident("process_block") {
-                    process_block_fn = Some(method);
-                } else if attr.path().is_ident("param") {
-                    param_fns.push(method);
-                }
-            }
             }
             ImplItem::Type(ty) => {
                 if ty.ident == "Sample" {
@@ -134,12 +136,10 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
                 } else if ty.ident == "Outputs" {
                     outputs_type_override = Some(ty.ty.clone());
                 }
-
             }
-            _ => ()
+            _ => (),
         }
     }
-
 
     let init_impl = match init_fn {
         Some(init_fn) => {
@@ -160,14 +160,15 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
     let process_impl = match process_fn {
         Some(process_fn) => {
             let mut matches_ugen_process_fn_sig = true;
-            
+
             match &process_fn.sig.output {
-                syn::ReturnType::Default => {num_output_channels = Some(0); 
-                matches_ugen_process_fn_sig= false;
+                syn::ReturnType::Default => {
+                    num_output_channels = Some(0);
+                    matches_ugen_process_fn_sig = false;
                 }
                 syn::ReturnType::Type(_rarrow, return_ty) => match &**return_ty {
                     syn::Type::Array(array) => {
-                            matches_ugen_process_fn_sig = false;
+                        matches_ugen_process_fn_sig = false;
                         num_output_channels = if let Expr::Lit(el) = &array.len {
                             if let Lit::Int(i) = &el.lit {
                                 Some(i.base10_parse().unwrap())
@@ -185,16 +186,16 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
                         };
                     }
                     syn::Type::Path(ty_path) => {
-
-                        if !(ty_path.qself.is_none() && matches!(ty_path.path.segments.last(), Some(ps) if ps.ident == "Frame" || ps.ident == "NumericArray")) {
+                        if !(ty_path.qself.is_none()
+                            && matches!(ty_path.path.segments.last(), Some(ps) if ps.ident == "Frame" || ps.ident == "NumericArray"))
+                        {
                             // matches_ugen_process_fn_sig = false;
                             return Err(syn::Error::new(
                                 return_ty.span(),
-                            "process function must return an array of samples or match the UGen trait process method",
+                                "process function must return an array of samples or match the UGen trait process method",
                             ));
                         }
                         // else we match the UGen process dn sig
-
                     }
                     _ => {
                         return Err(syn::Error::new(
@@ -210,35 +211,45 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
                 match (index, input) {
                     (0, syn::FnArg::Receiver(rec)) => {
                         if rec.mutability.is_none() {
-                        return Err(syn::Error::new(
-                            rec.span(),
-                            "process function must take &mut self",
-                        ));
+                            return Err(syn::Error::new(
+                                rec.span(),
+                                "process function must take &mut self",
+                            ));
                         }
                     }
-                    (index, syn::FnArg::Typed(ty)) => {
-                    match &*ty.ty {
+                    (index, syn::FnArg::Typed(ty)) => match &*ty.ty {
                         syn::Type::Reference(ref_type) => match &*ref_type.elem {
                             syn::Type::Path(path) => {
-                        #[allow(clippy::if_same_then_else)]
-                        if index == 1 && !path.path.segments.iter().any(|seg| seg.ident == "AudioCtx") {
-                            matches_ugen_process_fn_sig = false;
-                        } else if index == 2 && !path.path.segments.iter().any(|seg| seg.ident == "UGenFlags") {
-                            matches_ugen_process_fn_sig = false;
-                        } 
-
+                                #[allow(clippy::if_same_then_else)]
+                                if index == 1
+                                    && !path.path.segments.iter().any(|seg| seg.ident == "AudioCtx")
+                                {
+                                    matches_ugen_process_fn_sig = false;
+                                } else if index == 2
+                                    && !path
+                                        .path
+                                        .segments
+                                        .iter()
+                                        .any(|seg| seg.ident == "UGenFlags")
+                                {
+                                    matches_ugen_process_fn_sig = false;
                                 }
-                                _ => matches_ugen_process_fn_sig = false,
-                    }
-                                syn::Type::Path(path) => {
-if index == 3 && !path.path.segments.iter().any(|seg| seg.ident == "Frame" || seg.ident == "NumericArray") {
-                            matches_ugen_process_fn_sig = false;
-                        } 
                             }
-                                _ => 
-                            matches_ugen_process_fn_sig = false,
-                    }
-                    }
+                            _ => matches_ugen_process_fn_sig = false,
+                        },
+                        syn::Type::Path(path) => {
+                            if index == 3
+                                && !path
+                                    .path
+                                    .segments
+                                    .iter()
+                                    .any(|seg| seg.ident == "Frame" || seg.ident == "NumericArray")
+                            {
+                                matches_ugen_process_fn_sig = false;
+                            }
+                        }
+                        _ => matches_ugen_process_fn_sig = false,
+                    },
                     _ => matches_ugen_process_fn_sig = false,
                 }
             }
@@ -246,87 +257,86 @@ if index == 3 && !path.path.segments.iter().any(|seg| seg.ident == "Frame" || se
             let mut process_args = Vec::new();
 
             if !matches_ugen_process_fn_sig {
-
-            for input in &process_fn.sig.inputs {
-                if let syn::FnArg::Typed(pat_type) = input {
-                    match &*pat_type.ty {
-                        syn::Type::Reference(ref_type) => match &*ref_type.elem {
-                            syn::Type::Path(path) => {
-                                if path.path.segments.iter().any(|seg| seg.ident == "AudioCtx") {
-                                    process_args.push(quote! { _ctx.into(), });
-                                } else if path
-                                    .path
-                                    .segments
-                                    .iter()
-                                    .any(|seg| seg.ident == "UGenFlags")
-                                {
-                                    process_args.push(quote! { _flags.into(), });
-                                } else {
+                for input in &process_fn.sig.inputs {
+                    if let syn::FnArg::Typed(pat_type) = input {
+                        match &*pat_type.ty {
+                            syn::Type::Reference(ref_type) => match &*ref_type.elem {
+                                syn::Type::Path(path) => {
+                                    if path.path.segments.iter().any(|seg| seg.ident == "AudioCtx")
+                                    {
+                                        process_args.push(quote! { _ctx.into(), });
+                                    } else if path
+                                        .path
+                                        .segments
+                                        .iter()
+                                        .any(|seg| seg.ident == "UGenFlags")
+                                    {
+                                        process_args.push(quote! { _flags.into(), });
+                                    } else {
+                                        return Err(syn::Error::new(
+                                            path.span(),
+                                            "unknown argument found in process function",
+                                        ));
+                                    };
+                                }
+                                _ => {
                                     return Err(syn::Error::new(
-                                        path.span(),
+                                        ref_type.span(),
                                         "unknown argument found in process function",
                                     ));
+                                }
+                            },
+
+                            syn::Type::Array(array) => {
+                                num_input_channels = if let Expr::Lit(el) = &array.len {
+                                    if let Lit::Int(i) = &el.lit {
+                                        Some(i.base10_parse().unwrap())
+                                    } else {
+                                        return Err(syn::Error::new(
+                                            el.span(),
+                                            "process function input array must use a literal length",
+                                        ));
+                                    }
+                                } else {
+                                    return Err(syn::Error::new(
+                                        array.span(),
+                                        "process function input array must use a literal length",
+                                    ));
                                 };
+                                process_args.push(quote! { _input_array, });
                             }
                             _ => {
                                 return Err(syn::Error::new(
-                                    ref_type.span(),
+                                    pat_type.span(),
                                     "unknown argument found in process function",
                                 ));
                             }
-                        },
-
-                        syn::Type::Array(array) => {
-                            num_input_channels = if let Expr::Lit(el) = &array.len {
-                                if let Lit::Int(i) = &el.lit {
-                                    Some(i.base10_parse().unwrap())
-                                } else {
-                                    return Err(syn::Error::new(
-                                        el.span(),
-                                        "process function input array must use a literal length",
-                                    ));
-                                }
-                            } else {
-                                return Err(syn::Error::new(
-                                    array.span(),
-                                    "process function input array must use a literal length",
-                                ));
-                            };
-                            process_args.push(quote! { _input_array, });
-                        }
-                        _ => {
-                            return Err(syn::Error::new(
-                                pat_type.span(),
-                                "unknown argument found in process function",
-                            ));
                         }
                     }
                 }
-            }
-            let num_input_channels = num_input_channels.unwrap_or(0);
-            let input_array_elements = (0..num_input_channels)
-                .map(|i: usize| quote! { _input[#i], })
-                .collect::<Vec<_>>();
+                let num_input_channels = num_input_channels.unwrap_or(0);
+                let input_array_elements = (0..num_input_channels)
+                    .map(|i: usize| quote! { _input[#i], })
+                    .collect::<Vec<_>>();
 
-            quote! {
-                fn process(
-                    &mut self,
-                    _ctx: &mut #crate_ident::AudioCtx,
-                    _flags: &mut #crate_ident::UGenFlags,
-                    _input: #crate_ident::Frame<Self::Sample, Self::Inputs>,
-                ) -> #crate_ident::Frame<Self::Sample, Self::Outputs> {
-                        let _input_array: [F; #num_input_channels ] = [ #(#input_array_elements)* ];
-                        Self:: #process_fn_name (self,  #(#process_args)* ).into()
+                quote! {
+                    fn process(
+                        &mut self,
+                        _ctx: &mut #crate_ident::AudioCtx,
+                        _flags: &mut #crate_ident::UGenFlags,
+                        _input: #crate_ident::Frame<Self::Sample, Self::Inputs>,
+                    ) -> #crate_ident::Frame<Self::Sample, Self::Outputs> {
+                            let _input_array: [F; #num_input_channels ] = [ #(#input_array_elements)* ];
+                            Self:: #process_fn_name (self,  #(#process_args)* ).into()
+                    }
                 }
-            }
             } else {
                 remove_process_fn = true;
                 quote! {
                     #process_fn
                 }
             }
-
-            }
+        }
         None => quote! {
             fn process(
                 &mut self,
@@ -345,192 +355,215 @@ if index == 3 && !path.path.segments.iter().any(|seg| seg.ident == "Frame" || se
 
             // Check generics
             if process_block_fn.sig.generics.params.len() != 2 {
-                            matches_ugen_process_fn_sig = false;
+                matches_ugen_process_fn_sig = false;
             }
             // Check if the arguments match the UGen process fn
             for (index, input) in process_block_fn.sig.inputs.iter().enumerate() {
                 match (index, input) {
                     (0, syn::FnArg::Receiver(rec)) => {
                         if rec.mutability.is_none() {
-                        return Err(syn::Error::new(
-                            rec.span(),
-                            "process function must take &mut self",
-                        ));
+                            return Err(syn::Error::new(
+                                rec.span(),
+                                "process function must take &mut self",
+                            ));
                         }
                     }
-                    (index, syn::FnArg::Typed(ty)) => {
-                    match &*ty.ty {
+                    (index, syn::FnArg::Typed(ty)) => match &*ty.ty {
                         syn::Type::Reference(ref_type) => match &*ref_type.elem {
                             syn::Type::Path(path) => {
-                        #[allow(clippy::if_same_then_else)]
-                        if index == 1 && !path.path.segments.iter().any(|seg| seg.ident == "AudioCtx") {
-                            matches_ugen_process_fn_sig = false;
-                        } else if index == 2 && !path.path.segments.iter().any(|seg| seg.ident == "UGenFlags") {
-                            matches_ugen_process_fn_sig = false;
-                        } else if index == 3 && (ref_type.mutability.is_some() || !path.path.segments.iter().any(|seg| seg.ident == "InBlock")) {
-                            matches_ugen_process_fn_sig = false;
-                        } else if index == 4 && (ref_type.mutability.is_none() || !path.path.segments.iter().any(|seg| seg.ident == "OutBlock")) {
-                            matches_ugen_process_fn_sig = false;
-                        }  else if index > 4 {
-                            matches_ugen_process_fn_sig = false;
-
-                                    }
+                                #[allow(clippy::if_same_then_else)]
+                                if index == 1
+                                    && !path.path.segments.iter().any(|seg| seg.ident == "AudioCtx")
+                                {
+                                    matches_ugen_process_fn_sig = false;
+                                } else if index == 2
+                                    && !path
+                                        .path
+                                        .segments
+                                        .iter()
+                                        .any(|seg| seg.ident == "UGenFlags")
+                                {
+                                    matches_ugen_process_fn_sig = false;
+                                } else if index == 3
+                                    && (ref_type.mutability.is_some()
+                                        || !path
+                                            .path
+                                            .segments
+                                            .iter()
+                                            .any(|seg| seg.ident == "InBlock"))
+                                {
+                                    matches_ugen_process_fn_sig = false;
+                                } else if index == 4
+                                    && (ref_type.mutability.is_none()
+                                        || !path
+                                            .path
+                                            .segments
+                                            .iter()
+                                            .any(|seg| seg.ident == "OutBlock"))
+                                {
+                                    matches_ugen_process_fn_sig = false;
+                                } else if index > 4 {
+                                    matches_ugen_process_fn_sig = false;
                                 }
-                                _ => matches_ugen_process_fn_sig = false,
-                    }
-                                syn::Type::Path(path) => {
-if index == 3 && !path.path.segments.iter().any(|seg| seg.ident == "Frame" || seg.ident == "NumericArray") {
-                            matches_ugen_process_fn_sig = false;
-                        } 
                             }
-                                _ => 
-                            matches_ugen_process_fn_sig = false,
-                    }
-                    }
+                            _ => matches_ugen_process_fn_sig = false,
+                        },
+                        syn::Type::Path(path) => {
+                            if index == 3
+                                && !path
+                                    .path
+                                    .segments
+                                    .iter()
+                                    .any(|seg| seg.ident == "Frame" || seg.ident == "NumericArray")
+                            {
+                                matches_ugen_process_fn_sig = false;
+                            }
+                        }
+                        _ => matches_ugen_process_fn_sig = false,
+                    },
                     _ => matches_ugen_process_fn_sig = false,
                 }
             }
             if !matches_ugen_process_fn_sig {
+                let mut process_args = Vec::new();
 
-            let mut process_args = Vec::new();
-
-            let process_block_fn_name = &process_block_fn.sig.ident;
-            for input in &process_block_fn.sig.inputs {
-                if let syn::FnArg::Typed(pat_type) = input {
-                    match &*pat_type.ty {
-                        syn::Type::Reference(ref_type) => match &*ref_type.elem {
-                            syn::Type::Path(path) => {
-                                if path.path.segments.iter().any(|seg| seg.ident == "AudioCtx") {
-                                    process_args.push(quote! { _ctx.into(), });
-                                } else if path
-                                    .path
-                                    .segments
-                                    .iter()
-                                    .any(|seg| seg.ident == "UGenFlags")
-                                {
-                                    process_args.push(quote! { _flags.into(), });
-                                } else {
-                                    return Err(syn::Error::new(
-                                        path.span(),
-                                        "unknown argument in process_block function",
-                                    ));
-                                };
-                            }
-                            _ => {
-                                return Err(syn::Error::new(
-                                    pat_type.span(),
-                                    "unknown argument in process_block function",
-                                ));
-                            }
-                        },
-                        // [&[F]; N] is input, [&mut [F]; N] is output
-                        syn::Type::Array(array) => {
-                            let num_channels: usize = if let Expr::Lit(el) = &array.len {
-                                if let Lit::Int(i) = &el.lit {
-                                    i.base10_parse().unwrap()
-                                } else {
-                                    return Err(syn::Error::new(
-                                        el.span(),
-                                        "process function input array must use a literal length",
-                                    ));
-                                }
-                            } else {
-                                return Err(syn::Error::new(
-                                    array.span(),
-                                    "process function input array must use a literal length",
-                                ));
-                            };
-                            match array.elem.as_ref() {
-                                syn::Type::Reference(ref_type2) => {
-                                    if ref_type2.mutability.is_some() {
-                                        if let Some(num_output_channels) = num_output_channels {
-                                            if num_channels != num_output_channels {
-                                    return Err(syn::Error::new(
-                                        ref_type2.span(),
-                                                    "number of output chanels in process and process_block methods don't match"
-                                                ));
-                                            }
-                                        }
-                                        process_args.push(quote! { output_array, });
+                let process_block_fn_name = &process_block_fn.sig.ident;
+                for input in &process_block_fn.sig.inputs {
+                    if let syn::FnArg::Typed(pat_type) = input {
+                        match &*pat_type.ty {
+                            syn::Type::Reference(ref_type) => match &*ref_type.elem {
+                                syn::Type::Path(path) => {
+                                    if path.path.segments.iter().any(|seg| seg.ident == "AudioCtx")
+                                    {
+                                        process_args.push(quote! { _ctx.into(), });
+                                    } else if path
+                                        .path
+                                        .segments
+                                        .iter()
+                                        .any(|seg| seg.ident == "UGenFlags")
+                                    {
+                                        process_args.push(quote! { _flags.into(), });
                                     } else {
-                                            if let Some(num_input_channels) = num_input_channels {
-                                        if num_channels != num_input_channels {
-                                    return Err(syn::Error::new(
-                                        ref_type2.span(),
-                                                "number of input chanels in process and process_block methods don't match"
-                                                ));
-                                        }
-                                            }
-                                        process_args.push(quote! { input_array, });
-
-                                    }
-                                    // TODO: check that it's a slice of F/f32/f64
+                                        return Err(syn::Error::new(
+                                            path.span(),
+                                            "unknown argument in process_block function",
+                                        ));
+                                    };
                                 }
                                 _ => {
                                     return Err(syn::Error::new(
-                                        input.span(),
-                                        "unknown argument found in process_block function",
+                                        pat_type.span(),
+                                        "unknown argument in process_block function",
                                     ));
                                 }
+                            },
+                            // [&[F]; N] is input, [&mut [F]; N] is output
+                            syn::Type::Array(array) => {
+                                let num_channels: usize = if let Expr::Lit(el) = &array.len {
+                                    if let Lit::Int(i) = &el.lit {
+                                        i.base10_parse().unwrap()
+                                    } else {
+                                        return Err(syn::Error::new(
+                                            el.span(),
+                                            "process function input array must use a literal length",
+                                        ));
+                                    }
+                                } else {
+                                    return Err(syn::Error::new(
+                                        array.span(),
+                                        "process function input array must use a literal length",
+                                    ));
+                                };
+                                match array.elem.as_ref() {
+                                    syn::Type::Reference(ref_type2) => {
+                                        if ref_type2.mutability.is_some() {
+                                            if let Some(num_output_channels) = num_output_channels {
+                                                if num_channels != num_output_channels {
+                                                    return Err(syn::Error::new(
+                                                        ref_type2.span(),
+                                                        "number of output chanels in process and process_block methods don't match",
+                                                    ));
+                                                }
+                                            }
+                                            process_args.push(quote! { output_array, });
+                                        } else {
+                                            if let Some(num_input_channels) = num_input_channels {
+                                                if num_channels != num_input_channels {
+                                                    return Err(syn::Error::new(
+                                                        ref_type2.span(),
+                                                        "number of input chanels in process and process_block methods don't match",
+                                                    ));
+                                                }
+                                            }
+                                            process_args.push(quote! { input_array, });
+                                        }
+                                        // TODO: check that it's a slice of F/f32/f64
+                                    }
+                                    _ => {
+                                        return Err(syn::Error::new(
+                                            input.span(),
+                                            "unknown argument found in process_block function",
+                                        ));
+                                    }
+                                }
                             }
-                        }
 
-                        _ => {
-                            return Err(syn::Error::new(
-                                input.span(),
-                                "unknown argument found in process_block function",
-                            ));
+                            _ => {
+                                return Err(syn::Error::new(
+                                    input.span(),
+                                    "unknown argument found in process_block function",
+                                ));
+                            }
                         }
                     }
                 }
-            }
-            let num_input_channels = num_input_channels.unwrap_or(0);
-            let input_array_elements = (0..num_input_channels)
-                .map(|i: usize| quote! { input.channel_as_slice( #i ), })
-                .collect::<Vec<_>>();
-            let num_output_channels = num_output_channels.unwrap_or(0);
-            let output_array_elements = (0..num_output_channels)
-                .map(|_i: usize| quote! { outputs.next().unwrap(), })
-                .collect::<Vec<_>>();
+                let num_input_channels = num_input_channels.unwrap_or(0);
+                let input_array_elements = (0..num_input_channels)
+                    .map(|i: usize| quote! { input.channel_as_slice( #i ), })
+                    .collect::<Vec<_>>();
+                let num_output_channels = num_output_channels.unwrap_or(0);
+                let output_array_elements = (0..num_output_channels)
+                    .map(|_i: usize| quote! { outputs.next().unwrap(), })
+                    .collect::<Vec<_>>();
 
-            // let input_array = if num_input_channels == 0 {
-            //         quote!{}
-            //     } else {
-            //         quote! {
-            //         let input_array: [&[F]; #num_input_channels ] = [ #(#input_array_elements)* ];
-            //         }
-            //     };
-            // let output_array = if num_output_channels == 0 {
-            //         quote!{}
-            //     } else {
-            //         quote! {
-            //         let mut outputs = output.iter_mut();
-            //         let output_array: [&mut[F]; #num_output_channels ]= [ #(#output_array_elements)* ];
-            //         }
-            //     };
+                // let input_array = if num_input_channels == 0 {
+                //         quote!{}
+                //     } else {
+                //         quote! {
+                //         let input_array: [&[F]; #num_input_channels ] = [ #(#input_array_elements)* ];
+                //         }
+                //     };
+                // let output_array = if num_output_channels == 0 {
+                //         quote!{}
+                //     } else {
+                //         quote! {
+                //         let mut outputs = output.iter_mut();
+                //         let output_array: [&mut[F]; #num_output_channels ]= [ #(#output_array_elements)* ];
+                //         }
+                //     };
 
-            quote! {
+                quote! {
 
-                fn process_block<InBlock, OutBlock>(
-                    &mut self,
-                    _ctx: &mut #crate_ident::AudioCtx,
-                    _flags: &mut #crate_ident::UGenFlags,
-                    input: &InBlock,
-                    output: &mut OutBlock,
-                ) where
-                    InBlock: #crate_ident::BlockRead<Sample = Self::Sample>,
-                    OutBlock: #crate_ident::Block<Sample = Self::Sample>,
-                {
-                    let input_array: [&[F]; #num_input_channels ] = [ #(#input_array_elements)* ];
-                    let mut outputs = output.iter_mut();
-                    let output_array: [&mut[F]; #num_output_channels ]= [ #(#output_array_elements)* ];
-                    Self:: #process_block_fn_name (self,  #(#process_args)* ).into()
+                    fn process_block<InBlock, OutBlock>(
+                        &mut self,
+                        _ctx: &mut #crate_ident::AudioCtx,
+                        _flags: &mut #crate_ident::UGenFlags,
+                        input: &InBlock,
+                        output: &mut OutBlock,
+                    ) where
+                        InBlock: #crate_ident::BlockRead<Sample = Self::Sample>,
+                        OutBlock: #crate_ident::Block<Sample = Self::Sample>,
+                    {
+                        let input_array: [&[F]; #num_input_channels ] = [ #(#input_array_elements)* ];
+                        let mut outputs = output.iter_mut();
+                        let output_array: [&mut[F]; #num_output_channels ]= [ #(#output_array_elements)* ];
+                        Self:: #process_block_fn_name (self,  #(#process_args)* ).into()
+                    }
                 }
-            }
             } else {
                 // The provided function matches the UGen process_block, paste it as is
                 remove_process_block_fn = true;
-                quote!{ #process_block_fn }
+                quote! { #process_block_fn }
             }
         }
         None => quote! {},
@@ -595,7 +628,7 @@ if index == 3 && !path.path.segments.iter().any(|seg| seg.ident == "Frame" || se
                 let kind = if let Some(kind) = &p.kind {
                     let kind = match kind {
                         FloatParameterKind::Amplitude => quote! { #crate_ident::FloatParameterKind::Amplitude },
-                        FloatParameterKind::Frequency => quote! { #crate_ident::FloatParameterKind::Frequency },                        
+                        FloatParameterKind::Frequency => quote! { #crate_ident::FloatParameterKind::Frequency },
                         FloatParameterKind::Q => quote! { #crate_ident::FloatParameterKind::Q },
                         FloatParameterKind::Seconds => quote! { #crate_ident::FloatParameterKind::Seconds },
                     };
@@ -636,12 +669,24 @@ if index == 3 && !path.path.segments.iter().any(|seg| seg.ident == "Frame" || se
     // Remove all parsed attributes from the impl block
     let mut input = input.clone();
     let mut items_to_remove = vec![];
-    for (index, item )in &mut input.items.iter_mut().enumerate() {
+    for (index, item) in &mut input.items.iter_mut().enumerate() {
         if let ImplItem::Fn(method) = item {
-            if remove_process_fn && (method.sig.ident == "process" || method.attrs.iter().any(|attr| attr.path().is_ident("process"))) {
+            if remove_process_fn
+                && (method.sig.ident == "process"
+                    || method
+                        .attrs
+                        .iter()
+                        .any(|attr| attr.path().is_ident("process")))
+            {
                 items_to_remove.push(index);
             }
-            if remove_process_block_fn && (method.sig.ident == "process_block" || method.attrs.iter().any(|attr| attr.path().is_ident("process_block"))) {
+            if remove_process_block_fn
+                && (method.sig.ident == "process_block"
+                    || method
+                        .attrs
+                        .iter()
+                        .any(|attr| attr.path().is_ident("process_block")))
+            {
                 items_to_remove.push(index);
             }
             method.attrs.retain(|attr| {
@@ -655,21 +700,30 @@ if index == 3 && !path.path.segments.iter().any(|seg| seg.ident == "Frame" || se
     for i in items_to_remove.into_iter().rev() {
         input.items.remove(i);
     }
-    
+
     // Remove associated types
-    input.items.retain(|item| if let ImplItem::Type(ty) = item {
-        !matches!(ty.ident.to_string().as_ref(), "Sample" | "Inputs" | "Outputs")
-    } else {true});
+    input.items.retain(|item| {
+        if let ImplItem::Type(ty) = item {
+            !matches!(
+                ty.ident.to_string().as_ref(),
+                "Sample" | "Inputs" | "Outputs"
+            )
+        } else {
+            true
+        }
+    });
 
     let atype_sample = if let Some(ty) = sample_type_override {
-    quote! {type Sample = #ty ;}
-} else {
-            quote!{ type Sample = F; }
-};
-    let atype_inputs = inputs_type_override.map(|ty| quote!{ type Inputs = #ty ; })
-        .unwrap_or(quote!{type Inputs = #crate_ident::typenum::#num_inputs ;});
-    let atype_outputs = outputs_type_override.map(|ty| quote!{ type Outputs = #ty ; })
-        .unwrap_or(quote!{type Outputs = #crate_ident::typenum::#num_outputs ;});
+        quote! {type Sample = #ty ;}
+    } else {
+        quote! { type Sample = F; }
+    };
+    let atype_inputs = inputs_type_override
+        .map(|ty| quote! { type Inputs = #ty ; })
+        .unwrap_or(quote! {type Inputs = #crate_ident::typenum::#num_inputs ;});
+    let atype_outputs = outputs_type_override
+        .map(|ty| quote! { type Outputs = #ty ; })
+        .unwrap_or(quote! {type Outputs = #crate_ident::typenum::#num_outputs ;});
 
     Ok(quote! {
         impl #impl_block_generics #crate_ident::UGen for #struct_name {
@@ -851,7 +905,10 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
         }
         if let Some(attrs) = attrs {
             if let Some(akind) = attrs.kind {
-                if !matches!(pdata.ty, ParameterType::Float32 | ParameterType::PFloat | ParameterType::Float64) {
+                if !matches!(
+                    pdata.ty,
+                    ParameterType::Float32 | ParameterType::PFloat | ParameterType::Float64
+                ) {
                     return Err(syn::Error::new(
                         akind.span(),
                         "`kind` is only supported for float parameters. Use `from` to derive PInteger hints from a PIntegerConvertible type.",
@@ -873,7 +930,7 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
                     }
                 };
             }
-            if let Some(from) = attrs.from{
+            if let Some(from) = attrs.from {
                 if !matches!(pdata.ty, ParameterType::Integer) {
                     return Err(syn::Error::new(
                         from.span(),
@@ -883,25 +940,25 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
                 pdata.from_pinteger_convertible = Some(from);
             }
             if let Some(Expr::Range(range)) = attrs.range {
-                    if range.start.is_none() {
-                        return Err(syn::Error::new(
-                            range.span(),
-                            "Parameter range must have a start value",
-                        ));
-                    }
-                    if range.end.is_none() {
-                        return Err(syn::Error::new(
-                            range.span(),
-                            "Parameter range must have an end value",
-                        ));
-                    }
-                    if let syn::RangeLimits::HalfOpen(_) = range.limits {
-                        return Err(syn::Error::new(
-                            range.span(),
-                            "Parameter range must be inclusive/closed",
-                        ));
-                    }
-                    pdata.range = Some(range);
+                if range.start.is_none() {
+                    return Err(syn::Error::new(
+                        range.span(),
+                        "Parameter range must have a start value",
+                    ));
+                }
+                if range.end.is_none() {
+                    return Err(syn::Error::new(
+                        range.span(),
+                        "Parameter range must have an end value",
+                    ));
+                }
+                if let syn::RangeLimits::HalfOpen(_) = range.limits {
+                    return Err(syn::Error::new(
+                        range.span(),
+                        "Parameter range must be inclusive/closed",
+                    ));
+                }
+                pdata.range = Some(range);
             }
             pdata.default = attrs.default;
             if let Some(logarithmic) = attrs.logarithmic {

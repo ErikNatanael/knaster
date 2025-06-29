@@ -1,6 +1,6 @@
 use knaster_core::{
-    AudioCtx, Block, Float, PFloat, ParameterValue, StaticBlock, UGen, UGenFlags,
-    log::ArLogSender, typenum::*,
+    AudioCtx, Block, Float, PFloat, ParameterValue, StaticBlock, UGen, UGenFlags, log::ArLogSender,
+    typenum::*,
 };
 
 /// Outputs a static number every frame

@@ -30,7 +30,9 @@ pub trait AudioBackend {
 #[allow(missing_docs)]
 #[derive(thiserror::Error, Debug)]
 pub enum AudioBackendError {
-    #[error("You tried to start a backend that was already running. A backend can only be started once.")]
+    #[error(
+        "You tried to start a backend that was already running. A backend can only be started once."
+    )]
     BackendAlreadyRunning,
     #[error("You tried to stop a backend that was already stopped.")]
     BackendNotRunning,

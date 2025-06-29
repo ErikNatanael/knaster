@@ -1,4 +1,4 @@
-use knaster_graph::{math::*, typenum::U1, Float};
+use knaster_graph::{Float, math::*, typenum::U1};
 
 pub fn mul<F: Float>() -> MathUGen<F, U1, Mul> {
     MathUGen::new()
