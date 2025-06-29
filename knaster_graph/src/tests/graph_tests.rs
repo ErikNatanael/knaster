@@ -1,5 +1,5 @@
 use crate::Time;
-use crate::connectable::NodeOrGraph;
+use crate::graph::NodeOrGraph;
 use crate::runner::RunnerOptions;
 use crate::tests::utils::TestNumUGen;
 use crate::{handle::HandleTrait, runner::Runner, tests::utils::TestInPlusParamUGen};
@@ -12,7 +12,7 @@ use knaster_core::{Block, Done, PTrigger, typenum::U3};
 #[test]
 fn graph_inputs_to_outputs() {
     let block_size = 16;
-    let (mut graph, mut runner, log_receiver) = Runner::new::<U3, U3>(RunnerOptions {
+    let (mut graph, mut runner, _log_receiver) = Runner::new::<U3, U3>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -41,7 +41,7 @@ fn graph_inputs_to_outputs() {
 #[test]
 fn graph_inputs_to_nodes_to_outputs() {
     let block_size = 16;
-    let (mut graph, mut runner, log_receiver) = Runner::new::<U3, U3>(RunnerOptions {
+    let (mut graph, mut runner, _log_receiver) = Runner::new::<U3, U3>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -86,14 +86,14 @@ fn graph_inputs_to_nodes_to_outputs() {
 #[test]
 fn multichannel_nodes() {
     let block_size = 16;
-    let (mut graph, mut runner, log_receiver) = Runner::new::<U3, U2>(RunnerOptions {
+    let (mut graph, mut runner, _log_receiver) = Runner::new::<U3, U2>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
         ..Default::default()
     });
 
-    let (v0_0, v0_1, v1_0, v1_1, m) = graph.edit(|graph| {
+    let (v0_0, _v0_1, v1_0, _v1_1, m) = graph.edit(|graph| {
         let v0_0 = graph.push(TestNumUGen::new(0.125));
         let v0_1 = graph.push(TestNumUGen::new(1.));
         let v1_0 = graph.push(TestNumUGen::new(0.5));
@@ -117,9 +117,9 @@ fn multichannel_nodes() {
 
     graph.edit(|graph| {
         let v0_0 = graph.handle(v0_0).unwrap();
-        let v0_1 = graph.handle(v0_1).unwrap();
+        // let v0_1 = graph.handle(v0_1).unwrap();
         let v1_0 = graph.handle(v1_0).unwrap();
-        let v1_1 = graph.handle(v1_1).unwrap();
+        // let v1_1 = graph.handle(v1_1).unwrap();
         let m = graph.handle(m).unwrap();
         // Change the graph so that the output of m is multiplied by 0.5 and 0.125 respectively, but using two different nodes
         let m2 = graph.push(MathUGen::<f64, U1, Mul>::new()).dynamic();
@@ -145,7 +145,7 @@ fn multichannel_nodes() {
 #[test]
 fn free_node_when_done() {
     let block_size = 16;
-    let (mut graph, mut runner, log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
+    let (mut graph, mut runner, _log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -179,7 +179,7 @@ fn free_node_when_done() {
 #[test]
 fn feedback_nodes() {
     let block_size = 16;
-    let (mut g, mut runner, log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+    let (mut g, mut runner, _log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -220,7 +220,7 @@ fn feedback_nodes() {
 #[test]
 fn feedback_nodes2() {
     let block_size = 16;
-    let (mut g, mut runner, log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+    let (mut g, mut runner, _log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -266,11 +266,11 @@ fn disconnect() {
         ..Default::default()
     });
 
-    let n1 = g.push(TestInPlusParamUGen::new());
+    let n1 = g.push_internal(TestInPlusParamUGen::new());
     g.set(&n1, 0, 0.5, Time::asap()).unwrap();
-    let n2 = g.push(TestInPlusParamUGen::new());
+    let n2 = g.push_internal(TestInPlusParamUGen::new());
     g.set(&n2, 0, 1.25, Time::asap()).unwrap();
-    let n3 = g.push(TestInPlusParamUGen::new());
+    let n3 = g.push_internal(TestInPlusParamUGen::new());
     g.set(&n3, 0, 0.125, Time::asap()).unwrap();
     g.connect2(&n1, 0, 0, &n2).unwrap();
     g.connect2(&n2, 0, 0, &n3).unwrap();

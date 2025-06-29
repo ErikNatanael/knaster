@@ -1,6 +1,5 @@
 #![no_std]
 
-#[cfg(feature = "alloc")]
 extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
@@ -24,15 +23,15 @@ use core::boxed::Box;
 pub use knaster_graph::*;
 use knaster_graph::{
     audio_backend::{AudioBackend, AudioBackendError, cpal::CpalBackendOptions},
-    graph::{Graph, GraphOptions},
+    graph::Graph,
     log::ArLogMessage,
     runner::{Runner, RunnerOptions},
     typenum::{U0, U2},
 };
 
+#[allow(clippy::type_complexity)]
 pub struct KnasterBuilder<F: Float> {
     runner_options: RunnerOptions,
-    graph_options: GraphOptions,
     backend: Option<Box<dyn AudioBackend<Sample = F>>>,
     log_handler: Option<Box<dyn FnMut(&[ArLogMessage]) + Send>>,
 }
@@ -70,6 +69,7 @@ impl<F: Float> KnasterBuilder<F> {
         self.backend = Some(Box::new(backend));
         self
     }
+    #[allow(clippy::type_complexity)]
     pub fn log_handler(mut self, log_handler: Box<dyn FnMut(&[ArLogMessage]) + Send>) -> Self {
         self.log_handler = Some(log_handler);
         self
@@ -78,7 +78,6 @@ impl<F: Float> KnasterBuilder<F> {
 pub fn knaster<F: Float>() -> KnasterBuilder<F> {
     KnasterBuilder {
         runner_options: RunnerOptions::default(),
-        graph_options: GraphOptions::default(),
         backend: None,
         log_handler: None,
     }

@@ -66,8 +66,8 @@ impl<F: Float, InputChannels: Size, OutputChannels: Size>
     }
     fn process(
         &mut self,
-        ctx: &mut AudioCtx,
-        flags: &mut UGenFlags,
+        _ctx: &mut AudioCtx,
+        _flags: &mut UGenFlags,
         input: Frame<Self::Sample, Self::Inputs>,
     ) -> Frame<Self::Sample, Self::Outputs> {
         let mut outp = Frame::default();
@@ -79,8 +79,8 @@ impl<F: Float, InputChannels: Size, OutputChannels: Size>
 
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        ctx: &mut AudioCtx,
-        flags: &mut UGenFlags,
+        _ctx: &mut AudioCtx,
+        _flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where

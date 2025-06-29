@@ -1,6 +1,8 @@
 use alloc::boxed::Box;
 
 use crate::block::{AggregateBlockRead, RawBlock};
+#[allow(unused)]
+use crate::graph::Graph;
 use knaster_core::{AudioCtx, Float, ParameterValue, UGen, UGenFlags};
 use knaster_core::{ParameterHint, typenum::*};
 
@@ -26,6 +28,11 @@ pub trait DynUGen<F: Float> {
     fn outputs(&self) -> u16;
     fn parameters(&self) -> u16;
 
+    /// Register a new buffer from which a parameter should be set every sample
+    ///
+    /// # Safety
+    /// The caller guarantees that `buffer` points to a contiguous section of memory, at least as
+    /// large as the largest block size used in the [`Graph`].
     unsafe fn set_ar_param_buffer(&mut self, ctx: &mut AudioCtx, index: usize, buffer: *const F);
     fn set_delay_within_block_for_param(&mut self, ctx: &mut AudioCtx, index: usize, delay: u16);
     fn param_apply(&mut self, ctx: &mut AudioCtx, parameter: usize, value: ParameterValue);

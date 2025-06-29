@@ -36,7 +36,7 @@ impl NodeData {
     }
 }
 
-enum NodeUGen<F: Float> {
+pub(crate) enum NodeUGen<F: Float> {
     /// The UGen is stored here and has not yet been moved to the audio thread.
     Local(UGenEnum<F>),
     /// The UGen is stored on the audio thread at the given index (updated after task generation).
@@ -128,7 +128,7 @@ impl<F: Float> Node<F> {
     /// generated when this function is called.
     ///
     /// The [`Node`] will save the index in order to transfer the UGen during the next update.
-    pub(super) fn to_task(&mut self, node_order_index: usize) -> Task<F> {
+    pub(super) fn make_task(&mut self, node_order_index: usize) -> Task<F> {
         let in_buffers = self.node_inputs.clone();
         let out_buffer = self
             .node_output_ptr()

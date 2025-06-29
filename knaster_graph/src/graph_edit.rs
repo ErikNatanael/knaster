@@ -25,7 +25,7 @@ use crate::core::{
     ops::{Add, Mul},
     sync::RwLock,
 };
-use crate::graph::{GraphError, GraphOptions};
+use crate::graph::{Channels, GraphError, GraphOptions, NodeOrGraph};
 use crate::graph_gen::GraphGen;
 use crate::handle::SchedulingChannelSender;
 use crate::node::NodeData;
@@ -39,7 +39,6 @@ use knaster_core::{Float, Param, Size, UGen, numeric_array::NumericArray, typenu
 use smallvec::SmallVec;
 
 use crate::{
-    connectable::{Channels, NodeOrGraph},
     graph::{Graph, NodeId},
     handle::HandleTrait,
 };
@@ -58,7 +57,7 @@ impl<'b, F: Float> GraphEdit<'b, F> {
     }
     /// Create a new node in the graph and return a handle to it.
     pub fn push<'a, T: UGen<Sample = F> + 'static>(&'a self, ugen: T) -> SH<'a, 'b, F, Handle3<T>> {
-        let handle = self.graph.write().unwrap().push(ugen);
+        let handle = self.graph.write().unwrap().push_internal(ugen);
         let node_id = handle.node_id();
         SH {
             nodes: Handle3 {
@@ -160,6 +159,7 @@ impl<'b, F: Float> GraphEdit<'b, F> {
 
     // TODO: Move this to GraphEdit and have it take a GraphEdit callback for the new Graph that
     // gets evaluated before sending the GraphGen to the audio thread.
+    #[allow(clippy::type_complexity)]
     pub fn subgraph<'a, Inputs: Size, Outputs: Size>(
         &'a self,
         options: GraphOptions,
@@ -887,7 +887,7 @@ macro_rules! math_gen_fn_static {
             let mut out_channels = ChannelIterBuilder::new();
             let mut g = graph.write().unwrap();
             for (s0, s1) in Static::iter_outputs(&s0).zip(s1.iter_outputs()) {
-                let mul = g.push(MathUGen::<_, U1, $op>::new());
+                let mul = g.push_internal(MathUGen::<_, U1, $op>::new());
                 if let Err(e) = g.connect2(s0.0, s0.1, 0, NodeOrGraph::Node(mul.node_id())) {
                     log::error!("Failed to connect node to arithmetics node: {e}");
                 }
@@ -979,9 +979,9 @@ macro_rules! math_gen_fn_static_constant {
             let mut g = graph.write().unwrap();
             // TODO: Make a separate UGen for constant number maths to avoid this extra node
             let c: F = s1.into().into_f();
-            let c = g.push(Constant::new(c));
+            let c = g.push_internal(Constant::new(c));
             for s0 in Static::iter_outputs(&s0) {
-                let mul = g.push(MathUGen::<_, U1, $op>::new());
+                let mul = g.push_internal(MathUGen::<_, U1, $op>::new());
                 if let Err(e) = g.connect2(s0.0, s0.1, 0, NodeOrGraph::Node(mul.node_id())) {
                     log::error!("Failed to connect node to arithmetics node: {e}");
                 }
@@ -1003,7 +1003,7 @@ math_gen_fn_static_constant!(add_sources_static_constant, knaster_core::math::Ad
 math_gen_fn_static_constant!(sub_sources_static_constant, knaster_core::math::Sub);
 math_gen_fn_static_constant!(mul_sources_static_constant, knaster_core::math::Mul);
 math_gen_fn_static_constant!(div_sources_static_constant, knaster_core::math::Div);
-math_gen_fn_static_constant!(pow_sources_static_constant, knaster_core::math::Pow);
+// math_gen_fn_static_constant!(pow_sources_static_constant, knaster_core::math::Pow);
 
 // Macros for implementing arithmetics on sources without statically known channel configurations
 macro_rules! math_gen_fn_dynamic {
@@ -1019,7 +1019,7 @@ macro_rules! math_gen_fn_dynamic {
             let mut out_channels = SmallVec::with_capacity(s0.outputs() as usize);
             let mut g = graph.write().unwrap();
             for (s0, s1) in Dynamic::iter_outputs(&s0).zip(s1.iter_outputs()) {
-                let mul = g.push(MathUGen::<_, U1, $op>::new());
+                let mul = g.push_internal(MathUGen::<_, U1, $op>::new());
                 if let Err(e) = g.connect2(s0.0, s0.1, 0, NodeOrGraph::Node(mul.node_id())) {
                     log::error!("Failed to connect node to arithmetics node: {e}");
                 }
@@ -1052,9 +1052,9 @@ macro_rules! math_gen_fn_dynamic_constant {
             let mut out_channels = SmallVec::with_capacity(s0.outputs() as usize);
             let mut g = graph.write().unwrap();
             let c: F = s1.into().into_f();
-            let c = g.push(Constant::new(c));
+            let c = g.push_internal(Constant::new(c));
             for s0 in Dynamic::iter_outputs(&s0) {
-                let mul = g.push(MathUGen::<_, U1, $op>::new());
+                let mul = g.push_internal(MathUGen::<_, U1, $op>::new());
                 if let Err(e) = g.connect2(s0.0, s0.1, 0, NodeOrGraph::Node(mul.node_id())) {
                     log::error!("Failed to connect node to arithmetics node: {e}");
                 }
@@ -1074,7 +1074,7 @@ math_gen_fn_dynamic_constant!(add_sources_dynamic_constant, knaster_core::math::
 math_gen_fn_dynamic_constant!(sub_sources_dynamic_constant, knaster_core::math::Sub);
 math_gen_fn_dynamic_constant!(mul_sources_dynamic_constant, knaster_core::math::Mul);
 math_gen_fn_dynamic_constant!(div_sources_dynamic_constant, knaster_core::math::Div);
-math_gen_fn_dynamic_constant!(pow_sources_dynamic_constant, knaster_core::math::Pow);
+// math_gen_fn_dynamic_constant!(pow_sources_dynamic_constant, knaster_core::math::Pow);
 
 // Arithmetics with static types
 macro_rules! math_impl_static_static {
@@ -1900,7 +1900,7 @@ mod tests {
     #[test]
     fn scope() {
         let block_size = 16;
-        let (mut graph, runner, log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
+        let (mut graph, _runner, _log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
             block_size,
             sample_rate: 48000,
             ring_buffer_size: 50,
@@ -1920,7 +1920,7 @@ mod tests {
                 let lpf_r = graph.push(OnePoleLpf::new(2600.));
                 a.to(lpf).to(pan).to_graph_out();
                 let d = (a / c - c) + c * c * 0.2 / 4 - c;
-                let e = (d | d) - (c | c);
+                let _e = (d | d) - (c | c);
                 // (0.2 * e).to_graph_out();
                 ((a >> lpf >> pan >> (lpf_l | lpf_r)) * (amp | amp)).to_graph_out();
                 lpf.to_graph_out_channels(1);
@@ -1938,10 +1938,10 @@ mod tests {
                 let mut freq = sine.param("freq");
                 freq.set_time(400., t).unwrap();
 
-                let freq = sine.try_param("freq").unwrap();
+                let _freq = sine.try_param("freq").unwrap();
                 // s = Some(sine);
                 let c = graph.push(Constant::new(0.2));
-                let c = sine * sine2 * c;
+                let _c = sine * sine2 * c;
                 (sine.id(), lpf.id())
             }
         });
@@ -1956,77 +1956,14 @@ mod tests {
                 // Use the handle to connect it to another node
                 let new_sine = graph.push(SinWt::new(200.));
                 let new_pan = graph.push(Pan2::new(0.));
-                let a = (handle * new_sine) >> new_pan >> (lpf | lpf);
+                let _a = (handle * new_sine) >> new_pan >> (lpf | lpf);
                 let a = (new_sine * handle) >> new_pan;
-                ((handle * 2.0) - 3) / 5.0 + handle;
+                let _result = ((handle * 2.0) - 3) / 5.0 + handle;
                 (new_pan + (handle2 | handle2)).to(lpf | lpf);
                 a.to_graph_out();
-                (new_sine + handle) >> new_pan;
+                let _ = (new_sine + handle) >> new_pan;
             }
         });
-    }
-
-    #[test]
-    fn connectable3() {
-        env_logger::init();
-        let block_size = 16;
-        let (mut graph, mut runner, log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
-            block_size,
-            sample_rate: 48000,
-            ring_buffer_size: 50,
-            ..Default::default()
-        });
-        let sine = graph.push(SinWt::new(200.));
-        // Remake the following into something easier to read:
-        /*
-        let exciter_amp = g.push(Constant::new(0.5));
-        let exciter = g.push(HalfSineWt::new(2000.).wr_mul(0.1));
-        let noise_mix = g.push(Constant::new(0.25));
-        let noise = g.push(WhiteNoise::new());
-        let exciter_lpf = g.push(OnePoleLpf::new(2600.));
-        let en = ugen_mul(&exciter, &exciter_amp, g)?;
-        let en2 = ugen_mul(&noise, &noise_mix, g)?;
-        let en3 = ugen_mul(&en, &en2, g)?;
-        let add = ugen_add(&en, &en3, g)?;
-        g.connect(&add, 0, 0, &exciter_lpf)?;
-        */
-        // Could nodes be named inline, e.g. with a `name("exciter_amp")`. We need named nodes for
-        // two reasons:
-        // 1 connecting between them, audio and parameters
-        // 2 manually changing parameter values later
-        //
-        // For 1, the connections can almost always be made in a chain with some parallel tracks.
-        // Sometimes we need to add nodes later, especially whole sub-graphs going into effects.
-        //
-        // For 2, this would be neater in a larger Synth like interface since there is no type
-        // safety for parameters anyway.
-        //
-        // graph.edit().push(Constant::new(0.5)).name("exciter_amp_node").store_param(0, "exciter_amp");
-        // graph.edit().push(Constant::new(0.5)).name("exciter_amp_node").store_param(0, "exciter_amp");
-        // let exciter_amp = graph.node("exciter_amp_node")?;
-        // graph.edit().connect(exciter_amp).to(SinWt::new(2000.)).name("sine").store_param("freq",
-        // "freq");
-        // graph.set("exciter_amp")?.value(0.2).smoothing(Linear(0.5));
-        // graph.set("freq")?.value().smoothing(Linear(0.5));
-
-        // let exciter_amp = graph.push(Constant::new(0.5));
-        // let noise_mix = graph.push(Constant::new(0.25));
-        // let exc = (graph.connect_from_new(SinWt::new(2000.).wr_mul(0.1)) * exciter_amp).inner();
-        //
-        // let noise = graph.connect_from_new(WhiteNoise::new()) * noise_mix;
-        // let c = ((noise * exc) + exc).to_new(OnePoleLpf::new(2600.));
-        // let lpf = c.handle();
-        // let c = c.to_new(Pan2::new(0.0));
-        // let pan = c.handle();
-        // c.to_graph_out([0, 1]);
-
-        graph.commit_changes().unwrap();
-        assert_eq!(graph.inspection().nodes.len(), 1);
-        for _ in 0..10 {
-            unsafe {
-                runner.run(&[]);
-            }
-        }
     }
 
     use crate::tests::utils::TestInPlusParamUGen;

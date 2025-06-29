@@ -11,8 +11,8 @@ use core::ops::Mul;
 use knaster_core::{Float, Size, UGen, math::MathUGen, numeric_array::NumericArray, typenum::*};
 
 use crate::{
-    connectable::NodeOrGraph,
     graph::Graph,
+    graph::NodeOrGraph,
     handle::{Handle, HandleTrait},
 };
 
@@ -290,7 +290,7 @@ where
         {
             let add = NodeOrGraph::Node(
                 self.graph
-                    .push(MathUGen::<F, U2, knaster_core::math::Add>::new())
+                    .push_internal(MathUGen::<F, U2, knaster_core::math::Add>::new())
                     .node_id(),
             );
             self.graph

@@ -103,18 +103,6 @@ impl<H: HandleTrait> From<&H> for Connectable {
         Connectable::from_node(h.subset(0, input_channels), h.subset(0, output_channels))
     }
 }
-// The impl of Default allows NumericArray::default() which is handy
-#[derive(Debug, Default, Copy, Clone)]
-pub enum NodeOrGraph {
-    #[default]
-    Graph,
-    Node(NodeId),
-}
-impl<T: Into<NodeId>> From<T> for NodeOrGraph {
-    fn from(value: T) -> Self {
-        Self::Node(value.into())
-    }
-}
 pub enum Source {
     Graph,
     Node(NodeId),

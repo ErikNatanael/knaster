@@ -3,7 +3,6 @@ use std::time::Duration;
 use anyhow::Result;
 use knaster_core::envelopes::EnvAsr;
 use knaster_core::log::ArLogSender;
-use knaster_core::math::{MathUGen, Mul};
 use knaster_core::noise::{RandomLin, WhiteNoise};
 use knaster_core::onepole::OnePoleHpf;
 use knaster_core::{AudioCtx, Done, Seconds};
@@ -21,7 +20,6 @@ use knaster_graph::{
         cpal::{CpalBackend, CpalBackendOptions},
     },
     graph::GraphOptions,
-    handle::HandleTrait,
     runner::Runner,
 };
 use rand::Rng;
@@ -30,12 +28,13 @@ fn main() -> Result<()> {
     let mut backend = CpalBackend::new(CpalBackendOptions::default())?;
 
     // Create a graph
-    let (mut top_level_graph, runner, log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
-        block_size: backend.block_size().unwrap_or(64),
-        sample_rate: backend.sample_rate(),
-        ring_buffer_size: 200,
-        ..Default::default()
-    });
+    let (mut top_level_graph, runner, _log_receiver) =
+        Runner::<f32>::new::<U0, U2>(RunnerOptions {
+            block_size: backend.block_size().unwrap_or(64),
+            sample_rate: backend.sample_rate(),
+            ring_buffer_size: 200,
+            ..Default::default()
+        });
     backend.start_processing(runner)?;
     // push some nodes
     loop {
@@ -69,8 +68,7 @@ fn main() -> Result<()> {
             env.param("release_time").set(0.2)?;
             env.param("t_restart").set(knaster_graph::PTrigger)?;
             env.param("t_release")
-                .trig_after(Seconds::from_secs_f64(0.5));
-            let mult = graph.push(MathUGen::<_, U1, Mul>::new());
+                .trig_after(Seconds::from_secs_f64(0.5))?;
             let modulator = graph.push(SinNumeric::new(0.5).wr_powi(2).wr_mul(5000.).wr_add(freq));
             modulator.param("freq").set(0.5)?;
             let random_lin_modulator =

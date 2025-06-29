@@ -1,4 +1,4 @@
-use knaster_core::{AudioCtx, Float, PFloat, UGen, UGenFlags, typenum::*};
+use knaster_core::{AudioCtx, Float, PFloat, UGen, UGenFlags};
 /// Random numbers 0..1 with linear interpolation with new values at some frequency. Freq is sampled at control rate only.
 pub struct RandomLin<F: Copy = f32> {
     current_value: F,

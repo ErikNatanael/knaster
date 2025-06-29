@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use anyhow::Result;
 use knaster_core::envelopes::EnvAsr;
-use knaster_core::math::{MathUGen, Mul};
 use knaster_core::typenum::U1;
 use knaster_core::{
     Done,
@@ -18,7 +17,6 @@ use knaster_graph::{
         cpal::{CpalBackend, CpalBackendOptions},
     },
     graph::GraphOptions,
-    handle::HandleTrait,
     runner::Runner,
 };
 
@@ -26,7 +24,7 @@ fn main() -> Result<()> {
     let mut backend = CpalBackend::new(CpalBackendOptions::default())?;
 
     // Create a graph
-    let (mut top_graph, runner, log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
+    let (mut top_graph, runner, _log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
         block_size: backend.block_size().unwrap_or(64),
         sample_rate: backend.sample_rate(),
         ring_buffer_size: 200,
@@ -54,14 +52,14 @@ fn main() -> Result<()> {
             }
             // push some nodes
 
-            let graph = second_graph.edit(|graph| {
+            let _graph = second_graph.edit(|graph| {
                 let (gh, graph) = graph.subgraph::<U0, U1>(GraphOptions::default(), |g| {
                     let osc1 = WrSmoothParams::new(SinNumeric::new(freq * (i + 1) as f32));
-                    let osc1 = graph.push(osc1.wr_mul(0.05));
+                    let osc1 = g.push(osc1.wr_mul(0.05));
                     osc1.param("freq").set(freq * (i + 1) as f32).unwrap();
                     let attack_time = (attack_time_phase.sin() * 0.1).abs();
                     let release_time = release_time_phase.sin() * 2. + 2.1;
-                    let asr = graph.push_with_done_action(
+                    let asr = g.push_with_done_action(
                         EnvAsr::new(attack_time as f32, release_time as f32),
                         Done::FreeParent,
                     );
@@ -71,19 +69,13 @@ fn main() -> Result<()> {
                     asr.param("release_time").set(release_time).unwrap();
                     asr.param("t_restart").trig().unwrap();
                     previous_asr = Some(asr.param("t_release"));
-                    let mult = graph.push(MathUGen::<_, U1, Mul>::new());
                     // connect them together
                     (osc1 * asr).to_graph_out();
-                    // graph.connect(&osc1, 0, 0, &mult)?;
-                    // graph.connect(&asr, 0, 1, &mult)?;
-                    // graph.connect(&mult, 0, 0, graph.internal())?;
-                    // graph.commit_changes()?;
                 });
                 gh.to_graph_out();
                 graph
             });
             std::thread::sleep(Duration::from_secs_f32(0.005));
-            // asr.set(("t_release", Trigger)).unwrap();
             i += 1;
             if i >= 16 {
                 i = 0;

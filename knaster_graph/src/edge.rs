@@ -1,4 +1,4 @@
-use crate::{connectable::NodeOrGraph, graph::NodeKey};
+use crate::{graph::NodeKey, graph::NodeOrGraph};
 
 /// An edge in the Graph. Only stores the source in the Edge since they are stored per sink node.
 #[derive(Clone, Debug, Copy)]

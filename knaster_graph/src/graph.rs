@@ -1,12 +1,16 @@
 use crate::core::collections::VecDeque;
 use crate::core::{
+    cell::UnsafeCell,
+    format,
+    sync::atomic::{AtomicBool, Ordering},
+};
+use crate::core::{
     collections::HashSet,
     sync::{Arc, Mutex},
 };
 use crate::{
     SharedFrameClock, Time,
     buffer_allocator::BufferAllocator,
-    connectable::{Channels, NodeOrGraph, NodeSubset},
     core::sync::atomic::AtomicU64,
     edge::{Edge, NodeKeyOrGraph, ParameterEdge},
     graph_edit::GraphEdit,
@@ -15,17 +19,10 @@ use crate::{
     node::{Node, NodeData},
     task::{ArParameterChange, BlockOrGraphInput, OutputTask, Task, TaskData},
 };
-use crate::{
-    connectable::Connectable,
-    core::{
-        cell::UnsafeCell,
-        format,
-        sync::atomic::{AtomicBool, Ordering},
-    },
-};
 use alloc::{boxed::Box, string::String, string::ToString, vec, vec::Vec};
 use core::cell::Cell;
 use ecow::EcoString;
+use knaster_core::numeric_array::NumericArray;
 
 use crate::inspection::{EdgeInspection, EdgeSource, GraphInspection, NodeInspection};
 use crate::wrappers_graph::done::WrDone;
@@ -161,9 +158,6 @@ pub struct Graph<F: Float> {
     /// Edges which control a parameter of a node through the output of another
     /// node. These can be in addition to audio input edges.
     node_parameter_edges: SecondaryMap<NodeKey, Vec<ParameterEdge>>,
-    /// List of feedback input edges for every node. The NodeKey in the tuple is the index of the FeedbackNode doing the buffering
-    // node_feedback_edges: SecondaryMap<NodeKey, Vec<FeedbackEdge>>,
-    node_feedback_node_key: SecondaryMap<NodeKey, NodeKey>,
     /// If a node can be freed or not. A node can be made immortal to avoid accidentally removing it.
     node_mortality: SecondaryMap<NodeKey, bool>,
     node_order: Vec<NodeKey>,
@@ -234,13 +228,10 @@ impl<F: Float> Graph<F> {
             nodes,
             node_input_edges,
             node_parameter_edges,
-            node_feedback_node_key: SecondaryMap::with_capacity(DEFAULT_NUM_NODES),
-            // node_feedback_edges,
             node_mortality: SecondaryMap::with_capacity(DEFAULT_NUM_NODES),
             node_order: Vec::with_capacity(DEFAULT_NUM_NODES),
             disconnected_nodes: vec![],
             node_keys_to_free_when_safe: vec![],
-            // node_keys_pending_removal: HashSet::new(),
             output_edges: vec![None; Outputs::USIZE].into(),
             num_inputs: Inputs::U16,
             num_outputs: Outputs::U16,
@@ -356,6 +347,9 @@ impl<F: Float> Graph<F> {
     /// Push something implementing [`UGen`] to the graph.
     #[deprecated(note = "use `edit` instead")]
     pub fn push<T: UGen<Sample = F> + 'static>(&mut self, ugen: T) -> Handle<T> {
+        self.push_internal(ugen)
+    }
+    pub(crate) fn push_internal<T: UGen<Sample = F> + 'static>(&mut self, ugen: T) -> Handle<T> {
         let name = crate::core::any::type_name::<T>();
         let name = shorten_name(name);
         let node = Node::new(name, ugen);
@@ -374,8 +368,7 @@ impl<F: Float> Graph<F> {
     }
     /// Push something implementing [`UGen`] to the graph, adding the [`WrDone`] wrapper. This
     /// enables the node to free itself if it marks itself as done or for removal using [`GenFlags`].
-    #[deprecated(note = "use `edit` instead")]
-    pub fn push_with_done_action<T: UGen<Sample = F> + 'static>(
+    pub(crate) fn push_with_done_action<T: UGen<Sample = F> + 'static>(
         &mut self,
         ugen: T,
         default_done_action: Done,
@@ -459,6 +452,24 @@ impl<F: Float> Graph<F> {
 
     #[deprecated(since = "0.1.0", note = "Will become private")]
     pub fn connect_nodes(
+        &mut self,
+        source: impl Into<NodeId>,
+        sink: impl Into<NodeId>,
+        source_channel: u16,
+        sink_channel: u16,
+        additive: bool,
+        feedback: bool,
+    ) -> Result<(), GraphError> {
+        self.connect_nodes_internal(
+            source,
+            sink,
+            source_channel,
+            sink_channel,
+            additive,
+            feedback,
+        )
+    }
+    fn connect_nodes_internal(
         &mut self,
         source: impl Into<NodeId>,
         sink: impl Into<NodeId>,
@@ -839,7 +850,7 @@ impl<F: Float> Graph<F> {
     fn new_additive_node(&mut self) -> NodeKey {
         let add_gen = MathUGen::<F, U1, Add>::new();
         // TODO: We don't need a full handle here
-        let add_handle = self.push(add_gen);
+        let add_handle = self.push_internal(add_gen);
         let add_node = add_handle.raw_handle.node.key;
         self.get_nodes_mut()[add_node].auto_math_node = true;
         add_node
@@ -849,6 +860,9 @@ impl<F: Float> Graph<F> {
             OwnedRawBuffer::new(self.block_size),
             OwnedRawBuffer::new(self.block_size),
         ]);
+        // We currently guarantee that the two instances of this Arc are on the same thread, and therefore
+        // we can get away with using a `Cell` which is !Sync.
+        #[allow(clippy::arc_with_non_send_sync)]
         let bufnum = Arc::new(Cell::new(0));
         let sink = FeedbackSink {
             buffers: buffers.clone(),
@@ -859,9 +873,9 @@ impl<F: Float> Graph<F> {
             bufnum: bufnum.clone(),
         };
         // TODO: We don't need a full handle here
-        let sink_handle = self.push(sink);
+        let sink_handle = self.push_internal(sink);
         let sink_node = sink_handle.raw_handle.node.key;
-        let source_handle = self.push(source);
+        let source_handle = self.push_internal(source);
         let source_node = source_handle.raw_handle.node.key;
         self.get_nodes_mut()[source_node].auto_free_when_unconnected = true;
         self.get_nodes_mut()[source_node].strong_dependent = Some(sink_node);
@@ -870,91 +884,91 @@ impl<F: Float> Graph<F> {
         (source_node, sink_node)
     }
 
-    /// Connect a source to a sink with the designated channels replacing any existing connections to the sink at those channels. If you want to add to any
-    /// existing inputs to the sink, use [`Graph::connect`]
-    ///
-    /// # Example
-    /// ```rust,ignore
-    /// // Connect `sine` to `lpf`, channel 0 to 0
-    /// graph.connect_replace(&sine, 0, 0, &lpf)?;
-    /// // Connect `multi_oscillator` to the graph outputs, channels 1 to 0, 2, 1
-    /// // and 0 to 3.
-    /// graph.connect_replace(&multi_oscillator, [1, 2, 0], [0, 1, 2], Sink::Graph)?;
-    /// ```
-    #[deprecated(since = "0.1.0", note = "Deprecated in favour of the GraphEdit API")]
-    fn connect_replace<N: Size>(
-        &mut self,
-        source: impl Into<Connectable>,
-        source_channels: impl Into<Channels<N>>,
-        sink_channels: impl Into<Channels<N>>,
-        sink: impl Into<Connectable>,
-    ) -> Result<(), GraphError> {
-        let source = source.into();
-        let sink = sink.into();
-        for (so_chan, si_chan) in source_channels
-            .into()
-            .into_iter()
-            .zip(sink_channels.into().into_iter())
-        {
-            if let Some((source, so_chan)) = source.for_output_channel(so_chan) {
-                if let Some((sink, si_chan)) = sink.for_input_channel(si_chan) {
-                    match (source, sink) {
-                        (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
-                            self.connect_input_to_node(sink, so_chan, si_chan, false)?;
-                        }
-                        (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
-                            self.connect_nodes(source, sink, so_chan, si_chan, false, false)?;
-                        }
-                        (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
-                            self.connect_node_to_output(source, so_chan, si_chan, false)?;
-                        }
-                        (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
-                            self.connect_input_to_output(so_chan, si_chan, false)?;
-                        }
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-    /// Connect a source to a sink with the designated channels, addin it to any existing connections to the sink at those channels. If you want to replace
-    /// existing inputs to the sink, use [`Graph::connect_replace`]
-    #[deprecated(since = "0.1.0", note = "Deprecated in favour of the GraphEdit API")]
-    fn connect<N: Size>(
-        &mut self,
-        source: impl Into<Connectable>,
-        source_channels: impl Into<Channels<N>>,
-        sink_channels: impl Into<Channels<N>>,
-        sink: impl Into<Connectable>,
-    ) -> Result<(), GraphError> {
-        let source = source.into();
-        let sink = sink.into();
-        for (so_chan, si_chan) in source_channels
-            .into()
-            .into_iter()
-            .zip(sink_channels.into().into_iter())
-        {
-            if let Some((source, so_chan)) = source.for_output_channel(so_chan) {
-                if let Some((sink, si_chan)) = sink.for_input_channel(si_chan) {
-                    match (source, sink) {
-                        (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
-                            self.connect_input_to_node(sink, so_chan, si_chan, true)?;
-                        }
-                        (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
-                            self.connect_nodes(source, sink, so_chan, si_chan, true, false)?;
-                        }
-                        (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
-                            self.connect_node_to_output(source, so_chan, si_chan, true)?;
-                        }
-                        (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
-                            self.connect_input_to_output(so_chan, si_chan, true)?;
-                        }
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
+    // /// Connect a source to a sink with the designated channels replacing any existing connections to the sink at those channels. If you want to add to any
+    // /// existing inputs to the sink, use [`Graph::connect`]
+    // ///
+    // /// # Example
+    // /// ```rust,ignore
+    // /// // Connect `sine` to `lpf`, channel 0 to 0
+    // /// graph.connect_replace(&sine, 0, 0, &lpf)?;
+    // /// // Connect `multi_oscillator` to the graph outputs, channels 1 to 0, 2, 1
+    // /// // and 0 to 3.
+    // /// graph.connect_replace(&multi_oscillator, [1, 2, 0], [0, 1, 2], Sink::Graph)?;
+    // /// ```
+    // #[deprecated(since = "0.1.0", note = "Deprecated in favour of the GraphEdit API")]
+    // fn connect_replace<N: Size>(
+    //     &mut self,
+    //     source: impl Into<Connectable>,
+    //     source_channels: impl Into<Channels<N>>,
+    //     sink_channels: impl Into<Channels<N>>,
+    //     sink: impl Into<Connectable>,
+    // ) -> Result<(), GraphError> {
+    //     let source = source.into();
+    //     let sink = sink.into();
+    //     for (so_chan, si_chan) in source_channels
+    //         .into()
+    //         .into_iter()
+    //         .zip(sink_channels.into().into_iter())
+    //     {
+    //         if let Some((source, so_chan)) = source.for_output_channel(so_chan) {
+    //             if let Some((sink, si_chan)) = sink.for_input_channel(si_chan) {
+    //                 match (source, sink) {
+    //                     (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
+    //                         self.connect_input_to_node(sink, so_chan, si_chan, false)?;
+    //                     }
+    //                     (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
+    //                         self.connect_nodes(source, sink, so_chan, si_chan, false, false)?;
+    //                     }
+    //                     (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
+    //                         self.connect_node_to_output(source, so_chan, si_chan, false)?;
+    //                     }
+    //                     (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
+    //                         self.connect_input_to_output(so_chan, si_chan, false)?;
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     Ok(())
+    // }
+    // /// Connect a source to a sink with the designated channels, addin it to any existing connections to the sink at those channels. If you want to replace
+    // /// existing inputs to the sink, use [`Graph::connect_replace`]
+    // #[deprecated(since = "0.1.0", note = "Deprecated in favour of the GraphEdit API")]
+    // fn connect<N: Size>(
+    //     &mut self,
+    //     source: impl Into<Connectable>,
+    //     source_channels: impl Into<Channels<N>>,
+    //     sink_channels: impl Into<Channels<N>>,
+    //     sink: impl Into<Connectable>,
+    // ) -> Result<(), GraphError> {
+    //     let source = source.into();
+    //     let sink = sink.into();
+    //     for (so_chan, si_chan) in source_channels
+    //         .into()
+    //         .into_iter()
+    //         .zip(sink_channels.into().into_iter())
+    //     {
+    //         if let Some((source, so_chan)) = source.for_output_channel(so_chan) {
+    //             if let Some((sink, si_chan)) = sink.for_input_channel(si_chan) {
+    //                 match (source, sink) {
+    //                     (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
+    //                         self.connect_input_to_node(sink, so_chan, si_chan, true)?;
+    //                     }
+    //                     (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
+    //                         self.connect_nodes(source, sink, so_chan, si_chan, true, false)?;
+    //                     }
+    //                     (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
+    //                         self.connect_node_to_output(source, so_chan, si_chan, true)?;
+    //                     }
+    //                     (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
+    //                         self.connect_input_to_output(so_chan, si_chan, true)?;
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     Ok(())
+    // }
     /// Disconnect all edges from a specific output channel of a node or a graph input.
     pub fn disconnect_output_from_source(
         &mut self,
@@ -1135,7 +1149,14 @@ impl<F: Float> Graph<F> {
                 self.connect_input_to_node(sink, source_channel, sink_channel, true)?;
             }
             (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
-                self.connect_nodes(source, sink, source_channel, sink_channel, true, false)?;
+                self.connect_nodes_internal(
+                    source,
+                    sink,
+                    source_channel,
+                    sink_channel,
+                    true,
+                    false,
+                )?;
             }
             (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
                 self.connect_node_to_output(source, source_channel, sink_channel, true)?;
@@ -1161,7 +1182,7 @@ impl<F: Float> Graph<F> {
                 self.connect_input_to_node(sink, so_chan, si_chan, false)?;
             }
             (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
-                self.connect_nodes(source, sink, so_chan, si_chan, false, false)?;
+                self.connect_nodes_internal(source, sink, so_chan, si_chan, false, false)?;
             }
             (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
                 self.connect_node_to_output(source, so_chan, si_chan, false)?;
@@ -1190,7 +1211,7 @@ impl<F: Float> Graph<F> {
                 self.connect_input_to_node(sink, so_chan, si_chan, true)?;
             }
             (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
-                self.connect_nodes(source, sink, so_chan, si_chan, true, true)?;
+                self.connect_nodes_internal(source, sink, so_chan, si_chan, true, true)?;
             }
             (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
                 log::error!(
@@ -1225,7 +1246,7 @@ impl<F: Float> Graph<F> {
                 self.connect_input_to_node(sink, so_chan, si_chan, false)?;
             }
             (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
-                self.connect_nodes(source, sink, so_chan, si_chan, false, true)?;
+                self.connect_nodes_internal(source, sink, so_chan, si_chan, false, true)?;
             }
             (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
                 log::error!(
@@ -1242,56 +1263,58 @@ impl<F: Float> Graph<F> {
         }
         Ok(())
     }
-    /// Connect a source to a sink via a feedback edge with the designated channels, adding it to any existing connections to the sink at those channels. If you want to replace
-    /// existing inputs to the sink, use [`Graph::connect_replace_feedback`]
-    ///
-    /// A feedback edge is used to break cycles in a graph and causes a one block delay of the
-    /// signal data.
-    #[deprecated(since = "0.1.0", note = "Deprecated in favour of the GraphEdit API")]
-    pub fn connect_feedback<N: Size>(
-        &mut self,
-        source: impl Into<Connectable>,
-        source_channels: impl Into<Channels<N>>,
-        sink_channels: impl Into<Channels<N>>,
-        sink: impl Into<Connectable>,
-    ) -> Result<(), GraphError> {
-        let source = source.into();
-        let sink = sink.into();
-        for (so_chan, si_chan) in source_channels
-            .into()
-            .into_iter()
-            .zip(sink_channels.into().into_iter())
-        {
-            if let Some((source, so_chan)) = source.for_output_channel(so_chan) {
-                if let Some((sink, si_chan)) = sink.for_input_channel(si_chan) {
-                    match (source, sink) {
-                        (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
-                            log::error!(
-                                "There was an attempt to connect a graph input to a node via a feedback node. Feedback to or from graph outputs is non-sensical. Connection will be made without feedback."
-                            );
-                            self.connect_input_to_node(sink, so_chan, si_chan, true)?;
-                        }
-                        (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
-                            self.connect_nodes(source, sink, so_chan, si_chan, true, true)?;
-                        }
-                        (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
-                            log::error!(
-                                "There was an attempt to connect a node to a graph output via a feedback node. Feedback to or from graph outputs is non-sensical. Connection will be made without feedback."
-                            );
-                            self.connect_node_to_output(source, so_chan, si_chan, true)?;
-                        }
-                        (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
-                            log::error!(
-                                "There was an attempt to connect to a graph input to a  graph output via a feedback node. Feedback to or from graph outputs is non-sensical. Connection will be made without feedback."
-                            );
-                            self.connect_input_to_output(so_chan, si_chan, false)?;
-                        }
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
+    // /// Connect a source to a sink via a feedback edge with the designated channels, adding it to any existing connections to the sink at those channels. If you want to replace
+    // /// existing inputs to the sink, use [`Graph::connect_replace_feedback`]
+    // ///
+    // /// A feedback edge is used to break cycles in a graph and causes a one block delay of the
+    // /// signal data.
+    // #[deprecated(since = "0.1.0", note = "Deprecated in favour of the GraphEdit API")]
+    // pub fn connect_feedback<N: Size>(
+    //     &mut self,
+    //     source: impl Into<Connectable>,
+    //     source_channels: impl Into<Channels<N>>,
+    //     sink_channels: impl Into<Channels<N>>,
+    //     sink: impl Into<Connectable>,
+    // ) -> Result<(), GraphError> {
+    //     let source = source.into();
+    //     let sink = sink.into();
+    //     for (so_chan, si_chan) in source_channels
+    //         .into()
+    //         .into_iter()
+    //         .zip(sink_channels.into().into_iter())
+    //     {
+    //         if let Some((source, so_chan)) = source.for_output_channel(so_chan) {
+    //             if let Some((sink, si_chan)) = sink.for_input_channel(si_chan) {
+    //                 match (source, sink) {
+    //                     (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
+    //                         log::error!(
+    //                             "There was an attempt to connect a graph input to a node via a feedback node. Feedback to or from graph outputs is non-sensical. Connection will be made without feedback."
+    //                         );
+    //                         self.connect_input_to_node(sink, so_chan, si_chan, true)?;
+    //                     }
+    //                     (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
+    //                         self.connect_nodes_internal(
+    //                             source, sink, so_chan, si_chan, true, true,
+    //                         )?;
+    //                     }
+    //                     (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
+    //                         log::error!(
+    //                             "There was an attempt to connect a node to a graph output via a feedback node. Feedback to or from graph outputs is non-sensical. Connection will be made without feedback."
+    //                         );
+    //                         self.connect_node_to_output(source, so_chan, si_chan, true)?;
+    //                     }
+    //                     (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
+    //                         log::error!(
+    //                             "There was an attempt to connect to a graph input to a  graph output via a feedback node. Feedback to or from graph outputs is non-sensical. Connection will be made without feedback."
+    //                         );
+    //                         self.connect_input_to_output(so_chan, si_chan, false)?;
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     Ok(())
+    // }
 
     pub fn set(
         &self,
@@ -1441,7 +1464,7 @@ impl<F: Float> Graph<F> {
         let nodes = unsafe { &mut *self.nodes.get() };
         for (i, &node_key) in self.node_order.iter().enumerate() {
             let node = &mut nodes[node_key];
-            tasks.push(node.to_task(i));
+            tasks.push(node.make_task(i));
         }
         tasks
     }
@@ -2050,39 +2073,39 @@ impl<F: Float> Graph<F> {
     pub fn id(&self) -> NodeId {
         self.self_node_id
     }
-    /// Connectable for connecting the Graph to other nodes within its parent graph.
-    #[deprecated]
-    pub fn as_node(&self) -> Connectable {
-        Connectable::from_node(
-            NodeSubset {
-                node: NodeOrGraph::Node(self.self_node_id),
-                channels: self.inputs(),
-                start_channel: 0,
-            },
-            NodeSubset {
-                node: NodeOrGraph::Node(self.self_node_id),
-                channels: self.outputs(),
-                start_channel: 0,
-            },
-        )
-    }
-    /// Connectable for connecting inside the graph. Note that inside the graph, the graph outputs
-    /// are sinks/inputs and the graph outputs are sources/outputs.
-    #[deprecated]
-    pub fn internal(&self) -> Connectable {
-        Connectable::from_node(
-            NodeSubset {
-                node: NodeOrGraph::Graph,
-                channels: self.outputs(),
-                start_channel: 0,
-            },
-            NodeSubset {
-                node: NodeOrGraph::Graph,
-                channels: self.inputs(),
-                start_channel: 0,
-            },
-        )
-    }
+    // /// Connectable for connecting the Graph to other nodes within its parent graph.
+    // #[deprecated]
+    // pub fn as_node(&self) -> Connectable {
+    //     Connectable::from_node(
+    //         NodeSubset {
+    //             node: NodeOrGraph::Node(self.self_node_id),
+    //             channels: self.inputs(),
+    //             start_channel: 0,
+    //         },
+    //         NodeSubset {
+    //             node: NodeOrGraph::Node(self.self_node_id),
+    //             channels: self.outputs(),
+    //             start_channel: 0,
+    //         },
+    //     )
+    // }
+    // /// Connectable for connecting inside the graph. Note that inside the graph, the graph outputs
+    // /// are sinks/inputs and the graph outputs are sources/outputs.
+    // #[deprecated]
+    // pub fn internal(&self) -> Connectable {
+    //     Connectable::from_node(
+    //         NodeSubset {
+    //             node: NodeOrGraph::Graph,
+    //             channels: self.outputs(),
+    //             start_channel: 0,
+    //         },
+    //         NodeSubset {
+    //             node: NodeOrGraph::Graph,
+    //             channels: self.inputs(),
+    //             start_channel: 0,
+    //         },
+    //     )
+    // }
 }
 
 fn shorten_name(name: &str) -> EcoString {
@@ -2214,30 +2237,62 @@ impl<F: Float> From<&Graph<F>> for NodeId {
         value.self_node_id
     }
 }
-impl<F: Float> From<&Graph<F>> for Connectable {
-    fn from(h: &Graph<F>) -> Self {
-        Connectable::from_node(
-            NodeSubset {
-                node: NodeOrGraph::Node(h.self_node_id),
-                channels: h.inputs(),
-                start_channel: 0,
-            },
-            NodeSubset {
-                node: NodeOrGraph::Node(h.self_node_id),
-                channels: h.outputs(),
-                start_channel: 0,
-            },
-        )
-    }
-}
-// impl<F: Float> From<&Graph<F>> for Source {
-//     fn from(value: &Graph<F>) -> Self {
-//         Source::Node(value.self_node_id)
-//     }
-// }
 impl<F: Float> From<&mut Graph<F>> for NodeId {
     fn from(value: &mut Graph<F>) -> Self {
         value.self_node_id
+    }
+}
+
+// The impl of Default allows NumericArray::default() which is handy
+#[derive(Debug, Default, Copy, Clone)]
+pub enum NodeOrGraph {
+    #[default]
+    Graph,
+    Node(NodeId),
+}
+impl<T: Into<NodeId>> From<T> for NodeOrGraph {
+    fn from(value: T) -> Self {
+        Self::Node(value.into())
+    }
+}
+/// A newtype for an array of channel indices.
+///
+/// The generic `Size` parameter lets us ensure that channel arrays as inputs for a connection
+/// function match in arity at compile time.
+pub struct Channels<N: Size> {
+    channels: NumericArray<u16, N>,
+}
+impl<N: Size> IntoIterator for Channels<N> {
+    type Item = u16;
+
+    type IntoIter = <NumericArray<u16, N> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.channels.into_iter()
+    }
+}
+impl<N: Size> From<NumericArray<u16, N>> for Channels<N> {
+    fn from(value: NumericArray<u16, N>) -> Self {
+        Self { channels: value }
+    }
+}
+impl<N: Size, const N2: usize> From<[u16; N2]> for Channels<N>
+where
+    crate::typenum::Const<{ N2 }>: crate::typenum::ToUInt,
+    crate::typenum::Const<{ N2 }>: knaster_core::numeric_array::generic_array::IntoArrayLength,
+    knaster_core::numeric_array::generic_array::GenericArray<u16, N>: From<[u16; N2]>,
+{
+    fn from(value: [u16; N2]) -> Self {
+        Self {
+            channels: value.into(),
+        }
+    }
+}
+impl From<u16> for Channels<U1> {
+    fn from(value: u16) -> Self {
+        Self {
+            channels: [value].into(),
+        }
     }
 }
 
@@ -2249,6 +2304,9 @@ pub(crate) struct FeedbackSink<F: Float> {
     buffers: Arc<[OwnedRawBuffer<F>; 2]>,
     /// We promise that all nodes within a Graph will be processed sequentially and not
     /// concurrently. If that changes, this has to be changed into something like Arc<AtomicUsize>
+    ///
+    /// We currently guarantee that the two instances of this Arc are on the same thread, and therefore
+    /// we can get away with using a `Cell` which is !Sync.
     bufnum: Arc<Cell<usize>>,
 }
 impl<F: Float> UGen for FeedbackSink<F> {

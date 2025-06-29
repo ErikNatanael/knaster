@@ -1,6 +1,4 @@
-use knaster_core::{
-    AudioCtx, Float, ParameterValue, UGen, UGenFlags, log::ArLogSender, typenum::*,
-};
+use knaster_core::{AudioCtx, Float, ParameterValue, UGen, UGenFlags, log::ArLogSender};
 
 /// Outputs a static number every frame
 pub(crate) struct TestInPlusParamGen<F> {

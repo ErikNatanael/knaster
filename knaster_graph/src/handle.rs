@@ -5,8 +5,8 @@
 
 use crate::{
     SchedulingEvent, SchedulingToken, SharedFrameClock, Time,
-    connectable::{NodeOrGraph, NodeSubset},
     core::marker::PhantomData,
+    graph::NodeOrGraph,
     graph::{GraphError, NodeId},
 };
 use alloc::{string::ToString, vec::Vec};
@@ -18,6 +18,20 @@ use knaster_core::{
 use crate::core::sync::{Arc, Mutex};
 
 use crate::SchedulingChannelProducer;
+
+#[derive(Clone, Copy, Debug)]
+/// A subset of a node's channels. Can be input or output channels depending on the context.
+pub struct NodeSubset {
+    #[allow(unused)]
+    pub(crate) node: NodeOrGraph,
+    /// The number of channels to produce. `start_channel + ` is the
+    /// last channel in the subset.
+    #[allow(unused)]
+    pub(crate) channels: u16,
+    /// The offset from the start of the channels of the node
+    #[allow(unused)]
+    pub(crate) start_channel: u16,
+}
 
 #[derive(Clone, Debug)]
 pub struct SchedulingChannelSender(pub(crate) Arc<Mutex<SchedulingChannelProducer>>);

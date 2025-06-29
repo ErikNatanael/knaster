@@ -4,7 +4,6 @@ pub use knaster_graph::{
     Beats, Done, Float, Frame, PFloat, PInteger, PTrigger, ParameterHint, ParameterSmoothing,
     ParameterType, ParameterValue, Seconds, Size, Time, UGen,
     audio_backend::AudioBackend,
-    connectable::Connectable,
     graph::{GraphOptions, NodeId},
     graph_edit::{DH, Dynamic, GraphEdit, Parameter, SH, Static},
     handle::Handle,

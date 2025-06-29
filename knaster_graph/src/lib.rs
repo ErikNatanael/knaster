@@ -34,17 +34,19 @@ mod core {
 
 pub use knaster_core::*;
 
+// Deprecated
+pub mod handle;
+// pub mod connectable;
+// pub mod connectable2;
+
 pub mod audio_backend;
 pub mod block;
 mod buffer_allocator;
-pub mod connectable;
-pub mod connectable2;
 pub mod dynugen;
 mod edge;
 pub mod graph;
 pub mod graph_edit;
 pub(crate) mod graph_gen;
-pub mod handle;
 pub mod inspection;
 pub mod logging;
 mod node;

@@ -5,7 +5,6 @@ use std::time::Duration;
 use anyhow::Result;
 use knaster_core::buffer::BufferReader;
 use knaster_core::dsp::buffer::Buffer;
-use knaster_core::math::{MathUGen, Mul};
 use knaster_core::typenum::{U0, U2};
 use knaster_core::util::Constant;
 use knaster_graph::runner::RunnerOptions;
@@ -14,7 +13,6 @@ use knaster_graph::{
         AudioBackend,
         cpal::{CpalBackend, CpalBackendOptions},
     },
-    handle::HandleTrait,
     runner::Runner,
 };
 
@@ -22,19 +20,19 @@ fn main() -> Result<()> {
     let mut backend = CpalBackend::new(CpalBackendOptions::default())?;
 
     // Create a graph
-    let (mut top_level_graph, runner, log_receiver) = Runner::<f64>::new::<U0, U2>(RunnerOptions {
-        block_size: backend.block_size().unwrap_or(64),
-        sample_rate: backend.sample_rate(),
-        ring_buffer_size: 200,
-        ..Default::default()
-    });
+    let (mut top_level_graph, runner, _log_receiver) =
+        Runner::<f64>::new::<U0, U2>(RunnerOptions {
+            block_size: backend.block_size().unwrap_or(64),
+            sample_rate: backend.sample_rate(),
+            ring_buffer_size: 200,
+            ..Default::default()
+        });
     dbg!(backend.sample_rate());
     let sr = backend.sample_rate() as f64;
-    let sr = 57000.;
     backend.start_processing(runner)?;
     // load a stereo sound file
     let samples: Vec<_> = (0..(sr as usize))
-        .map(|i| {
+        .flat_map(|i| {
             let phase0 = i as f64 * (200. + i as f64 * 0.01) / sr;
             let phase1 = i as f64 * 250. / sr;
             let phase2 = i as f64 * 0.5 / sr;
@@ -45,7 +43,6 @@ fn main() -> Result<()> {
                 (phase1 * TAU).sin() as f32 * amp1 as f32,
             ]
         })
-        .flatten()
         .map(|v| v as f64)
         .collect();
     let samples = samples
@@ -59,7 +56,6 @@ fn main() -> Result<()> {
     let g = &mut top_level_graph;
     let (mut t_restart, mut loop_param, mut start_secs, mut end_secs) = g.edit(|g| {
         let play = g.push(BufferReader::<_, U2>::new(Arc::new(buffer), 1.0, false));
-        let mult = g.push(MathUGen::<_, U2, Mul>::new());
         let amp = g.push(Constant::new(0.5));
         (play * amp.out([0, 0])).to_graph_out();
         // g.connect(&amp, [0, 0], [2, 3], &mult)?;
