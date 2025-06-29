@@ -50,7 +50,7 @@ impl<F: Float> UGen for Galactic<F> {
 
     type Parameters = U5;
 
-    fn init(&mut self, sample_rate: u32, block_size: usize) {
+    fn init(&mut self, sample_rate: u32, _block_size: usize) {
         for (delay, time) in self.delays_left.iter_mut().zip(GALACTIC_DELAY_TIMES) {
             let time = ((time as f64 / 44100.) * sample_rate as f64) as usize;
             *delay = StaticSampleDelay::new(time);
@@ -224,7 +224,7 @@ impl<F: Float> Galactic<F> {
             // - vibM cycles 0. - TAU, speed depending on drift (Detune) and the fpdL value last time it reset
             // vibM is phase 0-TAU, speed dpends on drift and fpd
             self.vib_m += self.oldfpd * drift.to_f64();
-            if self.vib_m > (3.141592653589793238 * 2.0) {
+            if self.vib_m > f64::TAU {
                 self.vib_m = 0.0;
                 self.oldfpd = 0.4294967295 + (self.fpd_l as f64 * 0.0000000000618);
             }
@@ -237,7 +237,7 @@ impl<F: Float> Galactic<F> {
             // - Get a sample from the aM buffer (lin interp)
             let vib_m_sin = self.vib_m.sin(); // TODO: replace by something faster
             let offset_ml = ((vib_m_sin) + 1.0) * 127.; // 0-256
-            let offset_mr = ((self.vib_m + (3.141592653589793238 / 2.0)).sin() + 1.0) * 127.; // 0-256 90 degrees phase shifted
+            let offset_mr = ((self.vib_m + (f64::PI / 2.0)).sin() + 1.0) * 127.; // 0-256 90 degrees phase shifted
             let working_ml = self.detune_delay_left.position as f64 + offset_ml;
             let working_mr = self.detune_delay_right.position as f64 + offset_mr;
             let input_sample_l = self.detune_delay_left.read_at_lin(F::new(working_ml));
@@ -263,18 +263,23 @@ impl<F: Float> Galactic<F> {
             }
 
             let mut block_0_l = [F::ZERO; 4];
-            for i in 0..4 {
-                block_0_l[i] = self.delays_left[i].read();
+            for (i, delay) in self.delays_left.iter_mut().enumerate() {
+                block_0_l[i] = delay.read();
             }
+            // for i in 0..4 {
+            //     block_0_l[i] = self.delays_left[i].read();
+            // }
             let mut block_0_r = [F::ZERO; 4];
-            for i in 0..4 {
-                block_0_r[i] = self.delays_right[i].read();
+            for (i, delay) in self.delays_right.iter_mut().enumerate() {
+                block_0_r[i] = delay.read();
             }
+            // for i in 0..4 {
+            //     block_0_r[i] = self.delays_right[i].read();
+            // }
             // BLOCK 1
-
             for i in 0..4 {
                 self.delays_left[i + 4].write_and_advance(
-                    block_0_l[0 + i]
+                    block_0_l[i]
                         - (block_0_l[(1 + i) % 4]
                             + block_0_l[(2 + i) % 4]
                             + block_0_l[(3 + i) % 4]),
@@ -282,7 +287,7 @@ impl<F: Float> Galactic<F> {
             }
             for i in 0..4 {
                 self.delays_right[i + 4].write_and_advance(
-                    block_0_r[0 + i]
+                    block_0_r[i]
                         - (block_0_r[(1 + i) % 4]
                             + block_0_r[(2 + i) % 4]
                             + block_0_r[(3 + i) % 4]),
@@ -290,19 +295,19 @@ impl<F: Float> Galactic<F> {
             }
 
             let mut block_1_l = [F::ZERO; 4];
-            for i in 0..4 {
-                block_1_l[i] = self.delays_left[i + 4].read();
+            for (i, sample) in block_1_l.iter_mut().enumerate() {
+                *sample = self.delays_left[i + 4].read();
             }
             let mut block_1_r = [F::ZERO; 4];
-            for i in 0..4 {
-                block_1_r[i] = self.delays_right[i + 4].read();
+            for (i, sample) in block_1_r.iter_mut().enumerate() {
+                *sample = self.delays_right[i + 4].read();
             }
 
             // BLOCK 2
 
             for i in 0..4 {
                 self.delays_left[i + 8].write_and_advance(
-                    block_1_l[0 + i]
+                    block_1_l[i]
                         - (block_1_l[(1 + i) % 4]
                             + block_1_l[(2 + i) % 4]
                             + block_1_l[(3 + i) % 4]),
@@ -310,7 +315,7 @@ impl<F: Float> Galactic<F> {
             }
             for i in 0..4 {
                 self.delays_right[i + 8].write_and_advance(
-                    block_1_r[0 + i]
+                    block_1_r[i]
                         - (block_1_r[(1 + i) % 4]
                             + block_1_r[(2 + i) % 4]
                             + block_1_r[(3 + i) % 4]),
@@ -318,12 +323,12 @@ impl<F: Float> Galactic<F> {
             }
 
             let mut block_2_l = [F::ZERO; 4];
-            for i in 0..4 {
-                block_2_l[i] = self.delays_left[i + 8].read();
+            for (i, sample) in block_2_l.iter_mut().enumerate() {
+                *sample = self.delays_left[i + 8].read();
             }
             let mut block_2_r = [F::ZERO; 4];
-            for i in 0..4 {
-                block_2_r[i] = self.delays_right[i + 8].read();
+            for (i, sample) in block_2_r.iter_mut().enumerate() {
+                *sample = self.delays_right[i + 8].read();
             }
 
             // Set feedback
