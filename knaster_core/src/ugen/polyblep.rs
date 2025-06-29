@@ -1,3 +1,10 @@
+//! # PolyBlep
+//!
+//! PolyBlep UGen for anti-aliased waveforms using the polyblep method
+//!
+//! Ported from Martin Finke's C++ port of the PolyBLEP Waveform
+//! generator from the Jesusonic code by Tale
+//! (https://github.com/martinfinke/PolyBLEP)
 // Ported from Martin Finke's C++ port of the port below (https://github.com/martinfinke/PolyBLEP)
 /*
 PolyBLEP Waveform generator ported from the Jesusonic code by Tale
@@ -77,26 +84,46 @@ use knaster_primitives::num_traits;
     ToPrimitive,
     KnasterIntegerParameter,
 )]
+/// PolyBlep waveforms
 #[num_traits = "num_traits"]
 #[repr(u8)]
 pub enum Waveform {
+    #[allow(missing_docs)]
     #[default]
     Sawtooth = 0,
+    #[allow(missing_docs)]
     Sine,
+    #[allow(missing_docs)]
     Cosine,
+    #[allow(missing_docs)]
     Triangle,
+    #[allow(missing_docs)]
     Square,
+    #[allow(missing_docs)]
     Rectangle,
+    #[allow(missing_docs)]
     Ramp,
+    #[allow(missing_docs)]
     ModifiedTriangle,
+    #[allow(missing_docs)]
     ModifiedSquare,
+    #[allow(missing_docs)]
     HalfWaveRectifiedSine,
+    #[allow(missing_docs)]
     FullWaveRectifiedSine,
+    #[allow(missing_docs)]
     TriangularPulse,
+    #[allow(missing_docs)]
     TrapezoidFixed,
+    #[allow(missing_docs)]
     TrapezoidVariable,
 }
 
+/// Anti-aliased waveforms using the polyblep method
+///
+/// Ported from Martin Finke's C++ port of the PolyBLEP Waveform
+/// generator from the Jesusonic code by Tale
+/// (https://github.com/martinfinke/PolyBLEP)
 #[derive(Debug)]
 pub struct PolyBlep<F: Copy = f32> {
     waveform: Waveform,
@@ -108,6 +135,7 @@ pub struct PolyBlep<F: Copy = f32> {
 }
 #[impl_ugen]
 impl<F: Float> PolyBlep<F> {
+    #[allow(missing_docs)]
     pub fn new(waveform: Waveform, freq: F) -> Self {
         Self {
             waveform,
@@ -118,50 +146,56 @@ impl<F: Float> PolyBlep<F> {
             t: F::ZERO,
         }
     }
-    fn init(&mut self, sample_rate: u32, _block_size: usize) {
+    #[allow(missing_docs)]
+    pub fn init(&mut self, sample_rate: u32, _block_size: usize) {
         self.sample_rate = F::from(sample_rate).unwrap();
         if self.freq_in_seconds_per_sample == F::ZERO && self.freq_in_hz != F::ZERO {
             self.set_freq(self.freq_in_hz);
         }
     }
+    #[allow(missing_docs)]
     pub fn process(&mut self) -> [F; 1] {
         [self.get_and_inc()]
     }
 
+    /// Set the frequency in Hz
     #[param(kind = Frequency)]
     pub fn freq(&mut self, freq_in_hz: PFloat) {
         self.set_freq(F::new(freq_in_hz));
     }
+    /// Set the pulse width (ignored for waveforms that don't use it)
     #[param]
     pub fn pulse_width(&mut self, pulse_width: PFloat) {
         self.pulse_width = F::new(pulse_width);
     }
+    /// Set the waveform
     #[param]
     pub fn waveform(&mut self, waveform: PInteger) {
         self.waveform = Waveform::from(waveform);
     }
+    /// Set the time per sample
     pub fn set_dt(&mut self, time: F) {
         self.freq_in_seconds_per_sample = time;
     }
-    pub fn set_waveform(&mut self, waveform: Waveform) {
-        self.waveform = waveform;
-    }
     #[inline]
-    pub fn set_freq(&mut self, freq_in_hz: F) {
+    fn set_freq(&mut self, freq_in_hz: F) {
         self.freq_in_hz = F::new(freq_in_hz);
         self.set_dt(freq_in_hz / self.sample_rate);
     }
 
+    /// Set the sample rate to a new value, preserving the frequency.
     pub fn set_sample_rate(&mut self, sample_rate: F) {
         let freq_in_hz = self.get_freq_in_hz();
         self.sample_rate = sample_rate;
         self.set_freq(freq_in_hz);
     }
 
+    #[allow(missing_docs)]
     pub fn get_freq_in_hz(&self) -> F {
         self.freq_in_seconds_per_sample * self.sample_rate
     }
 
+    /// Set the phase of this oscillator
     pub fn sync(&mut self, phase: F) {
         self.t = phase;
         if self.t >= F::ZERO {
@@ -171,7 +205,8 @@ impl<F: Float> PolyBlep<F> {
         }
     }
 
-    pub fn get(&mut self) -> F {
+    #[allow(missing_docs)]
+    pub fn next_sample(&mut self) -> F {
         if self.get_freq_in_hz() >= self.sample_rate / F::new(4.) {
             self.sin()
         } else {
@@ -200,7 +235,7 @@ impl<F: Float> PolyBlep<F> {
     }
 
     fn get_and_inc(&mut self) -> F {
-        let sample = self.get();
+        let sample = self.next_sample();
         self.inc();
         sample
     }

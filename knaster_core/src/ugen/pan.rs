@@ -1,3 +1,6 @@
+//! # Panning
+//!
+//! UGens related to panning
 use core::marker::PhantomData;
 
 use knaster_macros::impl_ugen;
@@ -13,16 +16,19 @@ pub struct Pan2<F: Copy> {
 }
 #[impl_ugen]
 impl<F: Float> Pan2<F> {
+    #[allow(missing_docs)]
     pub fn new(pan: f32) -> Self {
         Self {
             pan: pan * 0.5 + 0.5,
             _phantom: PhantomData,
         }
     }
+    /// Set the pan value in the range (-1.0, 1.0)
     #[param]
     pub fn pan(&mut self, pan: f32) {
         self.pan = pan * 0.5 + 0.5;
     }
+    #[allow(missing_docs)]
     pub fn process(&mut self, input: [F; 1]) -> [F; 2] {
         let signal = input[0];
         let pan_pos_radians = self.pan * crate::core::f32::consts::FRAC_PI_2;

@@ -1,3 +1,6 @@
+//! # Util
+//!
+//! Utility UGens
 use crate::core::marker::PhantomData;
 use crate::rt_log;
 
@@ -15,16 +18,19 @@ pub struct DoneOnTrig<F> {
 #[knaster_macros::impl_ugen]
 impl<F: Float> DoneOnTrig<F> {
     #[allow(clippy::new_without_default)]
+    #[allow(missing_docs)]
     pub fn new() -> Self {
         Self {
             triggered: false,
             _phantom: PhantomData,
         }
     }
+    /// Trigger to set the done flag on the next sample
     #[param]
     pub fn t_done(&mut self) {
         self.triggered = true;
     }
+    #[allow(missing_docs)]
     pub fn process(&mut self, flags: &mut UGenFlags, _input: [F; 0]) -> [F; 0] {
         if self.triggered {
             flags.mark_done(0);
@@ -33,18 +39,22 @@ impl<F: Float> DoneOnTrig<F> {
     }
 }
 
+/// UGen producing a constant value
 pub struct Constant<F: Float> {
     value: F,
 }
 #[impl_ugen]
 impl<F: Float> Constant<F> {
+    #[allow(missing_docs)]
     pub fn new(value: F) -> Self {
         Self { value }
     }
+    /// Set the value of the constant
     #[param]
     pub fn value(&mut self, value: PFloat) {
         self.value = F::new(value);
     }
+    #[allow(missing_docs)]
     pub fn process(
         &mut self,
         _ctx: &mut AudioCtx,
@@ -53,11 +63,16 @@ impl<F: Float> Constant<F> {
     ) -> [F; 1] {
         [self.value]
     }
+    #[allow(missing_docs)]
     pub fn process_block(&mut self, output: [&mut [F]; 1]) {
         output[0].fill(self.value);
     }
 }
 
+#[allow(unused)]
+use crate::log::ArLogReceiver;
+/// Log the input to this UGen to the audio rate log every N samples. See [`ArLogReceiver`] for how
+/// to receive the log messages.
 pub struct LogProbe<F: Float> {
     samples_between_logs: usize,
     sample_counter: usize,
@@ -66,6 +81,7 @@ pub struct LogProbe<F: Float> {
 }
 #[knaster_macros::impl_ugen]
 impl<F: Float> LogProbe<F> {
+    #[allow(missing_docs)]
     pub fn new(name: &'static str) -> Self {
         Self {
             samples_between_logs: 44100,
@@ -74,6 +90,7 @@ impl<F: Float> LogProbe<F> {
             _phantom: PhantomData,
         }
     }
+    #[allow(missing_docs)]
     pub fn init(&mut self, sample_rate: u32, _block_size: usize) {
         self.samples_between_logs = sample_rate as usize;
     }

@@ -32,6 +32,7 @@ impl Seconds {
         seconds: 0,
         subsecond_tesimals: 0,
     };
+    /// The maximum possible value of a [`Seconds`].
     pub const MAX: Self = Self {
         seconds: u32::MAX,
         subsecond_tesimals: u32::MAX,

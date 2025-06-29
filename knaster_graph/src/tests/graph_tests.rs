@@ -16,6 +16,7 @@ fn graph_inputs_to_outputs() {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
+        ..Default::default()
     });
 
     graph.edit(|graph| {
@@ -44,6 +45,7 @@ fn graph_inputs_to_nodes_to_outputs() {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
+        ..Default::default()
     });
 
     graph.edit(|graph| {
@@ -88,6 +90,7 @@ fn multichannel_nodes() {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
+        ..Default::default()
     });
 
     let (v0_0, v0_1, v1_0, v1_1, m) = graph.edit(|graph| {
@@ -146,6 +149,7 @@ fn free_node_when_done() {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
+        ..Default::default()
     });
     let asr = graph.push_with_done_action(EnvAsr::new(0.0, 0.0), Done::FreeSelf);
     asr.set(("attack_time", 0.0)).unwrap();
@@ -179,6 +183,7 @@ fn feedback_nodes() {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
+        ..Default::default()
     });
 
     g.edit(|g| {
@@ -219,6 +224,7 @@ fn feedback_nodes2() {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
+        ..Default::default()
     });
 
     g.edit(|g| {
@@ -257,6 +263,7 @@ fn disconnect() {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
+        ..Default::default()
     });
 
     let n1 = g.push(TestInPlusParamUGen::new());

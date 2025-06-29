@@ -22,6 +22,7 @@ pub struct WrPreciseTiming<const DELAYED_CHANGES_PER_BLOCK: usize, T: UGen> {
 impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize>
     WrPreciseTiming<DELAYED_CHANGES_PER_BLOCK, T>
 {
+    #[allow(missing_docs)]
     pub fn new(ugen: T) -> Self {
         WrPreciseTiming {
             ugen,

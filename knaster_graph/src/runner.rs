@@ -22,6 +22,9 @@ pub struct RunnerOptions {
     /// Ring buffers are used pass information back and forth between the audio
     /// thread (GraphGen) and the Graph.
     pub ring_buffer_size: usize,
+    /// Log channel capacity for `ArLogMessage`s, i.e. those sent using the `rt_log` macro from the
+    /// audio thread.
+    pub log_channel_capacity: usize,
 }
 impl Default for RunnerOptions {
     fn default() -> Self {
@@ -29,6 +32,7 @@ impl Default for RunnerOptions {
             block_size: 64,
             sample_rate: 48000,
             ring_buffer_size: 1000,
+            log_channel_capacity: 100,
         }
     }
 }
@@ -69,7 +73,7 @@ impl<F: Float> Runner<F> {
             |_| {},
         );
         let log_receiver = ArLogReceiver::new();
-        let (log_sender, log_receiver) = log_receiver.sender();
+        let (log_sender, log_receiver) = log_receiver.sender(options.log_channel_capacity);
         let ctx = AudioCtx::new(sample_rate, block_size, log_sender);
         let runner = Runner {
             graph_node: node,

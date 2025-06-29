@@ -28,6 +28,7 @@ fn main() -> Result<()> {
             block_size: backend.block_size().unwrap_or(64),
             sample_rate: backend.sample_rate(),
             ring_buffer_size: 200,
+            ..Default::default()
         });
     backend.start_processing(runner)?;
     let mut graph = top_level_graph.edit(|g| {

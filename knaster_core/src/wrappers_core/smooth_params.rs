@@ -18,6 +18,7 @@ pub struct WrSmoothParams<T: UGen> {
 }
 
 impl<T: UGen> WrSmoothParams<T> {
+    #[allow(missing_docs)]
     pub fn new(ugen: T) -> Self {
         Self {
             ugen,
@@ -27,6 +28,7 @@ impl<T: UGen> WrSmoothParams<T> {
             smoothing_state: NumericArray::default(),
         }
     }
+    /// Set the smoothing kind for a specific parameter index.
     pub fn set_smoothing(
         &mut self,
         index: usize,

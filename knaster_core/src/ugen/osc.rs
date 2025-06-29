@@ -1,3 +1,9 @@
+//! # Oscillators
+//!
+//! A few simple oscillators:
+//! - [`OscWt`]: anti-aliased wavetable oscillator (requires `std` or `alloc`)
+//! - [`SinWt`]: optimised wavetable based sine wave oscillator (requires `std` or `alloc`)
+//! - [`SinNumeric`]: numeric (non-lookup) sine wave oscillator
 use crate::core::marker::PhantomData;
 
 use knaster_macros::impl_ugen;
@@ -64,9 +70,11 @@ mod wavetable_vec {
             self.phase.increase(self.step);
             sample
         }
+        #[allow(missing_docs)]
         pub fn process(&mut self) -> [F; 1] {
             [self.next_sample()]
         }
+        #[allow(missing_docs)]
         pub fn process_block(&mut self, output: [&mut [F]; 1]) {
             // TODO: Try SIMDifying this with a buffer of phase etc
             for out in output[0].iter_mut() {
@@ -80,6 +88,7 @@ mod wavetable_vec {
         }
     }
 
+    /// Shared sine wavetable
     pub static SINE_WAVETABLE_F32: LazyLock<NonAaWavetable<f32>> =
         LazyLock::new(NonAaWavetable::sine);
 
@@ -99,6 +108,7 @@ mod wavetable_vec {
 
     #[impl_ugen]
     impl<F: Float> SinWt<F> {
+        #[allow(missing_docs)]
         pub fn new(freq: F) -> Self {
             Self {
                 phase: WavetablePhase(0),
@@ -146,9 +156,11 @@ mod wavetable_vec {
             self.phase.increase(self.phase_increment);
             F::new(sample)
         }
+        #[allow(missing_docs)]
         pub fn process(&mut self) -> [F; 1] {
             [self.next_sample()]
         }
+        #[allow(missing_docs)]
         pub fn process_block(&mut self, output: [&mut [F]; 1]) {
             // TODO: Try SIMDifying this with a buffer of phase etc
             for out in output[0].iter_mut() {
@@ -177,6 +189,7 @@ impl<F: Float> Phasor<F> {
             _phantom: PhantomData,
         }
     }
+    /// Set the frequency
     #[param]
     pub fn freq(&mut self, freq: f64) {
         if self.freq_to_phase_step_mult == 0.0 {
@@ -185,10 +198,12 @@ impl<F: Float> Phasor<F> {
             self.step = freq * self.freq_to_phase_step_mult;
         }
     }
+    /// Initialize the coefficient to convert from frequency to phase step
     pub fn init(&mut self, sample_rate: u32, _block_size: usize) {
         self.freq_to_phase_step_mult = 1.0_f64 / (sample_rate as f64);
         self.freq(self.step);
     }
+    #[allow(missing_docs)]
     pub fn process(&mut self) -> [F; 1] {
         let out = F::new(self.phase);
         self.phase += self.step;
@@ -214,6 +229,7 @@ pub struct SinNumeric<F> {
 
 #[impl_ugen]
 impl<F: Float> SinNumeric<F> {
+    #[allow(missing_docs)]
     pub fn new(freq: F) -> Self {
         Self {
             phase: freq,
@@ -221,14 +237,17 @@ impl<F: Float> SinNumeric<F> {
             phase_increment: F::ZERO,
         }
     }
+    #[allow(missing_docs)]
     #[param]
     pub fn freq(&mut self, freq: PFloat, ctx: &AudioCtx) {
         self.phase_increment = F::new(freq) / F::new(ctx.sample_rate() as f32);
     }
+    #[allow(missing_docs)]
     #[param]
     pub fn phase_offset(&mut self, phase_offset: PFloat) {
         self.phase_offset = F::new(phase_offset);
     }
+    #[allow(missing_docs)]
     #[param]
     pub fn reset_phase(&mut self) {
         self.phase = F::ZERO;
@@ -242,6 +261,7 @@ impl<F: Float> SinNumeric<F> {
         }
         self.phase = F::ZERO;
     }
+    #[allow(missing_docs)]
     pub fn process(&mut self) -> [F; 1] {
         let out = ((self.phase + self.phase_offset) * F::TAU).sin();
         self.phase += self.phase_increment;

@@ -4,6 +4,9 @@ use crate::core::{
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign},
 };
 
+/// Trait for float types.
+///
+/// Based on numtraits::Float, but with more operator traits, some additional methods and constants.
 #[cfg(not(feature = "unstable"))]
 pub trait Float:
     num_traits::Float
@@ -25,9 +28,13 @@ pub trait Float:
     + core::fmt::Debug
     + 'static
 {
+    #[allow(missing_docs)]
     const ZERO: Self;
+    #[allow(missing_docs)]
     const ONE: Self;
+    #[allow(missing_docs)]
     const PI: Self;
+    #[allow(missing_docs)]
     const TAU: Self;
     /// A good guess for a number which, when added to a signal as DC, will prevent denormals
     /// without adding any perceivable noise to the output. This value is a compromise, you may
@@ -35,10 +42,16 @@ pub trait Float:
     /// having a smaller effect on the values produced.
     const ANTI_DENORMAL: Self;
 
+    /// The optimal SIMD width for this type on the current platform. This is only used for manual
+    /// SIMD if it is enabled.
     const SIMD_WIDTH: usize = 1;
+    /// Convert from a usize to this type.
     fn from_usize(i: usize) -> Self;
+    /// Convert from any float to a specific generic float type.
     fn new<F: Float>(v: F) -> Self;
+    /// Convert to f32.
     fn to_f32(self) -> f32;
+    /// Convert to f64.
     fn to_f64(self) -> f64;
 }
 

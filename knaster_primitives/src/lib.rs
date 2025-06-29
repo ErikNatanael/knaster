@@ -13,7 +13,8 @@
 //!
 //! - `alloc`: Enables a heap based implementation of [`Block`]: [`VecBlock`]
 //! - `std`: Enables std, disabling no_std. Takes precedence over `alloc`
-
+#![deny(rustdoc::broken_intra_doc_links)] // error if there are broken intra-doc links
+#![warn(missing_docs)]
 #[cfg(feature = "std")]
 extern crate std;
 
@@ -45,9 +46,11 @@ pub use numeric_array::typenum;
 pub use num_derive;
 pub use num_traits;
 
+/// Trait for typenum types that can be used as generic sizes of arrays.
 pub trait Size: ArrayLength + Clone + Copy + Sync + Send {}
 impl<T: ArrayLength + Clone + Sync + Send> Size for T {}
 
 use numeric_array::{ArrayLength, NumericArray};
 
+/// Alias of [`NumericArray`].
 pub type Frame<T, Size> = NumericArray<T, Size>;

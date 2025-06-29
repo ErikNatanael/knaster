@@ -23,6 +23,7 @@ pub struct WrArParams<T: UGen> {
 unsafe impl<T: UGen> Send for WrArParams<T> {}
 
 impl<T: UGen> WrArParams<T> {
+    #[allow(missing_docs)]
     pub fn new(ugen: T) -> Self {
         Self {
             ugen,

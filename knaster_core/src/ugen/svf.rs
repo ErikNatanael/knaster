@@ -77,6 +77,7 @@ impl<F: Float> SvfFilter<F> {
             gain_db,
         }
     }
+    #[allow(missing_docs)]
     #[param(kind = Frequency)]
     pub fn cutoff_freq(&mut self, cutoff_freq: PFloat, ctx: &AudioCtx) {
         self.cutoff_freq = F::new(cutoff_freq);
@@ -87,6 +88,7 @@ impl<F: Float> SvfFilter<F> {
             F::from(ctx.sample_rate).unwrap(),
         );
     }
+    #[allow(missing_docs)]
     #[param]
     pub fn q(&mut self, q: PFloat, ctx: &AudioCtx) {
         self.q = F::new(q);
@@ -97,6 +99,7 @@ impl<F: Float> SvfFilter<F> {
             F::from(ctx.sample_rate).unwrap(),
         );
     }
+    /// Set gain in dB
     #[param]
     pub fn gain(&mut self, gain_db: PFloat, ctx: &AudioCtx) {
         self.gain_db = F::new(gain_db);
@@ -107,6 +110,7 @@ impl<F: Float> SvfFilter<F> {
             F::from(ctx.sample_rate).unwrap(),
         );
     }
+    /// Set filter type
     #[param]
     pub fn filter(&mut self, filter: PInteger, ctx: &AudioCtx) {
         self.ty = SvfFilterType::from(filter);
@@ -117,6 +121,7 @@ impl<F: Float> SvfFilter<F> {
             F::from(ctx.sample_rate).unwrap(),
         );
     }
+    /// Trigger recalculations of coefficients
     #[param]
     pub fn t_calculate_coefficients(&mut self, ctx: &AudioCtx) {
         self.set_coeffs(

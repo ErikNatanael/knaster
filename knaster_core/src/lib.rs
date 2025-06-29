@@ -15,6 +15,8 @@
 // extern crate alloc;
 // #[cfg(feature = "std")]
 // extern crate std;
+#![deny(rustdoc::broken_intra_doc_links)] // error if there are broken intra-doc links
+#![warn(missing_docs)]
 
 extern crate no_std_compat as std;
 
@@ -72,6 +74,7 @@ pub enum Rate {
 #[num_traits = "num_traits"]
 #[repr(u8)]
 pub enum Done {
+    /// Don't do anything when done
     #[default]
     None = 0,
     /// Free only the current UGen node.

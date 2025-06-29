@@ -31,17 +31,10 @@ pub use vec_block::VecBlock;
 /// assert!(channels.next().is_none());
 /// ```
 pub trait Block {
+    /// The sample type of the block, f32 or f64.
     type Sample: Float;
 
-    fn channel_as_slice(&self, channel: usize) -> &[Self::Sample];
-    /// Return a mutable slice equivalent to one channel of data.
-    ///
-    /// If you need multiple mutable channels concurrently, see [`Block::iter_mut`]
-    ///
-    /// # Safety
-    ///
-    /// Channels returned from a [`Block`] may not overlap. Doing so can lead to
-    /// undefined behaviour.
+    /// Return an immutable slice equivalent to one channel of data.
     ///
     /// # Example
     /// ```
@@ -49,19 +42,47 @@ pub trait Block {
     /// use knaster_primitives::StaticBlock;
     /// use knaster_primitives::typenum::*;
     /// let mut block = StaticBlock::<f32, U3, U64>::new();
-    /// // Getting access to just one channel at a time
-    /// let mut channel1 = block.channel_as_slice_mut(1);
-    /// channel1[17] = 0.1;
+    /// {
+    ///     // Getting access to just one channel at a time
+    ///     let mut channel1 = block.channel_as_slice_mut(1);
+    ///     channel1[17] = 0.1;
+    /// }
+    /// // Read it to make sure it's been written to.
+    /// {
+    ///     // Getting access to just one channel at a time
+    ///     let mut channel1 = block.channel_as_slice(1);
+    ///     assert_eq!(channel1[17], 0.1);
+    /// }
+    fn channel_as_slice(&self, channel: usize) -> &[Self::Sample];
+    /// Return a mutable slice equivalent to one channel of data.
+    ///
+    /// If you need multiple mutable channels concurrently, see [`Block::iter_mut`]
+    ///
+    /// # Example
     /// ```
+    /// use crate::knaster_primitives::Block;
+    /// use knaster_primitives::StaticBlock;
+    /// use knaster_primitives::typenum::*;
+    /// let mut block = StaticBlock::<f32, U3, U64>::new();
+    /// {
+    ///     // Getting access to just one channel at a time
+    ///     let mut channel1 = block.channel_as_slice_mut(1);
+    ///     channel1[17] = 0.1;
+    /// }
+    /// // Read it to make sure it's been written to.
+    /// {
+    ///     // Getting access to just one channel at a time
+    ///     let mut channel1 = block.channel_as_slice(1);
+    ///     assert_eq!(channel1[17], 0.1);
+    /// }
+    /// ```
+    // # Safety
+    //
+    // Channels returned from a [`Block`] may not overlap. Doing so can lead to
+    // undefined behaviour.
     fn channel_as_slice_mut(&mut self, channel: usize) -> &mut [Self::Sample];
 
     /// Returns an iterator of mutable slices corresponding to all the channels of this [`Block`].
-    ///
-    /// # Safety
-    ///
-    /// The implementation of this iterator relies on the guarantee that
-    /// channels returned from a [`Block`] may not overlap. If they do, calling
-    /// this function is UB.
     ///
     /// # Example
     /// ```
@@ -91,6 +112,12 @@ pub trait Block {
     /// let mut channels_again = block.iter_mut();
     /// c0[0] = 1.; // (This is here to make sure `channels` can't be dropped in this example)
     /// ```
+    ///
+    // # Safety
+    //
+    // The implementation of this iterator relies on the guarantee that
+    // channels returned from a [`Block`] may not overlap. If they do, calling
+    // this function is UB.
     fn iter_mut(&mut self) -> BlockIterMut<Self> {
         BlockIterMut {
             block: self,
@@ -201,6 +228,7 @@ where
 /// This trait can be implemented for a wrapper around a read-only buffer only to be used as an
 /// input for processing, never as an output, e.g. a `&[T]`
 pub trait BlockRead {
+    /// The sample type of the block, f32 or f64.
     type Sample: Float;
 
     /// Return an immutable slice of the samples in a specific channel.
@@ -343,6 +371,7 @@ impl<F: Float> Default for EmptyBlock<F> {
 }
 
 impl<F: Float> EmptyBlock<F> {
+    /// Create a new empty block.
     pub fn new() -> Self {
         Self(PhantomData)
     }
@@ -375,10 +404,6 @@ impl<F: Float> Block for EmptyBlock<F> {
     }
 }
 
-pub fn empty_block<F: Float>() -> EmptyBlock<F> {
-    EmptyBlock::new()
-}
-
 #[cfg(any(feature = "alloc", feature = "std"))]
 mod vec_block {
     use super::Block;
@@ -400,6 +425,7 @@ mod vec_block {
         block_size: usize,
     }
     impl<F: Float> VecBlock<F> {
+        /// Create a new VecBlock with the given number of channels and block size.
         pub fn new(channels: usize, block_size: usize) -> Self {
             Self {
                 buffer: vec![F::ZERO; channels * block_size],
@@ -407,6 +433,11 @@ mod vec_block {
                 block_size,
             }
         }
+        /// Get a pointer to the internal buffer.
+        /// # Safety
+        ///
+        /// The caller must ensure the pointer is not used after the [`VecBlock`] is dropped. It is
+        /// unsound to cast the *cont pointer to a mutable reference.
         pub unsafe fn ptr_to_internal_buffer(&self) -> *const F {
             self.buffer.as_ptr()
         }
@@ -458,6 +489,7 @@ where
     BLOCK_SIZE: Mul<CHANNELS>,
     Prod<BLOCK_SIZE, CHANNELS>: Size,
 {
+    /// Create a new StaticBlock with the given (generic) number of channels and block size.
     pub fn new() -> Self {
         Self {
             buffer: NumericArray::default(),
@@ -465,6 +497,7 @@ where
     }
 }
 
+#[allow(non_camel_case_types)]
 impl<BLOCK_SIZE: Size, CHANNELS: Size, F: Float> Default for StaticBlock<F, CHANNELS, BLOCK_SIZE>
 where
     BLOCK_SIZE: Mul<CHANNELS>,

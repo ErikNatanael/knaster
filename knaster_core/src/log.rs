@@ -1,3 +1,9 @@
+//! Logging utilities for logging from the audio thread.
+//!
+//! This is a simple logging system for sending messages from the audio thread without allocations.
+//!
+//! Messages are sent as a chain of `ArLogMessage` values. The chain is terminated with
+//! `ArLogMessage::End`. Messages are sent in a preallocated channel.
 use core::{fmt::Display, mem::MaybeUninit};
 
 use knaster_primitives::{
@@ -11,14 +17,21 @@ use knaster_primitives::{
 /// A full message consists of any number of `ArLogMessage` values followed by `ArLogMessage::End`
 #[derive(Clone, Copy, Debug)]
 pub enum ArLogMessage {
+    /// A string message.
     Str(&'static str),
+    /// A float message.
     Float(f64),
+    /// An unsigned integer message.
     Unsigned(u64),
+    /// A signed integer message.
     Signed(i64),
+    /// A timestamp message in [`Seconds`].
     Timestamp(Seconds),
+    /// Marks the end of a message chain.
     End,
 }
 impl ArLogMessage {
+    /// Returns true if this is the end messages of a message chain.
     pub fn is_end(&self) -> bool {
         matches!(self, ArLogMessage::End)
     }
@@ -103,10 +116,28 @@ impl From<Seconds> for ArLogMessage {
 
 // TODO: Make the array of receivers static with a generic sender() method that returns a new
 // ArLogReceiver
+/// A receiver for log messages.
+///
+/// The Size parameter determines the number of preallocated channels, and therefore the number of
+/// supported threads to receive log messages from. Messages are received through ring buffers, one
+/// per thread.
 pub struct ArLogReceiver<N: Size> {
     receivers: NumericArray<rtrb::Consumer<ArLogMessage>, N>,
 }
 impl ArLogReceiver<U0> {
+    /// Create a new ArLogReceiver with no channels.
+    ///
+    /// Use [`Self::sender`] to add channels to receive from.
+    ///
+    /// # Example
+    /// ```rust
+    /// use knaster_core::log::ArLogReceiver;
+    /// let receiver = ArLogReceiver::new(); // 0 channels
+    /// let (sender0, receiver) = receiver.sender(100); // 1 channel
+    /// let (sender1, receiver) = receiver.sender(100); // 2 channels
+    /// // `receiver` now contains two channels
+    /// assert_eq!(receiver.channels(), 2);
+    /// ````
     pub fn new() -> Self {
         Self {
             receivers: NumericArray::from([]),
@@ -120,7 +151,9 @@ impl Default for ArLogReceiver<U0> {
     }
 }
 impl<N: Size> ArLogReceiver<N> {
-    /// Receive messages. Only full message chains are received ending
+    /// Receive messages. A full or partial message chain is passed to `log_handler`.
+    ///
+    /// Only full message chains are received, i.e. those ending
     /// with `AtLogMessage::End`, but they may be split into two calls to the `log_handler`.
     ///
     /// Each call to the log_handler may or may not contain a full message chain. If a message chain is not complete,
@@ -161,12 +194,26 @@ impl<N: Size> ArLogReceiver<N> {
         }
     }
 
-    pub fn sender(self) -> (ArLogSender, ArLogReceiver<Add1<N>>)
+    /// Add a new sender to this receiver. Consumes `self` and produces a new [`ArLogReceiver`]
+    /// with one more channel.
+    ///
+    /// # Example
+    /// ```rust
+    /// use knaster_core::log::ArLogReceiver;
+    /// let receiver = ArLogReceiver::new(); // 0 channels
+    /// // Add a channel with a capacity of 100 messages at a time:
+    /// let (sender0, receiver) = receiver.sender(100);     
+    /// // Add another channel with a capacity of 20messages at a time:
+    /// let (sender1, receiver) = receiver.sender(20);
+    /// // `receiver` now contains two channels
+    /// assert_eq!(receiver.channels(), 2);
+    /// ````
+    pub fn sender(self, capacity: usize) -> (ArLogSender, ArLogReceiver<Add1<N>>)
     where
         N: core::ops::Add<B1>,
         <N as core::ops::Add<B1>>::Output: Size,
     {
-        let (tx, rx) = rtrb::RingBuffer::new(100);
+        let (tx, rx) = rtrb::RingBuffer::new(capacity);
         let mut array: numeric_array::generic_array::GenericArray<MaybeUninit<_>, Add1<N>> =
             numeric_array::generic_array::GenericArray::uninit();
 
@@ -186,15 +233,29 @@ impl<N: Size> ArLogReceiver<N> {
         };
         (ArLogSender::RingBuffer(tx), ArLogReceiver { receivers })
     }
+    /// Returns the number of receiver channels this [`ArLogReceiver`] receivs from.
+    pub fn channels(&self) -> usize {
+        N::USIZE
+    }
 }
+/// Sender of [`ArLogMessage`]s. Used for logging from the audio thread without allocations.
+///
+/// Usually acquired through `AudioCtx` in `knaster_graph`. Use [`Self::non_rt`] to create an
+/// [`ArLogSender`] for a non real-time context, e.g. in testing.
 pub enum ArLogSender {
+    /// Logs via a ring buffer to an [`ArLogReceiver`].
     RingBuffer(rtrb::Producer<ArLogMessage>),
+    /// Logs to the `log` scaffolding from the `log` crate.
     Log,
 }
 impl ArLogSender {
+    /// Create a fallback `ArLogSender` which logs via the `log` crate instead of to an
+    /// `ArLogReceiver`. See the `log` crate for more info on how to receive the log messages.
     pub fn non_rt() -> Self {
         ArLogSender::Log
     }
+    /// Send a single log message. It is recommended to use the `rt_log` macro instead, since it
+    /// is more convenient and automatically adds the `End` message to the end of a chain.
     pub fn send(&mut self, message: ArLogMessage) {
         match self {
             ArLogSender::RingBuffer(sender) => {
@@ -205,6 +266,7 @@ impl ArLogSender {
     }
 }
 
+/// Macro for sending [`ArLogMessage`]s via an [`ArLogSender`] to an [`ArLogReceiver`].
 #[macro_export]
 macro_rules! rt_log {
     ($logger:expr; $($msg:expr),* $(,)?) => {{
@@ -224,7 +286,7 @@ mod tests {
     #[test]
     fn log_rt() {
         let log_receiver = ArLogReceiver::new();
-        let (mut logger, _log_receiver) = log_receiver.sender();
+        let (mut logger, _log_receiver) = log_receiver.sender(20);
         rt_log!(logger; "En", 10, " mängd olika ", 5.0, 4.0_f32, 3.0_f64);
     }
 }

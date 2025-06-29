@@ -7,10 +7,11 @@ pub fn main() -> Result<()> {
     let mut backend = JackBackend::new("fm bench")?;
 
     // Create a graph
-    let (mut graph, runner, log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
+    let (mut graph, runner, _log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
         block_size: backend.block_size().unwrap_or(64),
         sample_rate: backend.sample_rate(),
         ring_buffer_size: 200,
+        ..Default::default()
     });
     backend.start_processing(runner)?;
     graph.edit(|g| {

@@ -1,3 +1,8 @@
+//! # Closure
+//!
+//! Way to create a UGen directly from a closure
+//!
+
 use knaster_primitives::{
     Float, Size,
     numeric_array::{NumericArray, narr},
@@ -8,13 +13,16 @@ use crate::core::boxed::Box;
 
 use super::{AudioCtx, UGen, UGenFlags};
 
+/// Type alias for a closure that can be turned into a UGen
 pub type UGenC<F, I, O> =
     Box<dyn FnMut(&mut AudioCtx, &mut UGenFlags, NumericArray<F, I>) -> NumericArray<F, O> + Send>;
 
+/// Closure based UGen. Use the [`ugen`] function to create one.
 pub struct UGenClosure<F, I: Size, O: Size> {
     closure: UGenC<F, I, O>,
 }
 impl<F, I: Size, O: Size> UGenClosure<F, I, O> {
+    #[allow(missing_docs)]
     pub fn new(closure: UGenC<F, I, O>) -> Self {
         Self { closure }
     }
@@ -175,6 +183,25 @@ macro_rules! impl_ugen_from_closure {
 // Kör makrot
 impl_ugen_from_closure!(U1, U2, U3, U4, U5, U6, U7, U8);
 
+/// Create a UGen from the closure passed into this function.
+///
+/// # Example
+/// ```rust
+/// use knaster_core::closure::ugen;
+/// use knaster_core::{Frame, AudioCtx, UGenFlags, UGen, log::ArLogSender};
+/// let mut ctx = AudioCtx::new(44100, 64, ArLogSender::non_rt());
+/// let mut flags = UGenFlags::new();
+/// let mut ugen = ugen(|_ctx: &mut AudioCtx, _flags: &mut UGenFlags, s: [f32; 1]| {
+///     let s = s[0].tanh();
+///     let s = if s.is_nan() { 0.0 } else { s };
+///     [s, s]
+/// });
+/// let mut input = Frame::default();
+/// input[0] = 1.0;
+/// let output = ugen.process(&mut ctx, &mut flags, input);
+/// assert_eq!(output[0], 1.0_f32.tanh());
+/// ```
+// TODO: Support parameters through a second argument?
 pub fn ugen<F: Float, I: Size, O: Size>(
     c: impl Into<UGenClosure<F, I, O>>,
 ) -> UGenClosure<F, I, O> {
@@ -196,7 +223,7 @@ mod tests {
         let mut ugen = ugen(|_ctx: &mut AudioCtx, _flags: &mut UGenFlags, s: [f32; 1]| {
             let s = s[0].tanh();
             let s = if s.is_nan() { 0.0 } else { s };
-            [s]
+            [s, s]
         });
         let mut input = Frame::default();
         let output = ugen.process(&mut ctx, &mut flags, input);

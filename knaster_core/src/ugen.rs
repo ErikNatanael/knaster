@@ -27,9 +27,11 @@ pub struct AudioCtx {
     sample_rate: u32,
     block_size: usize,
     logger: ArLogSender,
+    /// Metadata about the current context of block processing.
     pub block: BlockMetadata,
 }
 impl AudioCtx {
+    #[allow(missing_docs)]
     pub fn new(sample_rate: u32, block_size: usize, logger: ArLogSender) -> Self {
         Self {
             sample_rate,
@@ -38,21 +40,27 @@ impl AudioCtx {
             block: BlockMetadata::new(block_size),
         }
     }
+    /// Get the block size
     pub fn block_size(&self) -> usize {
         self.block_size
     }
+    /// Get the sample rate
     pub fn sample_rate(&self) -> u32 {
         self.sample_rate
     }
+    /// The the logger for this [`AudioCtx`]
     pub fn logger(&mut self) -> &mut ArLogSender {
         &mut self.logger
     }
+    /// Get number of frames to process
     pub fn frames_to_process(&self) -> usize {
         self.block.frames_to_process
     }
+    /// Get the offset from the start of the current global block for this block
     pub fn block_start_offset(&self) -> usize {
         self.block.block_start_offset
     }
+    /// Get the time elapsed in frames
     pub fn frame_clock(&self) -> u64 {
         self.block.frame_clock
     }
@@ -82,6 +90,7 @@ pub struct BlockMetadata {
     frame_clock: u64,
 }
 impl BlockMetadata {
+    /// New BlockMetadata with the given block size, processing the full block from the start.
     pub fn new(block_size: usize) -> Self {
         Self {
             frames_to_process: block_size,
@@ -89,6 +98,10 @@ impl BlockMetadata {
             frame_clock: 0,
         }
     }
+    /// Define a partial block from self with the given offset and length.
+    ///
+    /// If the self is already a partial block, the returned partial block will be relative to
+    /// self.
     pub fn make_partial(&self, start_offset: usize, length: usize) -> BlockMetadata {
         Self {
             block_start_offset: self.block_start_offset + start_offset,
@@ -101,12 +114,16 @@ impl BlockMetadata {
     pub fn set_frame_clock(&mut self, new_frame_time: u64) {
         self.frame_clock = new_frame_time
     }
+    /// Get the time elapsed in frames
     pub fn frame_clock(&self) -> u64 {
         self.frame_clock
     }
+    /// Get the number of frames to process
     pub fn frames_to_process(&self) -> usize {
         self.frames_to_process
     }
+    /// Get the current offset from the start of the global block, which is also the offset into
+    /// any audio buffers.
     pub fn block_start_offset(&self) -> usize {
         self.block_start_offset
     }
@@ -139,6 +156,7 @@ pub struct UGenFlags {
     remove_parent_from_frame_in_block: u32,
 }
 impl UGenFlags {
+    /// New UGenFlags where no flag is set
     pub fn new() -> Self {
         Self {
             remove_self_supported: false,
@@ -160,9 +178,12 @@ impl UGenFlags {
             None
         }
     }
+    /// Get the value for the `remove_self` flag
     pub fn remove_self(&self) -> bool {
         self.remove_self
     }
+    /// Get the value for the `done` flag. If the flag is set, this will return
+    /// `Some(frame_in_block_where_flag_was_set)`
     pub fn done(&self) -> Option<u32> {
         if self.done {
             Some(self.done_frame_in_block)
@@ -197,13 +218,16 @@ impl UGenFlags {
         self.done = true;
         self.done_frame_in_block = from_frame;
     }
+    /// Mark that the `remove_self` flag is supported.
     pub fn mark_remove_self_supported(&mut self) {
         self.remove_self_supported = true;
     }
+    /// Clear the `remove_parent` flag to avoid it propagating.
     pub fn clear_parent_flags(&mut self) {
         self.remove_parent = false;
         self.remove_parent_from_frame_in_block = u32::MAX;
     }
+    /// Clear all single node related flags.
     pub fn clear_node_flags(&mut self) {
         self.remove_self = false;
         self.remove_self_supported = false;
@@ -238,6 +262,7 @@ pub trait UGen {
     /// is safe to allocate here.
     #[allow(unused)]
     fn init(&mut self, sample_rate: u32, block_size: usize) {}
+    /// Process a single frame and return it
     fn process(
         &mut self,
         ctx: &mut AudioCtx,

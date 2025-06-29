@@ -138,6 +138,7 @@ impl<F: Float> BrownNoise<F> {
         }
     }
 
+    /// Produce one frame of brown noise
     pub fn process(&mut self) -> [F; 1] {
         let white = F::new(self.rng.f32() * 2.0 - 1.0);
         // Adjust the coefficient to control the step size
@@ -203,6 +204,7 @@ impl<F: Float> RandomLin<F> {
         }
         [out]
     }
+    /// Set the frequency of producing new random numbers
     #[param]
     pub fn freq(&mut self, value: PFloat) {
         if self.freq_to_phase_inc == F::ZERO {

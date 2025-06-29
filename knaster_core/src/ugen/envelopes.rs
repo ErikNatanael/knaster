@@ -1,8 +1,10 @@
-use crate::numeric_array::NumericArray;
-use crate::{AudioCtx, ParameterHint, ParameterValue, UGen, UGenFlags};
+//! # Envelopes
+//!
+//! Various envelop [`UGen`]s
+#[allow(unused)]
+use crate::{AudioCtx, UGen, UGenFlags};
 use knaster_macros::impl_ugen;
-use knaster_primitives::typenum::{U0, U1, U3};
-use knaster_primitives::{Block, BlockRead, Float, Frame, PFloat};
+use knaster_primitives::{Block, BlockRead, Float, PFloat};
 
 #[derive(Debug, Clone, Copy)]
 enum AsrState {
@@ -27,6 +29,7 @@ pub struct EnvAsr<F: Copy> {
 
 #[impl_ugen]
 impl<F: Float> EnvAsr<F> {
+    /// Create a new ASR envelope with the given attack and release time.
     pub fn new(attack_time: F, release_time: F) -> Self {
         Self {
             state: AsrState::Stopped,
@@ -38,9 +41,13 @@ impl<F: Float> EnvAsr<F> {
             release_scale: F::ONE,
         }
     }
-    pub fn trig_start(&mut self) {
+    /// Start the envelope from the current value
+    // TODO: Take the current value of self.t from Self::next_sample because the release value is
+    // not linear.
+    fn trig_start(&mut self) {
         self.state = AsrState::Attacking;
     }
+    /// Progress the envelope and return the next sample value
     #[inline(always)]
     pub fn next_sample(&mut self, flags: &mut UGenFlags, sample_in_block: u32) -> F {
         let out: F;
@@ -73,6 +80,7 @@ impl<F: Float> EnvAsr<F> {
         out
     }
 
+    /// Set the attack time in seconds
     #[param(kind = Seconds)]
     pub fn attack_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
         let atk = F::new(seconds);
@@ -86,6 +94,7 @@ impl<F: Float> EnvAsr<F> {
             }
         }
     }
+    /// Set the release time in seconds
     #[param(kind = Seconds)]
     pub fn release_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
         let rel = F::new(seconds);
@@ -99,6 +108,7 @@ impl<F: Float> EnvAsr<F> {
             }
         }
     }
+    /// Trigger the release of the envelope
     #[param]
     pub fn t_release(&mut self) {
         match self.state {
@@ -116,6 +126,7 @@ impl<F: Float> EnvAsr<F> {
             AsrState::Releasing => {}
         }
     }
+    /// Trigger the (re)start of the envelope
     #[param]
     pub fn t_restart(&mut self) {
         self.trig_start();
@@ -170,10 +181,9 @@ pub struct EnvAr<F: Copy> {
     /// On early release, we need to scale the release value by the value we were on because the curves are different
     release_scale: F,
 }
+#[impl_ugen]
 impl<F: Float> EnvAr<F> {
-    pub const ATTACK_TIME: usize = 0;
-    pub const RELEASE_TIME: usize = 1;
-    pub const T_RESTART: usize = 2;
+    /// Create a new AR envelope
     pub fn new(attack_time: F, release_time: F) -> Self {
         Self {
             state: ArState::Stopped,
@@ -185,9 +195,12 @@ impl<F: Float> EnvAr<F> {
             release_scale: F::ONE,
         }
     }
-    pub fn trig_start(&mut self) {
+    /// (Re)start the envelope from the current value
+    // TODO: Take the relase curve into account, e.g. by taking the current value of `next_sample`
+    fn trig_start(&mut self) {
         self.state = ArState::Attacking;
     }
+    /// Progress the envelope one frame and return the value
     #[inline(always)]
     pub fn next_sample(&mut self, flags: &mut UGenFlags, sample_in_block: u32) -> F {
         let out: F;
@@ -218,12 +231,39 @@ impl<F: Float> EnvAr<F> {
         }
         out
     }
-}
-impl<F: Float> UGen for EnvAr<F> {
-    type Sample = F;
-    type Inputs = U0;
-    type Outputs = U1;
-    type Parameters = U3;
+    /// Set the attack time in seconds
+    #[param(kind = Seconds)]
+    pub fn attack_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
+        let atk = F::new(seconds);
+        if self.attack_seconds != atk {
+            self.attack_seconds = atk;
+            if atk == F::ZERO {
+                self.attack_rate = F::ONE;
+            } else {
+                self.attack_rate =
+                    F::ONE / (self.attack_seconds * F::from(ctx.sample_rate).unwrap());
+            }
+        }
+    }
+    /// Set the release time in seconds
+    #[param(kind = Seconds)]
+    pub fn release_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
+        let rel = F::new(seconds);
+        if self.release_seconds != rel {
+            self.release_seconds = rel;
+            if rel == F::ZERO {
+                self.release_rate = F::ONE;
+            } else {
+                self.release_rate =
+                    F::ONE / (self.release_seconds * F::from(ctx.sample_rate).unwrap());
+            }
+        }
+    }
+    /// Trigger the (re)start of the envelope
+    #[param]
+    pub fn t_restart(&mut self) {
+        self.trig_start();
+    }
 
     fn init(&mut self, sample_rate: u32, _block_size: usize) {
         // Init rate based on the seconds if the rate hasn't already been set through a param
@@ -242,15 +282,9 @@ impl<F: Float> UGen for EnvAr<F> {
             }
         }
     }
-
-    fn process(
-        &mut self,
-        _ctx: &mut AudioCtx,
-        flags: &mut UGenFlags,
-        _input: Frame<Self::Sample, Self::Inputs>,
-    ) -> Frame<Self::Sample, Self::Outputs> {
+    fn process(&mut self, _ctx: &mut AudioCtx, flags: &mut UGenFlags) -> [F; 1] {
         let out = self.next_sample(flags, 0);
-        [out].into()
+        [out]
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
@@ -264,58 +298,6 @@ impl<F: Float> UGen for EnvAr<F> {
     {
         for (i, out) in output.channel_as_slice_mut(0).iter_mut().enumerate() {
             *out = self.next_sample(flags, i as u32);
-        }
-    }
-
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
-        ["attack_time", "release_time", "t_restart"].into()
-    }
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
-        [
-            ParameterHint::new_float(|h| h.logarithmic(true).minmax(0.0, 20.0)),
-            ParameterHint::new_float(|h| h.logarithmic(true).minmax(0.0, 20.0)),
-            ParameterHint::Trigger,
-        ]
-        .into()
-    }
-
-    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
-        match index {
-            Self::ATTACK_TIME => {
-                let atk = F::new(value.float().unwrap());
-                if self.attack_seconds != atk {
-                    self.attack_seconds = atk;
-                    if atk == F::ZERO {
-                        self.attack_rate = F::ONE;
-                    } else {
-                        self.attack_rate =
-                            F::ONE / (self.attack_seconds * F::from(ctx.sample_rate).unwrap());
-                    }
-                }
-            }
-            Self::RELEASE_TIME => {
-                let rel = F::new(value.float().unwrap());
-                if self.release_seconds != rel {
-                    self.release_seconds = rel;
-                    if rel == F::ZERO {
-                        self.release_rate = F::ONE;
-                    } else {
-                        self.release_rate =
-                            F::ONE / (self.release_seconds * F::from(ctx.sample_rate).unwrap());
-                    }
-                }
-            }
-            Self::T_RESTART => {
-                // match self.state {
-                //     ArState::Attacking | ArState::Releasing => {
-                //         self.release_scale = F::new(self.t);
-                //         self.state = ArState::Releasing;
-                //         self.t = F::ONE;
-                //     }
-                // }
-                self.trig_start();
-            }
-            _ => (),
         }
     }
 }
@@ -336,6 +318,7 @@ mod alloc_envelopes {
 
     use crate::{AudioCtx, PInteger, ParameterHint, ParameterValue, UGen, UGenFlags};
 
+    /// An envelope segment for an [`Envelope`]
     #[derive(Copy, Clone, Debug)]
     pub struct EnvelopeSegment {
         reciprocal_duration: f64,
@@ -352,11 +335,16 @@ mod alloc_envelopes {
             }
         }
     }
+    /// The shape of an envelope segment
     #[derive(Copy, Clone, Debug)]
     pub enum EnvelopeShape {
+        #[allow(missing_docs)]
         Linear,
+        #[allow(missing_docs)]
         Exponential,
+        #[allow(missing_docs)]
         Sinusoidal,
+        #[allow(missing_docs)]
         Step,
     }
     #[derive(Copy, Clone, Debug)]
@@ -368,6 +356,7 @@ mod alloc_envelopes {
         },
     }
 
+    /// A flexible envelope UGen with a variable number of segments.
     pub struct Envelope<F: Float> {
         state: EnvelopeState,
         segments: crate::core::vec::Vec<EnvelopeSegment>,
@@ -380,6 +369,7 @@ mod alloc_envelopes {
         _float: PhantomData<F>,
     }
     impl<F: Float> Envelope<F> {
+        /// Create a new envelope with the given segments
         pub fn new(start_value: f64, segments: crate::core::vec::Vec<EnvelopeSegment>) -> Self {
             Self {
                 state: EnvelopeState::Stopped,
@@ -393,10 +383,13 @@ mod alloc_envelopes {
                 _float: PhantomData,
             }
         }
+        /// Set the scaling for the time of progressing through the segments
         pub fn time_scale(mut self, time_scale: f64) -> Self {
             self.time_scale = time_scale;
             self
         }
+        /// Set the `looping` state of the envelope, i.e. whether it should go back to the start
+        /// once it has reached the end.
         pub fn looping(mut self, looping: bool) -> Self {
             self.looping = looping;
             self

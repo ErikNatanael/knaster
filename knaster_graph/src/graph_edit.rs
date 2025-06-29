@@ -18,19 +18,18 @@
 use core::mem::MaybeUninit;
 use core::ops::{BitOr, Div, Shr, Sub};
 
-
 use crate::Time;
+use crate::core::{
+    clone::Clone,
+    marker::PhantomData,
+    ops::{Add, Mul},
+    sync::RwLock,
+};
 use crate::graph::{GraphError, GraphOptions};
 use crate::graph_gen::GraphGen;
 use crate::handle::SchedulingChannelSender;
 use crate::node::NodeData;
 use crate::wrappers_graph::done::WrDone;
-use crate::core::{
-        clone::Clone,
-        marker::PhantomData,
-        ops::{Add, Mul},
-        sync::RwLock,
-    };
 
 use ecow::EcoString;
 use knaster_core::math::MathUGen;
@@ -1888,7 +1887,6 @@ impl Parameter {
 
 #[cfg(test)]
 mod tests {
-    
 
     use crate::{
         Time,
@@ -1899,7 +1897,6 @@ mod tests {
         util::Constant, wrappers_core::UGenWrapperCoreExt,
     };
 
-    
     #[test]
     fn scope() {
         let block_size = 16;
@@ -1907,6 +1904,7 @@ mod tests {
             block_size,
             sample_rate: 48000,
             ring_buffer_size: 50,
+            ..Default::default()
         });
         let (kept_sine, kept_lpf) = graph.edit(|graph| {
             {
@@ -1976,6 +1974,7 @@ mod tests {
             block_size,
             sample_rate: 48000,
             ring_buffer_size: 50,
+            ..Default::default()
         });
         let sine = graph.push(SinWt::new(200.));
         // Remake the following into something easier to read:
@@ -2038,6 +2037,7 @@ mod tests {
             block_size,
             sample_rate: 48000,
             ring_buffer_size: 50,
+            ..Default::default()
         });
 
         g.edit(|g| {

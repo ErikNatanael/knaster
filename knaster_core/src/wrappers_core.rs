@@ -24,14 +24,23 @@ use crate::UGen;
 /// The methods all take `self`, returning the new wrapper. Math operation
 /// wrappers_graph start with `wr_` to disambiguate them from `std::ops::*`
 pub trait UGenWrapperCoreExt<T: UGen> {
+    /// Apply closure `c` to every sample of every channel of the wrapped UGen, i.e. `c(self)`.
     fn wr<C: FnMut(T::Sample) -> T::Sample + 'static>(self, c: C) -> WrClosure<T, C>;
+    /// Multiply the output of the wrapped UGen by `v`, i.e. `self * v`.
     fn wr_mul(self, v: T::Sample) -> WrMul<T>;
+    /// Add `v` to the output of the wrapped UGen, i.e. `self + v`.
     fn wr_add(self, v: T::Sample) -> WrAdd<T>;
+    /// Subtract `v` from the output of the wrapped UGen, i.e. `self - v`.
     fn wr_sub(self, v: T::Sample) -> WrSub<T>;
+    /// Subtract the output of the wrapped UGen from `v`, i.e. `v - self`.
     fn wr_v_sub_gen(self, v: T::Sample) -> WrVSub<T>;
+    /// Divide the output of the wrapped UGen by `v`, i.e. `self / v`.
     fn wr_div(self, v: T::Sample) -> WrDiv<T>;
+    /// Divide `v` by the output of the wrapped UGen, i.e. `v / self`.
     fn wr_v_div_gen(self, v: T::Sample) -> WrVDiv<T>;
+    /// Raise the output of the wrapped UGen to the power of `v`, i.e. `self.powf(v)`.
     fn wr_powf(self, v: T::Sample) -> WrPowf<T>;
+    /// Raise the output of the wrapped UGen to the power of `v`, i.e. `self.powi(v)`.
     fn wr_powi(self, v: i32) -> WrPowi<T>;
     /// Enable smoothing/easing functions for float parameters
     fn smooth_params(self) -> WrSmoothParams<T>;

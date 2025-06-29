@@ -1,4 +1,6 @@
-//! This module contains UGens for basic maths on a signal. These are usually used through methods
+//! # Math
+//!
+//! This module contains UGens for basic maths. These are usually used through methods
 //! or operators, rather than manually pushing and connecting UGens.
 use core::marker::PhantomData;
 
@@ -12,10 +14,12 @@ use crate::UGen;
 
 use super::{AudioCtx, UGenFlags};
 
+/// A maths operation of the form 2 in 1 out e.g. addition, multiplication etc.
 pub trait Operation<T> {
+    /// Apply the operation
     fn apply(a: &[T], b: &[T], out: &mut [T]);
 }
-// TODO: Implement SIMD operations for different architectures using portable-simd or intrinsics
+/// Addition operation
 pub struct Add;
 impl<T: crate::core::ops::Add<Output = T> + Float> Operation<T> for Add {
     #[inline(always)]
@@ -32,6 +36,7 @@ impl<T: crate::core::ops::Add<Output = T> + Float> Operation<T> for Add {
         // }
     }
 }
+/// Multiplication operation
 pub struct Mul;
 impl<T: crate::core::ops::Mul<Output = T> + Float> Operation<T> for Mul {
     #[inline(always)]
@@ -43,6 +48,7 @@ impl<T: crate::core::ops::Mul<Output = T> + Float> Operation<T> for Mul {
         }
     }
 }
+/// Division operation
 pub struct Div;
 impl<T: crate::core::ops::Div<Output = T> + Float> Operation<T> for Div {
     #[inline(always)]
@@ -54,6 +60,7 @@ impl<T: crate::core::ops::Div<Output = T> + Float> Operation<T> for Div {
         }
     }
 }
+/// Subtraction operation
 pub struct Sub;
 impl<T: crate::core::ops::Sub<Output = T> + Float> Operation<T> for Sub {
     #[inline(always)]
@@ -65,6 +72,7 @@ impl<T: crate::core::ops::Sub<Output = T> + Float> Operation<T> for Sub {
         }
     }
 }
+/// Power operation, i.e. `a.powf(b)`
 pub struct Pow;
 impl<T: Float> Operation<T> for Pow {
     #[inline(always)]
@@ -89,6 +97,7 @@ pub struct MathUGen<F: Float, Channels: Size, Op: Operation<F>> {
 }
 impl<F: Float, Channels: Size, Op: Operation<F>> MathUGen<F, Channels, Op> {
     #[allow(clippy::new_without_default)]
+    #[allow(missing_docs)]
     pub fn new() -> Self {
         Self {
             marker: PhantomData,
@@ -156,10 +165,12 @@ where
     fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: crate::ParameterValue) {}
 }
 
-/// Mathematical operation applied to a single number (e.g. sqrt, fract, ceil)
+/// Mathematical operation of the form 1 in 1 out (e.g. sqrt, fract, ceil)
 pub trait Operation1<T> {
+    /// Apply the operation
     fn apply(a: &[T], out: &mut [T]);
 }
+/// Ceiling operation
 pub struct Ceil;
 impl<T: Float> Operation1<T> for Ceil {
     #[inline(always)]
@@ -171,6 +182,7 @@ impl<T: Float> Operation1<T> for Ceil {
         }
     }
 }
+/// Square root operation
 pub struct Sqrt;
 impl<T: Float> Operation1<T> for Sqrt {
     #[inline(always)]
@@ -182,6 +194,7 @@ impl<T: Float> Operation1<T> for Sqrt {
         }
     }
 }
+/// Floor operation
 pub struct Floor;
 impl<T: Float> Operation1<T> for Floor {
     #[inline(always)]
@@ -193,6 +206,7 @@ impl<T: Float> Operation1<T> for Floor {
         }
     }
 }
+/// Truncation operation, removes the non-integer part of a number
 pub struct Trunc;
 impl<T: Float> Operation1<T> for Trunc {
     #[inline(always)]
@@ -204,6 +218,7 @@ impl<T: Float> Operation1<T> for Trunc {
         }
     }
 }
+/// Fractional operation
 pub struct Fract;
 impl<T: Float> Operation1<T> for Fract {
     #[inline(always)]
@@ -215,6 +230,7 @@ impl<T: Float> Operation1<T> for Fract {
         }
     }
 }
+/// Exp operation, i.e. `e^a`
 pub struct Exp;
 impl<T: Float> Operation1<T> for Exp {
     #[inline(always)]
@@ -238,6 +254,7 @@ pub struct Math1UGen<F: Float, Op: Operation1<F>> {
 }
 impl<F: Float, Op: Operation1<F>> Math1UGen<F, Op> {
     #[allow(clippy::new_without_default)]
+    #[allow(missing_docs)]
     pub fn new() -> Self {
         Self {
             marker: PhantomData,

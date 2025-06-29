@@ -90,6 +90,7 @@ mod wavetable_vec {
         }
     }
     impl<F: Float> NonAaWavetable<F> {
+        #[allow(missing_docs)]
         pub fn new() -> Self {
             Self::default()
         }

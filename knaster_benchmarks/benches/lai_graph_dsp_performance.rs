@@ -9,10 +9,11 @@ use knaster::util::Constant;
 
 pub fn lai_256_sine_mul_0_05_to_out_block_32() {
     let block_size = 32;
-    let (mut graph, mut runner, log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+    let (mut graph, mut runner, _log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
+        ..Default::default()
     });
     graph.edit(|g| {
         for _ in 0..256 {
@@ -32,6 +33,7 @@ pub fn lai_256_fm_cascade_block_32() {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
+        ..Default::default()
     });
     graph.edit(|g| {
         let mut last: Option<DH<_, _>> = None;

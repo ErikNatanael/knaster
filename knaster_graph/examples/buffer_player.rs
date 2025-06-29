@@ -26,6 +26,7 @@ fn main() -> Result<()> {
         block_size: backend.block_size().unwrap_or(64),
         sample_rate: backend.sample_rate(),
         ring_buffer_size: 200,
+        ..Default::default()
     });
     dbg!(backend.sample_rate());
     let sr = backend.sample_rate() as f64;

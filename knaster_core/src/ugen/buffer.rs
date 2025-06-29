@@ -1,3 +1,7 @@
+//! # Buffer
+//!
+//! UGens related to buffer playback. This module requires `std` or `alloc`.
+
 use crate::core::sync::Arc;
 use crate::{core::marker::PhantomData, rt_log};
 
@@ -8,7 +12,7 @@ use crate::dsp::buffer::Buffer;
 
 use super::AudioCtx;
 
-/// Reads a sample from a buffer and outputs it. The generic `Channels` determines how many
+/// Reads a frame from a buffer and outputs it. The generic `Channels` determines how many
 /// channels will be read from the buffer.
 ///
 /// `duration_s` is the playback duration before looping or stopping. If given a negative value,
@@ -70,26 +74,31 @@ impl<F: Float, Channels: Size> BufferReader<F, Channels> {
     }
 
     #[param]
+    #[allow(missing_docs)]
     pub fn rate(&mut self, v: f64) {
         self.rate = v;
     }
     #[param]
+    #[allow(missing_docs)]
     pub fn looping(&mut self, value: bool) {
         self.looping = value;
     }
     #[param]
+    #[allow(missing_docs)]
     pub fn start_s(&mut self, start_s: PFloat) {
         let start_time = Seconds::from_secs_f64(start_s);
         self.start_frame = start_time.to_samples_f64(self.buffer.sample_rate());
         self.end_frame = self.start_frame + self.dur_frame;
     }
     #[param]
+    #[allow(missing_docs)]
     pub fn duration_s(&mut self, duration_s: PFloat) {
         let dur_time = Seconds::from_secs_f64(duration_s);
         self.dur_frame = dur_time.to_samples_f64(self.buffer.sample_rate());
         self.end_frame = self.start_frame + self.dur_frame;
     }
     #[param]
+    #[allow(missing_docs)]
     pub fn t_restart(&mut self) {
         self.reset();
     }

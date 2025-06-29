@@ -187,12 +187,11 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
                     syn::Type::Path(ty_path) => {
 
                         if !(ty_path.qself.is_none() && matches!(ty_path.path.segments.last(), Some(ps) if ps.ident == "Frame" || ps.ident == "NumericArray")) {
-                            matches_ugen_process_fn_sig = false;
-                        return Err(syn::Error::new(
-                            return_ty.span(),
+                            // matches_ugen_process_fn_sig = false;
+                            return Err(syn::Error::new(
+                                return_ty.span(),
                             "process function must return an array of samples or match the UGen trait process method",
-                        ));
-                            
+                            ));
                         }
                         // else we match the UGen process dn sig
 
@@ -221,6 +220,7 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
                     match &*ty.ty {
                         syn::Type::Reference(ref_type) => match &*ref_type.elem {
                             syn::Type::Path(path) => {
+                        #[allow(clippy::if_same_then_else)]
                         if index == 1 && !path.path.segments.iter().any(|seg| seg.ident == "AudioCtx") {
                             matches_ugen_process_fn_sig = false;
                         } else if index == 2 && !path.path.segments.iter().any(|seg| seg.ident == "UGenFlags") {
@@ -362,13 +362,14 @@ if index == 3 && !path.path.segments.iter().any(|seg| seg.ident == "Frame" || se
                     match &*ty.ty {
                         syn::Type::Reference(ref_type) => match &*ref_type.elem {
                             syn::Type::Path(path) => {
+                        #[allow(clippy::if_same_then_else)]
                         if index == 1 && !path.path.segments.iter().any(|seg| seg.ident == "AudioCtx") {
                             matches_ugen_process_fn_sig = false;
                         } else if index == 2 && !path.path.segments.iter().any(|seg| seg.ident == "UGenFlags") {
                             matches_ugen_process_fn_sig = false;
-                        } else if index == 3 && (!ref_type.mutability.is_none() || !path.path.segments.iter().any(|seg| seg.ident == "InBlock")) {
+                        } else if index == 3 && (ref_type.mutability.is_some() || !path.path.segments.iter().any(|seg| seg.ident == "InBlock")) {
                             matches_ugen_process_fn_sig = false;
-                        } else if index == 4 && (!ref_type.mutability.is_some() || !path.path.segments.iter().any(|seg| seg.ident == "OutBlock")) {
+                        } else if index == 4 && (ref_type.mutability.is_none() || !path.path.segments.iter().any(|seg| seg.ident == "OutBlock")) {
                             matches_ugen_process_fn_sig = false;
                         }  else if index > 4 {
                             matches_ugen_process_fn_sig = false;
@@ -451,8 +452,7 @@ if index == 3 && !path.path.segments.iter().any(|seg| seg.ident == "Frame" || se
                                             }
                                         }
                                         process_args.push(quote! { output_array, });
-                                    } else 
-                                        {
+                                    } else {
                                             if let Some(num_input_channels) = num_input_channels {
                                         if num_channels != num_input_channels {
                                     return Err(syn::Error::new(
@@ -493,21 +493,21 @@ if index == 3 && !path.path.segments.iter().any(|seg| seg.ident == "Frame" || se
                 .map(|_i: usize| quote! { outputs.next().unwrap(), })
                 .collect::<Vec<_>>();
 
-            let input_array = if num_input_channels == 0 {
-                    quote!{}
-                } else {
-                    quote! {
-                    let input_array: [&[F]; #num_input_channels ] = [ #(#input_array_elements)* ];
-                    }
-                };
-            let output_array = if num_output_channels == 0 {
-                    quote!{}
-                } else {
-                    quote! {
-                    let mut outputs = output.iter_mut();
-                    let output_array: [&mut[F]; #num_output_channels ]= [ #(#output_array_elements)* ];
-                    }
-                };
+            // let input_array = if num_input_channels == 0 {
+            //         quote!{}
+            //     } else {
+            //         quote! {
+            //         let input_array: [&[F]; #num_input_channels ] = [ #(#input_array_elements)* ];
+            //         }
+            //     };
+            // let output_array = if num_output_channels == 0 {
+            //         quote!{}
+            //     } else {
+            //         quote! {
+            //         let mut outputs = output.iter_mut();
+            //         let output_array: [&mut[F]; #num_output_channels ]= [ #(#output_array_elements)* ];
+            //         }
+            //     };
 
             quote! {
 
@@ -882,8 +882,7 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
                 }
                 pdata.from_pinteger_convertible = Some(from);
             }
-            if let Some(arange) = attrs.range {
-                if let Expr::Range(range) = arange {
+            if let Some(Expr::Range(range)) = attrs.range {
                     if range.start.is_none() {
                         return Err(syn::Error::new(
                             range.span(),
@@ -903,7 +902,6 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
                         ));
                     }
                     pdata.range = Some(range);
-                }
             }
             pdata.default = attrs.default;
             if let Some(logarithmic) = attrs.logarithmic {

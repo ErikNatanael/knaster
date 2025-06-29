@@ -7,10 +7,11 @@ use knaster_benchmarks::TestNumUGen;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let block_size = 32;
-    let (mut graph, mut runner, log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+    let (mut graph, mut runner, _log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
+        ..Default::default()
     });
     graph.edit(|g| {
         g.push(TestNumUGen::new(2.0).wr_mul(0.5)).to_graph_out();
@@ -29,6 +30,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
+        ..Default::default()
     });
     graph.edit(|graph| {
         let g = graph.push(TestNumUGen::new(2.0));
@@ -54,6 +56,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
+        ..Default::default()
     });
     graph.edit(|g| {
         for _ in 0..100 {
@@ -79,6 +82,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
+        ..Default::default()
     });
     graph.edit(|graph| {
         for _ in 0..100 {

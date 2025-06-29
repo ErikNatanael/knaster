@@ -13,7 +13,7 @@ fn sample_accurate_parameters_test() {
     const SR: u32 = 48000;
 
     let log_receiver = ArLogReceiver::new();
-    let (logger, _log_receiver) = log_receiver.sender();
+    let (logger, _log_receiver) = log_receiver.sender(100);
     let mut ctx = AudioCtx::new(SR, BLOCK_SIZE, logger);
     let ctx = &mut ctx;
     let mut flags = UGenFlags::new();
@@ -47,7 +47,7 @@ fn sample_accurate_parameters_with_wrappers_test() {
     const BLOCK_SIZE: usize = 16;
     const SR: u32 = 48000;
     let log_receiver = ArLogReceiver::new();
-    let (logger, _log_receiver) = log_receiver.sender();
+    let (logger, _log_receiver) = log_receiver.sender(100);
     let mut ctx = AudioCtx::new(SR, BLOCK_SIZE, logger);
     let ctx = &mut ctx;
 

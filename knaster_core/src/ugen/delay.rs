@@ -1,4 +1,9 @@
-use crate::{AudioCtx, PFloat, UGenFlags};
+//! # Delay
+//!
+//! [`UGen`]s for delays.
+
+#[allow(unused)]
+use crate::{AudioCtx, PFloat, UGen, UGenFlags};
 use knaster_macros::impl_ugen;
 use knaster_primitives::{Float, Seconds};
 use std::prelude::v1::*;
@@ -15,7 +20,6 @@ pub struct SampleDelay<F: Copy = f32> {
 
 #[impl_ugen]
 impl<F: Float> SampleDelay<F> {
-    pub const DELAY_TIME: usize = 0;
     /// Create a new SampleDelay with a maximum delay time.
     pub fn new(max_delay_length: Seconds) -> Self {
         Self {
@@ -25,6 +29,7 @@ impl<F: Float> SampleDelay<F> {
             delay_samples: 0,
         }
     }
+    /// Set delay time in seconds
     #[param]
     pub fn delay_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
         self.delay_samples = (seconds * ctx.sample_rate as PFloat) as usize;
@@ -83,6 +88,7 @@ impl<F: Float> Default for AllpassInterpolator<F> {
         Self::new()
     }
 }
+/// Delay with allpass interpolation for non-integer sample delay lengths.
 #[derive(Clone, Debug)]
 pub struct AllpassDelay<F: Copy = f32> {
     buffer: Vec<F>,
@@ -96,7 +102,8 @@ pub struct AllpassDelay<F: Copy = f32> {
 
 #[impl_ugen]
 impl<F: Float> AllpassDelay<F> {
-    pub const DELAY_TIME: usize = 0;
+    /// Create a new allpass delay with the given maximum delay time. Doesn't allocate the delay
+    /// buffer until [`Self::init`]
     pub fn new(max_delay_seconds: Seconds) -> Self {
         let buffer = vec![F::ZERO; 0];
         Self {
@@ -109,15 +116,23 @@ impl<F: Float> AllpassDelay<F> {
             max_delay_seconds,
         }
     }
+    /// Allocates internal buffer.
     pub fn init(&mut self, sample_rate: u32, _block_size: usize) {
         let max_delay_samples = self.max_delay_seconds.to_samples(sample_rate as u64);
         self.buffer = vec![F::ZERO; max_delay_samples as usize];
     }
-    fn process(&mut self, _ctx: &mut AudioCtx, _flags: &mut UGenFlags, input: [F; 1]) -> [F; 1] {
+    /// Produce one frame from the delay and put `input` into the delay.
+    pub fn process(
+        &mut self,
+        _ctx: &mut AudioCtx,
+        _flags: &mut UGenFlags,
+        input: [F; 1],
+    ) -> [F; 1] {
         let out = self.read();
         self.write_and_advance(input[0]);
         [out]
     }
+    /// Set delay time in seconds
     #[param]
     pub fn delay_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
         let delay_frames = seconds * ctx.sample_rate as PFloat;
@@ -140,6 +155,7 @@ impl<F: Float> AllpassDelay<F> {
             v
         }
     }
+    /// Set delay time in frames (f32 or f64)
     #[inline]
     pub fn set_delay_in_frames(&mut self, num_frames: F) {
         let num_frames_float = num_frames.floor();
@@ -199,9 +215,8 @@ pub struct AllpassFeedbackDelay<F: Copy = f32> {
 }
 #[impl_ugen]
 impl<F: Float> AllpassFeedbackDelay<F> {
-    pub const DELAY_TIME: usize = 0;
-    pub const FEEDBACK: usize = 1;
-    #[allow(missing_docs)]
+    /// Create a new allpass delay with the given maximum delay time. Doesn't allocate the delay
+    /// buffer until [`Self::init`]
     #[must_use]
     pub fn new(max_delay_time: Seconds) -> Self {
         let allpass_delay = AllpassDelay::new(max_delay_time);
@@ -212,11 +227,13 @@ impl<F: Float> AllpassFeedbackDelay<F> {
             previous_delay_time: F::from(max_delay_time.to_secs_f64()).unwrap(),
         }
     }
+    /// Set delay time in seconds
     #[param]
     pub fn delay_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
         self.set_delay_in_frames(F::new(seconds * ctx.sample_rate as f64));
         self.previous_delay_time = F::new(seconds);
     }
+    /// Set delay feedback
     #[param]
     pub fn feedback(&mut self, feedback: PFloat) {
         self.feedback = F::new(feedback);

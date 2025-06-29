@@ -20,6 +20,7 @@ pub struct WrMul<T: UGen> {
     value: T::Sample,
 }
 impl<T: UGen> WrMul<T> {
+    #[allow(missing_docs)]
     pub fn new(ugen: T, value: T::Sample) -> Self {
         Self { ugen, value }
     }
@@ -126,6 +127,7 @@ pub struct WrAdd<T: UGen> {
     value: T::Sample,
 }
 impl<T: UGen> WrAdd<T> {
+    #[allow(missing_docs)]
     pub fn new(ugen: T, value: T::Sample) -> Self {
         Self { ugen, value }
     }
@@ -209,6 +211,7 @@ pub struct WrSub<T: UGen> {
     value: T::Sample,
 }
 impl<T: UGen> WrSub<T> {
+    #[allow(missing_docs)]
     pub fn new(ugen: T, value: T::Sample) -> Self {
         Self { ugen, value }
     }
@@ -287,6 +290,7 @@ pub struct WrVSub<T: UGen> {
     value: T::Sample,
 }
 impl<T: UGen> WrVSub<T> {
+    #[allow(missing_docs)]
     pub fn new(ugen: T, value: T::Sample) -> Self {
         Self { ugen, value }
     }
@@ -366,6 +370,7 @@ pub struct WrDiv<T: UGen> {
     value: T::Sample,
 }
 impl<T: UGen> WrDiv<T> {
+    #[allow(missing_docs)]
     pub fn new(ugen: T, value: T::Sample) -> Self {
         Self { ugen, value }
     }
@@ -444,6 +449,7 @@ pub struct WrVDiv<T: UGen> {
     value: T::Sample,
 }
 impl<T: UGen> WrVDiv<T> {
+    #[allow(missing_docs)]
     pub fn new(ugen: T, value: T::Sample) -> Self {
         Self { ugen, value }
     }
@@ -523,6 +529,7 @@ pub struct WrPowf<T: UGen> {
     value: T::Sample,
 }
 impl<T: UGen> WrPowf<T> {
+    #[allow(missing_docs)]
     pub fn new(ugen: T, value: T::Sample) -> Self {
         Self { ugen, value }
     }
@@ -602,6 +609,7 @@ pub struct WrPowi<T: UGen> {
     value: i32,
 }
 impl<T: UGen> WrPowi<T> {
+    #[allow(missing_docs)]
     pub fn new(ugen: T, value: i32) -> Self {
         Self { ugen, value }
     }

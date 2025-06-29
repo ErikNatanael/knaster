@@ -10,10 +10,11 @@ use knaster::util::Constant;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     for block_size in [16, 32, 128] {
-        let (mut graph, mut runner, log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+        let (mut graph, mut runner, _log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
             block_size,
             sample_rate: 48000,
             ring_buffer_size: 50,
+            ..Default::default()
         });
         graph.edit(|g| {
             for _ in 0..256 {
@@ -37,6 +38,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             block_size,
             sample_rate: 48000,
             ring_buffer_size: 50,
+            ..Default::default()
         });
         graph.edit(|g| {
             let mut last: Option<DH<_, _>> = None;
