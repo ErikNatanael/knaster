@@ -4,15 +4,26 @@ Knaster is a real time sound synthesis framework focused on a balance between pe
 
 ## Features
 
+- Creative coding friendly framework for audio synthesis in Rust.
 - Dynamic graph that can be changed while it's running, similar to SuperCollider.
 - `no_std` compatible (knaster_graph requires `alloc`)
-- Fast: knaster aims to be as performant as possible on all major platforms. PRs to improve performance are always welcome.
+- Fast: Knaster aims to be as performant as possible on all major platforms. PRs to improve performance are always welcome.
   - Pay the performance cost only for what you use: most features that are only required sometimes are implemented as wrappers around the signal generators that need them.
   - Audio buffers are reused within a Graph.
 - Parameters
   - Opt in sample accurate parameter changes, automatically splitting block processing for that UGen.
   - Parameter smoothing of manual parameter changes.
   - Audio rate parameter changes, automatically switching to sample by sample processing for only the destination UGen.
+- Support for multiple backends, currently CPAL and JACK, and non-realtime processing.
+- f32 or f64 audio sample type.
+- Block size and sample rate agnostic.
+
+## Goals
+
+- Automatic GUI for editing live graphs (in progress).
+- CLAP host support to use CLAP plugins as UGens in Knaster.
+- Opt-in multi-threaded parallel processing.
+- Static graph using the same UGen trait from `knaster_core`.
 
 ## Example
 
