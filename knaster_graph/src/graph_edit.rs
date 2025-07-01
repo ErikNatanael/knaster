@@ -734,7 +734,11 @@ impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, Handle3<U>> {
     }
     /// Get a parameter from the node this handle points to if it exists. Panics if the parameter doesn't exist.
     pub fn param(self, p: impl Into<Param>) -> Parameter {
-        self.try_param(p).unwrap()
+        let p = p.into();
+        match self.try_param(p) {
+            Some(param) => param,
+            None => panic!("Parameter {:?} doesn't exist on node {:?}", p, self.id()),
+        }
     }
     /// Get a parameter from the node this handle points to if it exists.
     pub fn try_param(self, p: impl Into<Param>) -> Option<Parameter> {
@@ -1980,12 +1984,13 @@ mod tests {
     #[test]
     fn scope() {
         let block_size = 16;
-        let (mut graph, _audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U2>(AudioProcessorOptions {
-            block_size,
-            sample_rate: 48000,
-            ring_buffer_size: 50,
-            ..Default::default()
-        });
+        let (mut graph, _audio_processor, _log_receiver) =
+            AudioProcessor::<f32>::new::<U0, U2>(AudioProcessorOptions {
+                block_size,
+                sample_rate: 48000,
+                ring_buffer_size: 50,
+                ..Default::default()
+            });
         let (kept_sine, kept_lpf) = graph.edit(|graph| {
             {
                 let sine = graph.push(SinWt::new(200.));
@@ -2050,12 +2055,13 @@ mod tests {
     #[test]
     fn disconnect() {
         let block_size = 16;
-        let (mut g, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
-            block_size,
-            sample_rate: 48000,
-            ring_buffer_size: 50,
-            ..Default::default()
-        });
+        let (mut g, mut audio_processor, _log_receiver) =
+            AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
+                block_size,
+                sample_rate: 48000,
+                ring_buffer_size: 50,
+                ..Default::default()
+            });
 
         g.edit(|g| {
             let n1 = g.push(TestInPlusParamUGen::new()).name("n1");

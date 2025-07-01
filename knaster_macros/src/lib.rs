@@ -598,11 +598,11 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
             let fn_name = &p.fn_name;
             let arguments = p.arguments.iter().map(|a| match a {
                 ParameterArgumentTypes::Parameter(ty) => match ty {
-                    ParameterType::PFloat => quote! { _value.float().unwrap() },
-                    ParameterType::Float64 => quote! { _value.float().unwrap() as f64 },
-                    ParameterType::Float32 => quote! { _value.float().unwrap() as f32 },
-                    ParameterType::Integer => quote! { _value.integer().unwrap() },
-                    ParameterType::Bool => quote! { _value.bool().unwrap() },
+                    ParameterType::PFloat => quote! { _value.float().expect("parameter value is expected to be a float") },
+                    ParameterType::Float64 => quote! { _value.float().expect("parameter value is expected to be a float") as f64 },
+                    ParameterType::Float32 => quote! { _value.float().expect("parameter value is expected to be a float") as f32 },
+                    ParameterType::Integer => quote! { _value.integer().expect("parameter value is expected to be an integer") },
+                    ParameterType::Bool => quote! { _value.bool().expect("parameter value is expected to be a boolean") },
                     ParameterType::Trigger => quote! {},
                 },
                 ParameterArgumentTypes::Ctx => quote! { ctx },
