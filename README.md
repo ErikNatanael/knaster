@@ -7,12 +7,12 @@ Knaster is a real time sound synthesis framework focused on a balance between pe
 - Dynamic graph that can be changed while it's running, similar to SuperCollider.
 - `no_std` compatible (knaster_graph requires `alloc`)
 - Fast: knaster aims to be as performant as possible on all major platforms. PRs to improve performance are always welcome.
-- - Pay the performance cost only for what you use: most features that are only required sometimes are implemented as wrappers around the signal generators that need them.
-- - Audio buffers are reused within a Graph.
+  - Pay the performance cost only for what you use: most features that are only required sometimes are implemented as wrappers around the signal generators that need them.
+  - Audio buffers are reused within a Graph.
 - Parameters
-- - Opt in sample accurate parameter changes, automatically splitting block processing for that UGen.
-- - Parameter smoothing of manual parameter changes.
-- - Audio rate parameter changes, automatically switching to sample by sample processing for only the destination UGen.
+  - Opt in sample accurate parameter changes, automatically splitting block processing for that UGen.
+  - Parameter smoothing of manual parameter changes.
+  - Audio rate parameter changes, automatically switching to sample by sample processing for only the destination UGen.
 
 ## Example
 
@@ -59,6 +59,4 @@ Any contributions will, unless otherwise explicitly stated, be submitted and lic
 
 ## License
 
-Knaster is licensed under MIT + Apache 2.0. Some crates in this repo, not necessary to use Knaster, are licensed under the GPL. See each crate for more info.
-
-The crates that are licensed under GPL are crates that port GPL DSP code as Knaster UGens.
+Knaster is licensed under MIT + Apache 2.0.
