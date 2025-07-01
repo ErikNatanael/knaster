@@ -114,10 +114,16 @@ The crates are defined in the following chain, where each crate imports and re-e
 
 Additionally, there are crates which only implement new UGens, and are not required for the core functionality of Knaster. These typically only depend on `knaster_core`.
 
+## History
+
+Knaster is the result of a complete rewrite of [Knyst](https://github.com/ErikNatanael/knyst).
+
 ## Contributions
 
 Any contributions will, unless otherwise explicitly stated, be submitted and licensed under the same license as the crate they pertain to.
 
 ## License
 
-Knaster is licensed under MIT + Apache 2.0.
+Licensed under either of Apache License, Version 2.0 or MIT license at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in Knaster by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
