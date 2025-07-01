@@ -1,3 +1,6 @@
+//! # Graph
+//!
+//! This module contains the [`Graph`] struct, which is a dynamically editable audio graph.
 use crate::core::collections::VecDeque;
 use crate::core::{
     cell::UnsafeCell,
@@ -59,6 +62,8 @@ pub struct NodeId {
     pub(crate) graph: GraphId,
 }
 impl NodeId {
+    /// Returns a NodeId that doesn't point to any node. Should only be used for nodes which are
+    /// not in a [`Graph`], e.g. the top level [`Graph`].
     pub fn invalid() -> Self {
         Self {
             key: NodeKey::default(),
@@ -66,12 +71,13 @@ impl NodeId {
             graph: GraphId::MAX,
         }
     }
+    /// Returns the [`NodeKey`], i.e. the [`Graph`] internal node address, of this NodeId
     pub fn key(&self) -> NodeKey {
         self.key
     }
 }
 
-/// Some options for
+/// Options for a new [`Graph`]
 #[derive(Clone, Debug)]
 pub struct GraphOptions {
     /// The name of the Graph
@@ -82,6 +88,7 @@ pub struct GraphOptions {
     pub ring_buffer_size: usize,
 }
 impl GraphOptions {
+    /// Set the name of the new [`Graph`]
     pub fn name(mut self, n: impl AsRef<str>) -> Self {
         self.name = EcoString::from(n.as_ref());
         self
@@ -139,6 +146,15 @@ impl<F: Float> Drop for OwnedRawBuffer<F> {
     }
 }
 
+/// Dynamically editable audio graph, consisting of nodes, which implement [`UGen`], and edges
+/// between these nodes and graph inputs and outputs.
+///
+/// Edges can be direct or feedback edges. Direct edges determine node order and cannot be added if they create a circular
+/// dependency. Feedback edges always buffer the output of a node to become the input of another
+/// node one block later, and have no impact on node ordering.
+///
+/// Use [`Graph::edit`] to make changes to a [`Graph`] at any point. When the edit closure returns,
+/// all changes will be sent to the audio thread and applied at the start of the next block.
 pub struct Graph<F: Float> {
     graph_id: GraphId,
     name: EcoString,
@@ -315,6 +331,10 @@ impl<F: Float> Graph<F> {
         (graph, graph_gen)
     }
 
+    /// Returns a clone of the shared frame clock for this [`Graph`].
+    ///
+    /// The frame clock holds a reference to the number of frames elapsed on the audio thread, and
+    /// is shared among all subgraphs to any top level [`Graph`].
     pub fn shared_frame_clock(&self) -> SharedFrameClock {
         self.graph_gen_communicator.shared_frame_clock.clone()
     }
@@ -429,6 +449,9 @@ impl<F: Float> Graph<F> {
         None
     }
 
+    /// Returns an [`AudioCtx`] matching this [`Graph`] with a non real-time [`ArLogSender`]. This
+    /// means that any log messages will be logged to the `log` crate scaffolding. See the `log`
+    /// crate for more information on how to receive these log messages.
     pub fn ctx(&self) -> AudioCtx {
         AudioCtx::new(self.sample_rate, self.block_size, ArLogSender::non_rt())
     }
@@ -450,25 +473,25 @@ impl<F: Float> Graph<F> {
         key
     }
 
-    #[deprecated(since = "0.1.0", note = "Will become private")]
-    pub fn connect_nodes(
-        &mut self,
-        source: impl Into<NodeId>,
-        sink: impl Into<NodeId>,
-        source_channel: u16,
-        sink_channel: u16,
-        additive: bool,
-        feedback: bool,
-    ) -> Result<(), GraphError> {
-        self.connect_nodes_internal(
-            source,
-            sink,
-            source_channel,
-            sink_channel,
-            additive,
-            feedback,
-        )
-    }
+    // #[deprecated(since = "0.1.0", note = "Will become private")]
+    // pub fn connect_nodes(
+    //     &mut self,
+    //     source: impl Into<NodeId>,
+    //     sink: impl Into<NodeId>,
+    //     source_channel: u16,
+    //     sink_channel: u16,
+    //     additive: bool,
+    //     feedback: bool,
+    // ) -> Result<(), GraphError> {
+    //     self.connect_nodes_internal(
+    //         source,
+    //         sink,
+    //         source_channel,
+    //         sink_channel,
+    //         additive,
+    //         feedback,
+    //     )
+    // }
     fn connect_nodes_internal(
         &mut self,
         source: impl Into<NodeId>,
@@ -1316,6 +1339,11 @@ impl<F: Float> Graph<F> {
     //     Ok(())
     // }
 
+    /// Set a parameter value on a node.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node is not found in the graph or the `param` is not a valid parameter for the node.
     pub fn set(
         &self,
         node: impl Into<NodeId>,
@@ -1388,6 +1416,7 @@ impl<F: Float> Graph<F> {
     }
 
     #[deprecated(note = "Deprecated in favour or GraphEdit")]
+    /// Create a subgraph as a new node in this graph.
     pub fn subgraph<Inputs: Size, Outputs: Size>(&mut self, options: GraphOptions) -> Self {
         let temporary_invalid_node_id = NodeId::invalid();
         let (mut subgraph, graph_gen) = Self::new::<Inputs, Outputs>(
@@ -1699,6 +1728,7 @@ impl<F: Float> Graph<F> {
         }
         Ok(())
     }
+    /// Returns the [`GraphId`] of this graph.
     pub fn graph_id(&self) -> GraphId {
         self.graph_id
     }
@@ -1842,7 +1872,9 @@ impl<F: Float> Graph<F> {
             shared_frame_clock: self.graph_gen_communicator.shared_frame_clock.clone(),
         }
     }
-    pub fn num_nodes_pending_removal(&self) -> usize {
+    /// Returns the number of nodes that are pending removal. Used for testing.
+    #[allow(unused)]
+    pub(crate) fn num_nodes_pending_removal(&self) -> usize {
         self.node_keys_to_free_when_safe.len()
     }
     /// Check if there are any old nodes or other resources that have been
@@ -2042,6 +2074,7 @@ impl<F: Float> Graph<F> {
         // mutability.
         unsafe { &mut *self.nodes.get() }
     }
+    /// Set the mortality of a node, i.e. whether it can be removed or not. If `mortality` is false, the node cannot be removed.
     pub fn set_mortality(
         &mut self,
         node: impl Into<NodeId>,
@@ -2063,9 +2096,11 @@ impl<F: Float> Graph<F> {
     pub fn outputs(&self) -> u16 {
         self.num_outputs
     }
+    /// The sample rate of this graph.
     pub fn sample_rate(&self) -> u32 {
         self.sample_rate
     }
+    /// The block size of this graph.
     pub fn block_size(&self) -> usize {
         self.block_size
     }
@@ -2179,43 +2214,58 @@ impl<F: Float> GraphGenCommunicator<F> {
     }
 }
 
+/// Errors that can occur when interacting with a [`Graph`].
 #[derive(thiserror::Error, Debug)]
 pub enum GraphError {
+    #[allow(missing_docs)]
     #[error(
         "Connection would create a circular dependency. Cannot connect. Try using a feedback connection."
     )]
     CircularConnection,
+    #[allow(missing_docs)]
     #[error("Error sending new data to GraphGen: `{0}`")]
     SendToGraphGen(String),
+    #[allow(missing_docs)]
     #[error("Node cannot be found in current Graph.")]
     NodeNotFound,
+    #[allow(missing_docs)]
     #[error("Source node is in a different Graph `{found_graph}`, expecting `{expected_graph}`")]
     WrongSourceNodeGraph {
         expected_graph: GraphId,
         found_graph: GraphId,
     },
+    #[allow(missing_docs)]
     #[error("Sink node is in a different Graph `{found_graph}`, expecting `{expected_graph}`")]
     WrongSinkNodeGraph {
         expected_graph: GraphId,
         found_graph: GraphId,
     },
+    #[allow(missing_docs)]
     #[error("Tried to connect a node input that doesn't exist: `{0}`")]
     InputOutOfBounds(u16),
+    #[allow(missing_docs)]
     #[error("Tried to connect to a node output that doesn't exist: `{0}`")]
     OutputOutOfBounds(u16),
     #[error("Tried to connect a graph input that doesn't exist (`{0}`) to some destination")]
+    #[allow(missing_docs)]
     GraphInputOutOfBounds(u16),
     #[error("Tried to connect a graph output that doesn't exist (`{0}`) to some destination")]
+    #[allow(missing_docs)]
     GraphOutputOutOfBounds(u16),
     #[error("The parameter `{0}` is not a valid parameter description for the node")]
+    #[allow(missing_docs)]
     ParameterDescriptionNotFound(String),
     #[error("The parameter `{0}` is not a valid parameter index for the node")]
+    #[allow(missing_docs)]
     ParameterIndexOutOfBounds(usize),
     #[error(transparent)]
+    #[allow(missing_docs)]
     ParameterError(#[from] ParameterError),
     #[error("There was an error sending the change: `{0}`")]
+    #[allow(missing_docs)]
     PushChangeError(String),
     #[error(transparent)]
+    #[allow(missing_docs)]
     FreeError(#[from] FreeError),
 }
 
@@ -2245,9 +2295,13 @@ impl<F: Float> From<&mut Graph<F>> for NodeId {
 
 // The impl of Default allows NumericArray::default() which is handy
 #[derive(Debug, Default, Copy, Clone)]
+/// A node or the graph in which the [`NodeOrGraph`] is used. Used for connections where the source
+/// or sink can be either a node or the graph.
 pub enum NodeOrGraph {
+    #[allow(missing_docs)]
     #[default]
     Graph,
+    #[allow(missing_docs)]
     Node(NodeId),
 }
 impl<T: Into<NodeId>> From<T> for NodeOrGraph {
@@ -2407,5 +2461,53 @@ impl<F: Float> UGen for FeedbackSource<F> {
         _index: usize,
         _value: knaster_core::ParameterValue,
     ) {
+    }
+}
+#[cfg(test)]
+mod tests {
+    use knaster_core::{
+        Done, PTrigger,
+        envelopes::EnvAsr,
+        typenum::{U0, U2},
+    };
+
+    use crate::{
+        handle::HandleTrait,
+        processor::{AudioProcessor, AudioProcessorOptions},
+    };
+
+    #[test]
+    fn free_node_when_done() {
+        let block_size = 16;
+        let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U2>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+            ..Default::default()
+        });
+        let asr = graph.push_with_done_action(EnvAsr::new(0.0, 0.0), Done::FreeSelf);
+        asr.set(("attack_time", 0.0)).unwrap();
+        asr.set(("release_time", 0.0)).unwrap();
+        asr.set(("t_restart", PTrigger)).unwrap();
+        asr.set(("t_release", PTrigger)).unwrap();
+        graph.commit_changes().unwrap();
+        assert_eq!(graph.inspection().nodes.len(), 1);
+        for _ in 0..10 {
+            unsafe {
+                audio_processor.run(&[]);
+            }
+        }
+        // Run the code to free old nodes
+        graph.commit_changes().unwrap();
+        assert_eq!(graph.inspection().nodes.len(), 0);
+        assert_eq!(graph.num_nodes_pending_removal(), 1);
+        // Apply the new TaskData on the audio thread so that the node can be removed
+        unsafe {
+            audio_processor.run(&[]);
+        }
+        // Now the node is removed
+        graph.commit_changes().unwrap();
+        assert_eq!(graph.num_nodes_pending_removal(), 0);
+        assert_eq!(graph.inspection().nodes.len(), 0);
     }
 }

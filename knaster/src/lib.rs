@@ -25,13 +25,13 @@ use knaster_graph::{
     audio_backend::{AudioBackend, AudioBackendError, cpal::CpalBackendOptions},
     graph::Graph,
     log::ArLogMessage,
-    runner::{Runner, RunnerOptions},
+    processor::{AudioProcessor, AudioProcessorOptions},
     typenum::{U0, U2},
 };
 
 #[allow(clippy::type_complexity)]
 pub struct KnasterBuilder<F: Float> {
-    runner_options: RunnerOptions,
+    runner_options: AudioProcessorOptions,
     backend: Option<Box<dyn AudioBackend<Sample = F>>>,
     log_handler: Option<Box<dyn FnMut(&[ArLogMessage]) + Send>>,
 }
@@ -51,15 +51,15 @@ impl<F: Float> KnasterBuilder<F> {
         });
 
         // Create a graph
-        let (top_level_graph, runner, mut log_receiver) =
-            Runner::<F>::new::<U0, U2>(self.runner_options);
+        let (top_level_graph, audio_processor, mut log_receiver) =
+            AudioProcessor::<F>::new::<U0, U2>(self.runner_options);
         std::thread::spawn(move || {
             loop {
                 log_receiver.recv(&mut log_handler);
                 std::thread::sleep(core::time::Duration::from_secs_f32(0.1))
             }
         });
-        backend.start_processing(runner)?;
+        backend.start_processing(audio_processor)?;
         Box::leak(backend);
         Ok(top_level_graph)
     }
@@ -77,7 +77,7 @@ impl<F: Float> KnasterBuilder<F> {
 }
 pub fn knaster<F: Float>() -> KnasterBuilder<F> {
     KnasterBuilder {
-        runner_options: RunnerOptions::default(),
+        runner_options: AudioProcessorOptions::default(),
         backend: None,
         log_handler: None,
     }

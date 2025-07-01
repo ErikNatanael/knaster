@@ -50,6 +50,7 @@ pub struct GraphEdit<'b, F: Float> {
     graph: RwLock<&'b mut Graph<F>>,
 }
 impl<'b, F: Float> GraphEdit<'b, F> {
+    /// Use [`Graph::edit`] instead. Creates a new `GraphEdit` wrapper around a `&mut Graph`.
     pub fn new(g: &'b mut Graph<F>) -> Self {
         Self {
             graph: RwLock::new(g),
@@ -117,6 +118,8 @@ impl<'b, F: Float> GraphEdit<'b, F> {
             })
     }
 
+    /// Set a parameter value on a node. Note that this operation is sent to the audio thread
+    /// instantly, unlike changes to the graph structure which take effect when the [`GraphEdit`] is dropped.
     pub fn set(
         &self,
         node: impl Into<NodeId>,
@@ -127,6 +130,7 @@ impl<'b, F: Float> GraphEdit<'b, F> {
         self.graph.read().unwrap().set(node, param, value, t)?;
         Ok(())
     }
+    /// Free a node from the graph. This will remove the node and any of its dependent nodes from the graph.
     pub fn free_node(&self, node: impl Into<NodeId>) -> Result<(), GraphError> {
         let node = node.into();
         let graph_id = self.graph.read().unwrap().graph_id();
@@ -139,6 +143,23 @@ impl<'b, F: Float> GraphEdit<'b, F> {
         self.graph.write().unwrap().free_node_from_key(node.key())?;
         Ok(())
     }
+    /// Create a new handle to the graph input(s).
+    ///
+    /// # Example
+    /// ```rust,
+    /// # use knaster_graph::{runner::Runner, osc::SinWt, runner::RunnerOptions, typenum::*};
+    /// # let (mut graph, mut audio_processor, _log_receiver) = Runner::new::<U1, U1>(RunnerOptions {
+    /// #     block_size: 16,
+    /// #     sample_rate: 48000,
+    /// #     ring_buffer_size: 50,
+    /// #     ..Default::default()
+    /// # });
+    /// graph.edit(|graph| {
+    ///     let sine = graph.push(SinWt::new(200.));
+    ///     let input = graph.from_inputs(0).unwrap();
+    ///     (sine * input).to_graph_out();
+    /// });
+    /// ```
     pub fn from_inputs<'a, N: Size + Copy>(
         &'a self,
         source_channels: impl Into<Channels<N>>,
@@ -157,8 +178,7 @@ impl<'b, F: Float> GraphEdit<'b, F> {
         })
     }
 
-    // TODO: Move this to GraphEdit and have it take a GraphEdit callback for the new Graph that
-    // gets evaluated before sending the GraphGen to the audio thread.
+    /// Create a subgraph as a new node in this graph. `init_callback` is called with a [`GraphEdit`] to edit the subgraph before it is initialized and sent to the audio thread.
     #[allow(clippy::type_complexity)]
     pub fn subgraph<'a, Inputs: Size, Outputs: Size>(
         &'a self,
@@ -228,6 +248,7 @@ pub struct DH<'a, 'b, F: Float, T> {
     graph: &'a RwLock<&'b mut Graph<F>>,
 }
 impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
+    /// Create a new handle to certain outputs from this handle.
     pub fn out<N: Size + Copy>(
         &self,
         source_channels: impl Into<Channels<N>>,
@@ -310,6 +331,7 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
         n
     }
 
+    /// Connect the output(s) of self to the graph output(s).
     pub fn to_graph_out(self) {
         let mut g = self.graph.write().unwrap();
         for (i, (source, source_channel)) in Static::iter_outputs(&self.nodes).enumerate() {
@@ -317,6 +339,8 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
                 .expect("Error connecting to graph output channel");
         }
     }
+    /// Connect the output(s) of self to the graph output(s), replacing any existing connections at
+    /// the sink.
     pub fn to_graph_out_replace(self) {
         let mut g = self.graph.write().unwrap();
         for (i, (source, source_channel)) in Static::iter_outputs(&self.nodes).enumerate() {
@@ -325,6 +349,7 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
         }
     }
 
+    /// Connect the output(s) of self to the graph output(s), selecting graph output channels from the channels provided.
     pub fn to_graph_out_channels<N>(self, sink_channels: impl Into<Channels<N>>)
     where
         N: Size + Same<S0::Outputs>,
@@ -337,6 +362,7 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
                 .expect("Error connecting to graph output channel.");
         }
     }
+    /// Connect the output(s) of self to the graph output(s), selecting graph output channels from the channels provided, and replacing any existing connections at those graph output channels.
     pub fn to_graph_out_channels_replace<N>(self, sink_channels: impl Into<Channels<N>>)
     where
         N: Size + Same<S0::Outputs>,
@@ -385,12 +411,14 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
             graph: self.graph,
         }
     }
+    /// Turn this static handle [`SH`] into a dynamic handle.
     pub fn dynamic(self) -> DH<'a, 'b, F, S0::DynamicType> {
         DH {
             nodes: self.nodes.dynamic(self.graph),
             graph: self.graph,
         }
     }
+    /// Perform a power operation on each channel pair, i.e. `self[0].pow(rhs[0])` etc.
     // Arithmetic operations that lack an operator overload.
     pub fn pow<S1: Static>(
         self,
@@ -407,6 +435,7 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
     }
 }
 impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
+    /// Create a new handle to specific output channels from this handle.
     pub fn out<N: Size>(
         &self,
         source_channels: impl Into<Channels<N>>,
@@ -606,9 +635,11 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
             graph: self.graph,
         }
     }
+    /// Get a dynamic handle to this node. Provided for symmetry with [`SH`].
     pub fn dynamic(self) -> Self {
         self
     }
+    /// Perform a power operation on each channel pair, i.e. `self[0].pow(rhs[0])` etc.
     pub fn pow<S1: Dynamic>(self, rhs: DH<'a, 'b, F, S1>) -> DH<'a, 'b, F, DynamicChannelsHandle> {
         assert_eq!(self.nodes.outputs(), rhs.nodes.outputs());
         let nodes = pow_sources_dynamic(self.nodes, rhs.nodes, self.graph);
@@ -741,6 +772,8 @@ impl<'a, 'b, F: Float> From<DH<'a, 'b, F, DynamicHandle3>> for NodeId {
     }
 }
 impl<'a, 'b, F: Float> DH<'a, 'b, F, DynamicHandle3> {
+    /// Turn this dynamic handle to a specific node into a [`DynamicChannelsHandle`] which can hold
+    /// and combination of channels.
     pub fn to_channels_handle(self) -> DH<'a, 'b, F, DynamicChannelsHandle> {
         let mut in_channels = SmallVec::with_capacity(self.nodes.inputs() as usize);
         let mut out_channels = SmallVec::with_capacity(self.nodes.outputs() as usize);
@@ -911,13 +944,19 @@ math_gen_fn_static!(mul_sources, knaster_core::math::Mul);
 math_gen_fn_static!(div_sources, knaster_core::math::Div);
 math_gen_fn_static!(pow_sources, knaster_core::math::Pow);
 
+/// A number that can be used as a constant in a graph.
 pub enum ConstantNumber {
+    #[allow(missing_docs)]
     F32(f32),
+    #[allow(missing_docs)]
     F64(f64),
+    #[allow(missing_docs)]
     Usize(usize),
+    #[allow(missing_docs)]
     I32(i32),
 }
 impl ConstantNumber {
+    /// Convert the constant number into a float of type F.
     pub fn into_f<F: Float>(self) -> F {
         match self {
             ConstantNumber::F32(f) => F::new(f),
@@ -1352,6 +1391,9 @@ math_impl_dynamic_constant!(sub_sources_dynamic_constant, Sub, sub);
 math_impl_dynamic_constant!(div_sources_dynamic_constant, Div, div);
 
 #[derive(Copy, Clone)]
+/// A stack of two nodes, where the channels are mapped sequentially first to the first node, then to the second node, when creating connections.
+///
+/// This is useful e.g. when you want to pass two different single channel nodes to a node that takes two channels as input.
 pub struct Stack<S0, S1> {
     s0: S0,
     s1: S1,
@@ -1411,6 +1453,7 @@ where
 }
 
 #[derive(Clone)]
+/// A statically sized array of output channels.
 pub struct ChannelsHandle<O: Size> {
     channels: NumericArray<(NodeOrGraph, u16), O>,
 }
@@ -1490,15 +1533,25 @@ impl Dynamic for DynamicChannelsHandle {
 // We need Sink and Source because some things such as binary op connections can't reasonably be
 // have things connected to their inputs
 
+/// Trait for handles with statically known channel configurations.
 pub trait Static {
+    /// Number of output channels
     type Outputs: Size;
+    /// Number of input channels
     type Inputs: Size;
+    /// What type to use when converting self to a dynamic handle
     type DynamicType: Dynamic;
+    /// Returns an iterator over the output channels
     fn iter_outputs(&self) -> ChannelIter<Self::Outputs>;
+    /// Returns an iterator over the input channels
     fn iter_inputs(&self) -> ChannelIter<Self::Inputs>;
+    /// Convert self to a dynamic handle.
+    ///
+    /// Dynamic in this context means that the channel configuration is only known at runtime.
     fn dynamic<F: Float>(&self, graph: &RwLock<&mut Graph<F>>) -> Self::DynamicType;
 }
-pub struct ChannelIterBuilder<I: Size> {
+/// Convenience struct for building a [`ChannelIter`].
+struct ChannelIterBuilder<I: Size> {
     channels: knaster_core::numeric_array::generic_array::GenericArray<
         MaybeUninit<(NodeOrGraph, u16)>,
         I,
@@ -1538,11 +1591,13 @@ impl<I: Size> ChannelIterBuilder<I> {
         }
     }
 }
+/// Iterator over a statically known number of channels.
 pub struct ChannelIter<I: Size> {
     channels: NumericArray<(NodeOrGraph, u16), I>,
     current_index: usize,
 }
 impl ChannelIter<U0> {
+    /// Create an empty iterator
     pub fn empty() -> Self {
         Self {
             channels: knaster_core::numeric_array::narr!(),
@@ -1563,17 +1618,20 @@ impl<I: Size> Iterator for ChannelIter<I> {
         }
     }
 }
+/// Iterator over a dynamically sized number of channels.
 pub struct DynamicChannelIter {
     channels: SmallVec<[(NodeOrGraph, u16); 1]>,
     current_index: usize,
 }
 impl DynamicChannelIter {
+    /// Create a new iterator from the given channels
     pub fn new(channels: SmallVec<[(NodeOrGraph, u16); 1]>) -> Self {
         Self {
             channels,
             current_index: 0,
         }
     }
+    /// Create an empty iterator
     pub fn empty() -> Self {
         Self {
             channels: SmallVec::with_capacity(0),
@@ -1595,16 +1653,23 @@ impl Iterator for DynamicChannelIter {
     }
 }
 
+/// Trait for handles with dynamically known channel configurations, i.e. the number of inputs and outputs is not known at compile time.
 pub trait Dynamic {
+    /// Get an iterator over the output channels
     fn iter_outputs(&self) -> DynamicChannelIter;
+    /// Get the number of output channels
     fn outputs(&self) -> u16;
+    /// Get an iterator over the input channels
     fn iter_inputs(&self) -> DynamicChannelIter;
+    /// Get the number of input channels
     fn inputs(&self) -> u16;
+    /// Get a dynamic handle to this node. Provided for symmetry with [`Static`].
     fn dynamic<F: Float>(&self, _graph: &RwLock<&mut Graph<F>>) -> &Self {
         self
     }
 }
 
+/// A handle to a specific parameter of a specific node.
 #[derive(Clone)]
 pub struct Parameter {
     pub(crate) node: NodeId,
@@ -1613,6 +1678,7 @@ pub struct Parameter {
     sender: SchedulingChannelSender,
 }
 impl Parameter {
+    /// Set the value of the parameter.
     pub fn set(&mut self, value: impl Into<ParameterValue>) -> Result<(), GraphError> {
         let value = value.into();
         self.sender.send(crate::SchedulingEvent {
@@ -1625,6 +1691,7 @@ impl Parameter {
         })?;
         Ok(())
     }
+    /// Set the value of the parameter with the given `Time` setting.
     pub fn set_time(
         &mut self,
         value: impl Into<ParameterValue>,
@@ -1641,6 +1708,7 @@ impl Parameter {
         })?;
         Ok(())
     }
+    /// Set the value of the parameter _at_ the given time in [`Seconds`], in absolute time.
     pub fn set_at(
         &mut self,
         value: impl Into<ParameterValue>,
@@ -1657,6 +1725,8 @@ impl Parameter {
         })?;
         Ok(())
     }
+    /// Set the value of the parameter _after_ the given time in [`Seconds`], in relative time to
+    /// when it it scheduled on the audio thread.
     pub fn set_after(
         &mut self,
         value: impl Into<ParameterValue>,
@@ -1673,6 +1743,7 @@ impl Parameter {
         })?;
         Ok(())
     }
+    /// Set the smoothing setting for the parameter.
     pub fn smooth(&mut self, s: impl Into<ParameterSmoothing>) -> Result<(), GraphError> {
         let s = s.into();
         self.sender.send(crate::SchedulingEvent {
@@ -1685,6 +1756,7 @@ impl Parameter {
         })?;
         Ok(())
     }
+    /// Set the smoothing setting for the parameter with the given `Time` setting.
     pub fn smooth_time(
         &mut self,
         s: impl Into<ParameterSmoothing>,
@@ -1701,6 +1773,7 @@ impl Parameter {
         })?;
         Ok(())
     }
+    /// Set the smoothing setting for the parameter _at_ the given time in [`Seconds`], in absolute time.
     pub fn smooth_at(
         &mut self,
         s: impl Into<ParameterSmoothing>,
@@ -1717,6 +1790,8 @@ impl Parameter {
         })?;
         Ok(())
     }
+    /// Set the smoothing setting for the parameter _after_ the given time in [`Seconds`], in relative time to
+    /// when it it scheduled on the audio thread.
     pub fn smooth_after(
         &mut self,
         s: impl Into<ParameterSmoothing>,
@@ -1733,6 +1808,7 @@ impl Parameter {
         })?;
         Ok(())
     }
+    /// Trigger the parameter.
     pub fn trig(&mut self) -> Result<(), GraphError> {
         self.sender.send(crate::SchedulingEvent {
             node_key: self.node.key(),
@@ -1744,6 +1820,7 @@ impl Parameter {
         })?;
         Ok(())
     }
+    /// Trigger the parameter with the given `Time` setting.
     pub fn trig_time(&mut self, t: impl Into<Time>) -> Result<(), GraphError> {
         self.sender.send(crate::SchedulingEvent {
             node_key: self.node.key(),
@@ -1755,6 +1832,7 @@ impl Parameter {
         })?;
         Ok(())
     }
+    /// Trigger the parameter _at_ the given time in [`Seconds`], in absolute time.
     pub fn trig_at(&mut self, t: impl Into<Seconds>) -> Result<(), GraphError> {
         self.sender.send(crate::SchedulingEvent {
             node_key: self.node.key(),
@@ -1766,6 +1844,8 @@ impl Parameter {
         })?;
         Ok(())
     }
+    /// Trigger the parameter _after_ the given time in [`Seconds`], in relative time to
+    /// when it it scheduled on the audio thread.
     pub fn trig_after(&mut self, t: impl Into<Seconds>) -> Result<(), GraphError> {
         self.sender.send(crate::SchedulingEvent {
             node_key: self.node.key(),
@@ -1890,7 +1970,7 @@ mod tests {
 
     use crate::{
         Time,
-        runner::{Runner, RunnerOptions},
+        processor::{AudioProcessor, AudioProcessorOptions},
     };
     use knaster_core::{
         Block, Seconds, noise::WhiteNoise, onepole::OnePoleLpf, osc::SinWt, pan::Pan2, typenum::*,
@@ -1900,7 +1980,7 @@ mod tests {
     #[test]
     fn scope() {
         let block_size = 16;
-        let (mut graph, _runner, _log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
+        let (mut graph, _audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U2>(AudioProcessorOptions {
             block_size,
             sample_rate: 48000,
             ring_buffer_size: 50,
@@ -1970,7 +2050,7 @@ mod tests {
     #[test]
     fn disconnect() {
         let block_size = 16;
-        let (mut g, mut runner, _log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+        let (mut g, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
             block_size,
             sample_rate: 48000,
             ring_buffer_size: 50,
@@ -1989,9 +2069,9 @@ mod tests {
 
         // Block 1
         unsafe {
-            runner.run(&[]);
+            audio_processor.run(&[]);
         }
-        let output = runner.output_block();
+        let output = audio_processor.output_block();
         assert_eq!(output.read(0, 0), 0.5 + 1.25 + 0.125);
 
         g.edit(|g| {
@@ -2001,9 +2081,9 @@ mod tests {
 
         // Block 2
         unsafe {
-            runner.run(&[]);
+            audio_processor.run(&[]);
         }
-        let output = runner.output_block();
+        let output = audio_processor.output_block();
         assert_eq!(output.read(0, 0), 1.25 + 0.125);
 
         g.edit(|g| {
@@ -2012,9 +2092,9 @@ mod tests {
         });
         // Block 3
         unsafe {
-            runner.run(&[]);
+            audio_processor.run(&[]);
         }
-        let output = runner.output_block();
+        let output = audio_processor.output_block();
         assert_eq!(output.read(0, 0), 0.125);
     }
 }

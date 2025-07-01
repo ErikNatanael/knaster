@@ -1,3 +1,23 @@
 [workspace]
-members = ["knaster_core", "knaster_primitives", "knaster_graph", "knaster_benchmarks", "knaster_airwindows", "knaster", "knaster_macros"]
+members = [
+  "knaster_core",
+  "knaster_primitives",
+  "knaster_graph",
+  "knaster_benchmarks",
+  "knaster_airwindows",
+  "knaster",
+  "knaster_macros",
+]
 resolver = "2"
+
+[profile.release]
+debug = false
+lto = "fat"
+codegen-units = 1
+opt-level = 3
+
+[profile.bench]
+debug = false
+lto = "fat"
+codegen-units = 1
+opt-level = 3

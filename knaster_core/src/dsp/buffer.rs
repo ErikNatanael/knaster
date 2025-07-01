@@ -4,6 +4,7 @@
 //! - [`BufferReader`] for reading a single channel [`Buffer`] or only the first channel from a multi channel buffer
 //! - [`BufferReaderMulti`] for reading multiple channels from a [`Buffer`]. The number of channels is fixed once it has been added to a [`Graph`]
 
+#[allow(unused)]
 #[cfg(feature = "std")]
 use crate::core::path::PathBuf;
 use crate::core::{string::String, vec::Vec};
@@ -146,6 +147,7 @@ impl<F: Float> Buffer<F> {
     }
 }
 
+#[allow(unused)]
 #[cfg(any(feature = "std", feature = "alloc"))]
 use crate::core::boxed::Box;
 #[cfg(all(feature = "symphonia", feature = "std"))]

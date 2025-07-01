@@ -1,3 +1,10 @@
+//! # JACK audio backend
+//!
+//! Process the audio as a JACK client. JACK supports duplex audio streams with an arbitrary number
+//! of input and output channels.
+//!
+//! Requires the `jack` feature to be enabled in Cargo. See the `jack` crate for compilation
+//! dependencies.
 use crate::core::vec::Vec;
 
 use crate::core::format;
@@ -5,7 +12,7 @@ use crate::core::format;
 use crate::core::vec;
 
 use crate::audio_backend::{AudioBackend, AudioBackendError};
-use crate::runner::Runner;
+use crate::processor::AudioProcessor;
 #[cfg(all(debug_assertions, feature = "assert_no_alloc"))]
 use assert_no_alloc::*;
 use knaster_core::Block;
@@ -69,14 +76,14 @@ impl<F: Float> AudioBackend for JackBackend<F> {
 
     fn start_processing(
         &mut self,
-        runner: crate::runner::Runner<Self::Sample>,
+        audio_processor: crate::processor::AudioProcessor<Self::Sample>,
     ) -> Result<(), AudioBackendError> {
         match self.client.take() {
             Some(JackClient::Passive(client)) => {
                 let mut in_ports = vec![];
                 let mut out_ports = vec![];
-                let num_inputs = runner.inputs();
-                let num_outputs = runner.outputs();
+                let num_inputs = audio_processor.inputs();
+                let num_outputs = audio_processor.outputs();
                 for i in 0..num_inputs {
                     in_ports
                         .push(client.register_port(&format!("in_{i}"), jack::AudioIn::default())?);
@@ -92,7 +99,7 @@ impl<F: Float> AudioBackend for JackBackend<F> {
                     input_block_pointers.push(input_block.channel_as_slice(i as usize).as_ptr());
                 }
                 let jack_process = JackProcess {
-                    runner,
+                    audio_processor,
                     in_ports,
                     out_ports,
                     input_block,
@@ -111,7 +118,7 @@ impl<F: Float> AudioBackend for JackBackend<F> {
 }
 
 struct JackProcess<F: Float> {
-    runner: Runner<F>,
+    audio_processor: AudioProcessor<F>,
     in_ports: Vec<jack::Port<jack::AudioIn>>,
     out_ports: Vec<jack::Port<jack::AudioOut>>,
     input_block: VecBlock<F>,
@@ -166,9 +173,9 @@ impl<F: Float> jack::ProcessHandler for JackProcess<F> {
                     *graph_in = F::new(*from_jack);
                 }
             }
-            unsafe { self.runner.run(&self.input_block_pointers) }
+            unsafe { self.audio_processor.run(&self.input_block_pointers) }
 
-            let graph_output_buffers = self.runner.output_block();
+            let graph_output_buffers = self.audio_processor.output_block();
             for (i, out_port) in self.out_ports.iter_mut().enumerate() {
                 let out_buffer = graph_output_buffers.channel_as_slice_mut(i);
                 for sample in out_buffer.iter_mut() {

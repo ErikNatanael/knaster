@@ -3,13 +3,13 @@ use iai::black_box;
 use knaster::Block;
 use knaster::graph_edit::DH;
 use knaster::osc::SinWt;
-use knaster::runner::{Runner, RunnerOptions};
+use knaster::processor::{AudioProcessor, AudioProcessorOptions};
 use knaster::typenum::*;
 use knaster::util::Constant;
 
 pub fn lai_256_sine_mul_0_05_to_out_block_32() {
     let block_size = 32;
-    let (mut graph, mut runner, _log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+    let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -23,13 +23,13 @@ pub fn lai_256_sine_mul_0_05_to_out_block_32() {
         }
     });
     for _ in 0..256 {
-        unsafe { runner.run(&[]) };
-        black_box(runner.output_block().channel_as_slice_mut(0));
+        unsafe { audio_processor.run(&[]) };
+        black_box(audio_processor.output_block().channel_as_slice_mut(0));
     }
 }
 pub fn lai_256_fm_cascade_block_32() {
     let block_size = 32;
-    let (mut graph, mut runner, log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+    let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -57,8 +57,8 @@ pub fn lai_256_fm_cascade_block_32() {
         // graph.commit_changes().unwrap();
     });
     for _ in 0..256 {
-        unsafe { runner.run(&[]) };
-        black_box(runner.output_block().channel_as_slice_mut(0));
+        unsafe { audio_processor.run(&[]) };
+        black_box(audio_processor.output_block().channel_as_slice_mut(0));
     }
 }
 

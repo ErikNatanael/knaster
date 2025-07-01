@@ -18,17 +18,6 @@ knaster = { path = "../knaster", features = ["std"] }
 criterion = "0.6"
 iai = { git = "https://github.com/sigaloid/iai", rev = "6c83e942" }
 
-[profile.release]
-debug = false
-lto = "fat"
-codegen-units = 1
-opt-level = 3
-
-[profile.bench]
-debug = false
-lto = "fat"
-codegen-units = 1
-opt-level = 3
 
 # [[bench]]
 # name = "graph_dsp_performance"

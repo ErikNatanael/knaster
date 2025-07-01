@@ -1,3 +1,8 @@
+//! # Dynugen
+//!
+//! This module contains the [`DynUGen`] trait, which is used to store [`UGen`]s as trait objects
+//! in the [`Graph`]. There is no need to use this trait directly.
+
 use alloc::boxed::Box;
 
 use crate::block::{AggregateBlockRead, RawBlock};
@@ -15,7 +20,10 @@ use knaster_core::{ParameterHint, typenum::*};
 /// a problem since this interface is essentially Graph internal. A different
 /// graph implementation can make a different tradeoff with different types.
 pub trait DynUGen<F: Float> {
+    /// Initalize the UGen before sending it to the audio thread. This function may allocate and
+    /// perform other potentially blocking operations without impacting the audio thread.
     fn init(&mut self, sample_rate: u32, block_size: usize);
+    /// Process one block of audio
     fn process_block(
         &mut self,
         ctx: &mut AudioCtx,
@@ -24,8 +32,11 @@ pub trait DynUGen<F: Float> {
         output: &mut RawBlock<F>,
     ) where
         F: Float;
+    /// Returns the number of inputs to the UGen
     fn inputs(&self) -> u16;
+    /// Returns the number of outputs from the UGen
     fn outputs(&self) -> u16;
+    /// Returns the number of parameters of the UGen
     fn parameters(&self) -> u16;
 
     /// Register a new buffer from which a parameter should be set every sample
@@ -34,9 +45,19 @@ pub trait DynUGen<F: Float> {
     /// The caller guarantees that `buffer` points to a contiguous section of memory, at least as
     /// large as the largest block size used in the [`Graph`].
     unsafe fn set_ar_param_buffer(&mut self, ctx: &mut AudioCtx, index: usize, buffer: *const F);
+    /// Register a delay of the next parameter change to a given parameter.
+    ///
+    /// The UGen needs to be
+    /// wrapped in a [`WrPreciseTiming`], or a different wrapper with similar functionality,
+    /// for this to have any effect.
     fn set_delay_within_block_for_param(&mut self, ctx: &mut AudioCtx, index: usize, delay: u16);
+    /// Apply a parameter change to the UGen
     fn param_apply(&mut self, ctx: &mut AudioCtx, parameter: usize, value: ParameterValue);
+    /// Returns a function which provides the parameter description strings for parameters of this
+    /// UGen
     fn param_description_fn(&self) -> fn(usize) -> Option<&'static str>;
+    /// Returns a function which provides the parameter hints for parameters of this
+    /// UGen
     fn param_hints_fn(&self) -> fn(usize) -> Option<ParameterHint>;
 }
 impl<F: Float, T: UGen<Sample = F> + 'static> DynUGen<F> for T {
@@ -87,12 +108,12 @@ impl<F: Float, T: UGen<Sample = F> + 'static> DynUGen<F> for T {
     }
 }
 
-/// UGenEnum has concrete variants for the most common UGens, with a fallback to boxed trait
-/// objects for the rest. This speeds up execution since both the heap allocation and the pointer
-/// indirection of the trait object are eliminated.
+/// UGenEnum
 ///
-/// Carefully benchmark code when chaning what is in this enum. Variants with structs much larger than 16 bytes
-/// should be boxed or left to the default case if benchmarks show that their inclusion slows down execution.
+/// This enum originally had special cases for certain common UGens, but benchmarking showed no
+/// performance benefits of this specialization.
+///
+// Carefully benchmark code when changing this enum. It is at the core of the hot path.
 pub enum UGenEnum<F: Float> {
     // Add(MathUGen<F, U1, knaster_core::math::Add>),
     // Mul(MathUGen<F, U1, knaster_core::math::Mul>),
@@ -100,6 +121,7 @@ pub enum UGenEnum<F: Float> {
     // Div(MathUGen<F, U1, knaster_core::math::Div>),
     // Constant(Constant<F>),
     // SinWt(knaster_core::osc::SinWt<F>),
+    /// A boxed DynUGen, currently the only valid variant when a UGenEnum is in an active Task
     Dyn(Box<dyn DynUGen<F> + 'static>),
     /// TakeFromTask is a placeholder for a UGen in a Task when its real UGen is already on the
     /// audio thread. It will then be taken from its previous task at TaskData initialisation.
@@ -109,6 +131,7 @@ pub enum UGenEnum<F: Float> {
     None,
 }
 impl<F: Float> UGenEnum<F> {
+    /// Returns the current value of self and replaces self with `Self::None`
     pub fn take(&mut self) -> UGenEnum<F> {
         std::mem::replace(self, UGenEnum::None)
     }

@@ -1,3 +1,9 @@
+//! # Audio processor
+//! 
+//! This module contains the [`AudioProcessor`] which is the main entry point for processing audio. It can either be placed in 
+//! in an [`AudioBackend`], placed in a different audio callback to produce blocks of audio, or manually called in a non-realtime 
+//! context for non-realtime processing.
+
 use knaster_core::Seconds;
 use knaster_core::log::ArLogReceiver;
 use knaster_core::typenum::U1;
@@ -12,8 +18,9 @@ use crate::{
     node::Node,
 };
 
+/// Options for creating a new [`AudioProcessor`].
 #[derive(Clone, Debug)]
-pub struct RunnerOptions {
+pub struct AudioProcessorOptions {
     /// The block size this Graph uses for processing.
     pub block_size: usize,
     /// The sample rate this Graph uses for processing.
@@ -26,7 +33,7 @@ pub struct RunnerOptions {
     /// audio thread.
     pub log_channel_capacity: usize,
 }
-impl Default for RunnerOptions {
+impl Default for AudioProcessorOptions {
     fn default() -> Self {
         Self {
             block_size: 64,
@@ -37,7 +44,7 @@ impl Default for RunnerOptions {
     }
 }
 /// Top level runner for Knaster. Put this on the audio thread and run it.
-pub struct Runner<F: Float> {
+pub struct AudioProcessor<F: Float> {
     // The Node contains sapce for metadata for the owning Graph that we don't need, but
     // it was convenient to reuse it here.
     graph_node: Node<F>,
@@ -50,10 +57,16 @@ pub struct Runner<F: Float> {
     shared_frame_clock: SharedFrameClock,
     ctx: AudioCtx,
 }
-impl<F: Float> Runner<F> {
+impl<F: Float> AudioProcessor<F> {
+    /// Create a new [`AudioProcessor`] with the given [`AudioProcessorOptions`].
+    /// 
+    /// Returns a tuple of 
+    /// - the [`Graph`], which is where you add audio processing and generating nodes,
+    /// - the [`AudioProcessor`], which is how you run the graph to produce audio, and
+    /// - the [`ArLogReceiver`], which is how you receive logs from the audio thread.
     pub fn new<Inputs: Size, Outputs: Size + NonZero>(
-        options: RunnerOptions,
-    ) -> (Graph<F>, Runner<F>, ArLogReceiver<U1>) {
+        options: AudioProcessorOptions,
+    ) -> (Graph<F>, AudioProcessor<F>, ArLogReceiver<U1>) {
         let block_size = options.block_size;
         let sample_rate = options.sample_rate;
         assert!(block_size != 0, "The block size must not be 0");
@@ -75,7 +88,7 @@ impl<F: Float> Runner<F> {
         let log_receiver = ArLogReceiver::new();
         let (log_sender, log_receiver) = log_receiver.sender(options.log_channel_capacity);
         let ctx = AudioCtx::new(sample_rate, block_size, log_sender);
-        let runner = Runner {
+        let audio_processor = AudioProcessor {
             graph_node: node,
             output_block: unsafe {
                 RawBlock::new(
@@ -91,7 +104,7 @@ impl<F: Float> Runner<F> {
             shared_frame_clock,
             ctx,
         };
-        (graph, runner, log_receiver)
+        (graph, audio_processor, log_receiver)
     }
 
     /// Produce one block of audio
@@ -121,15 +134,20 @@ impl<F: Float> Runner<F> {
                 self.sample_rate as u64,
             ));
     }
+    /// Get a mutable reference to the output block. This block holds the output of the last
+    /// processed block.
     pub fn output_block(&mut self) -> &mut RawBlock<F> {
         &mut self.output_block
     }
+    /// Get the block size, i.e. how many frames are produced each time [`Self::run`] is called.
     pub fn block_size(&self) -> usize {
         self.block_size
     }
+    /// Get the number of inputs to the top level graph.
     pub fn inputs(&self) -> u16 {
         self.graph_node.data.inputs
     }
+    /// Get the number of outputs from the top level graph.
     pub fn outputs(&self) -> u16 {
         self.graph_node.data.outputs
     }
@@ -138,8 +156,8 @@ impl<F: Float> Runner<F> {
 // # Safety
 //
 // Synchronisation with the Graph happens through safe means. See Graph for more info.
-unsafe impl<F: Float> Send for Runner<F> {}
+unsafe impl<F: Float> Send for AudioProcessor<F> {}
 // # Safety
 //
 // Synchronisation with the Graph happens through safe means. See Graph for more info.
-unsafe impl<F: Float> Sync for Runner<F> {}
+unsafe impl<F: Float> Sync for AudioProcessor<F> {}

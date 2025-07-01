@@ -7,9 +7,9 @@
 
 mod audio_rate;
 mod closure;
-mod hi_res_params;
+mod precise_timing;
 pub use closure::*;
-pub use hi_res_params::*;
+pub use precise_timing::*;
 mod math;
 pub use math::*;
 

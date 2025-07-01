@@ -13,14 +13,14 @@ use knaster_core::{
     wrappers_core::{UGenWrapperCoreExt, WrSmoothParams},
 };
 use knaster_graph::graph::GraphError;
-use knaster_graph::runner::RunnerOptions;
+use knaster_graph::processor::AudioProcessorOptions;
 use knaster_graph::{
     audio_backend::{
         AudioBackend,
         cpal::{CpalBackend, CpalBackendOptions},
     },
     graph::GraphOptions,
-    runner::Runner,
+    processor::AudioProcessor,
 };
 use rand::Rng;
 
@@ -28,14 +28,14 @@ fn main() -> Result<()> {
     let mut backend = CpalBackend::new(CpalBackendOptions::default())?;
 
     // Create a graph
-    let (mut top_level_graph, runner, _log_receiver) =
-        Runner::<f32>::new::<U0, U2>(RunnerOptions {
+    let (mut top_level_graph, audio_processor, _log_receiver) =
+        AudioProcessor::<f32>::new::<U0, U2>(AudioProcessorOptions {
             block_size: backend.block_size().unwrap_or(64),
             sample_rate: backend.sample_rate(),
             ring_buffer_size: 200,
             ..Default::default()
         });
-    backend.start_processing(runner)?;
+    backend.start_processing(audio_processor)?;
     // push some nodes
     loop {
         let mut graph = top_level_graph.edit(|g| {

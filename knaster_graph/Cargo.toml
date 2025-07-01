@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["std", "cpal", "jack"]
+default = ["std", "cpal", "jack", "dot"]
 std = ["knaster_core/std", "slotmap/std", "thiserror/std", "ecow/std"]
+dot = ["dep:open"]
 # Enables potential optimisations that require nightly rust
 unstable = ["knaster_core/unstable"]
 jack = ["dep:jack"]
@@ -14,6 +15,7 @@ sound_files = ["knaster_core/sound_files"]
 
 [dependencies]
 knaster_core = { path = "../knaster_core" }
+
 assert_no_alloc = { version = "1.1.2", optional = true }
 cpal = { version = "0.15.3", default-features = false, optional = true }
 jack = { version = "0.13.2", optional = true }
@@ -21,6 +23,7 @@ paste = "1.0.15"
 rtrb = { version = "0.3.2", default-features = false }
 slotmap = { version = "1.0", default-features = false }
 thiserror = { version = "2", default-features = false }
+open = { version = "5.3.2", optional = true }
 smallvec = { version = "1.14.0", features = [
   "union",
   "const_generics",

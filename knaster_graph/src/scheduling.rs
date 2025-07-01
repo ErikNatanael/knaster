@@ -23,6 +23,7 @@ use crate::{
 use knaster_core::log::ArLogSender;
 use knaster_core::{ParameterError, ParameterSmoothing, ParameterValue, Seconds, rt_log};
 
+/// An event, i.e. a parameter change or a smoothing change, to be scheduled to be applied on the audio thread.
 #[derive(Debug, Clone)]
 pub struct SchedulingEvent {
     pub(crate) node_key: NodeKey,
@@ -36,10 +37,15 @@ pub(crate) type SchedulingChannelProducer = rtrb::Producer<SchedulingEvent>;
 // Every GraphGen has one of these for receiving parameter changes.
 pub(crate) type SchedulingChannelConsumer = rtrb::Consumer<SchedulingEvent>;
 
+/// Error related to scheduling
 pub enum SchedulingError {
+    #[allow(missing_docs)]
     ParameterError(ParameterError),
 }
 
+/// A time keeper to see how many frames have been processed since the start of the audio thread.
+///
+/// Often used to schedule parameter changes.
 #[derive(Clone, Debug)]
 pub struct SharedFrameClock(Arc<AtomicU64>);
 impl SharedFrameClock {
@@ -51,6 +57,7 @@ impl SharedFrameClock {
         let as_u64 = unsafe { crate::core::mem::transmute::<Seconds, u64>(new_time) };
         self.0.store(as_u64, core::sync::atomic::Ordering::Relaxed);
     }
+    /// Get the current time as [`Seconds`]
     pub fn get(&self) -> Seconds {
         let as_u64 = self.0.load(core::sync::atomic::Ordering::Relaxed);
         unsafe { crate::core::mem::transmute::<u64, Seconds>(as_u64) }
@@ -67,12 +74,15 @@ pub struct Time {
     absolute: bool,
 }
 impl Time {
+    /// Time referencing `secs` seconds from the start of the audio thread.
     pub fn at(secs: Seconds) -> Self {
         Self {
             seconds: secs,
             absolute: true,
         }
     }
+    /// Time referencing `secs` seconds from when the event reaches audio thread. Note that the
+    /// [`GraphGen`] will discard changes that are scheduled to far into the future.
     pub fn after(secs: Seconds) -> Self {
         Self {
             seconds: secs,
@@ -108,18 +118,6 @@ impl Time {
             }
         }
     }
-    pub fn absolute(seconds: Seconds) -> Self {
-        Self {
-            seconds,
-            absolute: true,
-        }
-    }
-    pub fn relative(seconds: Seconds) -> Self {
-        Self {
-            seconds,
-            absolute: false,
-        }
-    }
     /// Return a new `SchedulingTime` that will be applied as soon as possible.
     pub fn asap() -> Self {
         Self {
@@ -127,10 +125,12 @@ impl Time {
             absolute: false,
         }
     }
+    /// Set self to be an absolute time value, counted from the start, instead of relative to the current time.
     pub fn to_absolute(mut self) -> Self {
         self.absolute = true;
         self
     }
+    /// Set self to be a relative time value, counted from the current time, instead of absolute to the start.
     pub fn to_relative(mut self) -> Self {
         self.absolute = false;
         self
@@ -152,13 +152,15 @@ impl Default for SchedulingToken {
 }
 
 impl SchedulingToken {
+    /// Create a new token.
     pub fn new() -> Self {
         Self {
             token: Arc::new(AtomicBool::new(false)),
         }
     }
 
-    pub fn ready(&self) -> bool {
+    /// Check if the token is activated.
+    pub fn is_activated(&self) -> bool {
         self.token.load(crate::core::sync::atomic::Ordering::SeqCst)
     }
     /// Activate the token
@@ -183,13 +185,3 @@ impl SchedulingToken {
             .store(true, crate::core::sync::atomic::Ordering::SeqCst);
     }
 }
-
-// pub trait Schedulable {
-//     fn set(&mut self, event: impl Into<SchedulingEvent>) -> Result<(), ()>;
-// }
-
-// impl<Sample: Float, T: Gen<Sample = Sample> + Parameterable<Sample>> Schedulable for Handle<T> {
-//     fn set(&mut self, event: impl Into<SchedulingEvent>) -> Result<(), ()> {
-//         todo!()
-//     }
-// }

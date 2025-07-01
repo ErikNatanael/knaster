@@ -4,13 +4,13 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use knaster::Block;
 use knaster::graph_edit::DH;
 use knaster::osc::SinWt;
-use knaster::runner::{Runner, RunnerOptions};
+use knaster::processor::{AudioProcessor, AudioProcessorOptions};
 use knaster::typenum::*;
 use knaster::util::Constant;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     for block_size in [16, 32, 128] {
-        let (mut graph, mut runner, _log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+        let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
             block_size,
             sample_rate: 48000,
             ring_buffer_size: 50,
@@ -27,14 +27,14 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             &format!("256 sine * 0.05 -> out, block: {block_size}"),
             |b| {
                 b.iter(|| {
-                    unsafe { runner.run(&[]) };
-                    black_box(runner.output_block().channel_as_slice_mut(0));
+                    unsafe { audio_processor.run(&[]) };
+                    black_box(audio_processor.output_block().channel_as_slice_mut(0));
                 })
             },
         );
     }
     for block_size in [16, 32, 128] {
-        let (mut graph, mut runner, log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+        let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
             block_size,
             sample_rate: 48000,
             ring_buffer_size: 50,
@@ -63,8 +63,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         });
         c.bench_function(&format!("256 FM cascade, block: {block_size}"), |b| {
             b.iter(|| {
-                unsafe { runner.run(&[]) };
-                black_box(runner.output_block().channel_as_slice_mut(0));
+                unsafe { audio_processor.run(&[]) };
+                black_box(audio_processor.output_block().channel_as_slice_mut(0));
             })
         });
     }

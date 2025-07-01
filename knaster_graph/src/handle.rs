@@ -33,9 +33,16 @@ pub struct NodeSubset {
     pub(crate) start_channel: u16,
 }
 
+/// This is used to send scheduling events to the audio thread.
 #[derive(Clone, Debug)]
 pub struct SchedulingChannelSender(pub(crate) Arc<Mutex<SchedulingChannelProducer>>);
 impl SchedulingChannelSender {
+    /// Send a scheduling event to the audio thread.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the graph this sender is connected to was freed or the event channel is
+    /// full.
     pub fn send(&self, event: SchedulingEvent) -> Result<(), GraphError> {
         // Lock should never be poisoned, but if it is we don't care.
         let mut sender = match self.0.lock() {
@@ -53,6 +60,7 @@ impl SchedulingChannelSender {
         Ok(())
     }
 
+    /// Returns true if the graph this sender is connected to is still alive.
     pub fn is_alive(&self) -> bool {
         match self.0.lock() {
             Ok(s) => !s.is_abandoned(),
@@ -130,6 +138,7 @@ impl<T: UGen> Handle<T> {
             raw_handle: untyped_handle,
         }
     }
+    /// Convert this handle into an [`AnyHandle`].
     pub fn into_any(self) -> AnyHandle {
         AnyHandle {
             raw_handle: self.raw_handle,
@@ -139,9 +148,11 @@ impl<T: UGen> Handle<T> {
             outputs: T::Outputs::U16,
         }
     }
+    /// Get the number of inputs of this node.
     pub fn inputs(&self) -> usize {
         T::Inputs::USIZE
     }
+    /// Get the number of outputs of this node.
     pub fn outputs(&self) -> usize {
         T::Outputs::USIZE
     }
@@ -156,13 +167,19 @@ impl<T: HandleTrait> From<&T> for NodeId {
         value.node_id()
     }
 }
+/// Trait for handles to nodes.
 pub trait HandleTrait: Sized {
+    /// Set a parameter value on this node.
     fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), GraphError>;
-    fn change(&self, param: impl Into<Param>) -> Result<ParameterChange2<Self>, ParameterError>;
+    /// Send a [`SchedulingEvent`] to the audio thread.
     fn schedule_event(&self, event: SchedulingEvent) -> Result<(), GraphError>;
+    /// Get the [`NodeId`] of this node.
     fn node_id(&self) -> NodeId;
+    /// Get the number of inputs of this node.
     fn inputs(&self) -> u16;
+    /// Get the number of outputs of this node.
     fn outputs(&self) -> u16;
+    /// Get a subset of this node's channels.
     fn subset(&self, start_channel: u16, channels: u16) -> NodeSubset {
         NodeSubset {
             node: NodeOrGraph::Node(self.node_id()),
@@ -170,7 +187,9 @@ pub trait HandleTrait: Sized {
             start_channel,
         }
     }
+    /// Get parameter descriptions for this node.
     fn parameters(&self) -> Vec<&'static str>;
+    /// Get parameter hints for this node.
     fn hints(&self) -> Vec<ParameterHint>;
 
     /// Returns time of the Runner connected to this
@@ -206,36 +225,6 @@ impl<T: UGen> HandleTrait for Handle<T> {
             time: c.time,
         };
         self.raw_handle.send(event)
-    }
-
-    fn change(&self, param: impl Into<Param>) -> Result<ParameterChange2<Self>, ParameterError> {
-        let param_index = match param.into() {
-            knaster_core::Param::Index(param_i) => {
-                if param_i >= T::Parameters::USIZE {
-                    return Err(ParameterError::ParameterIndexOutOfBounds);
-                } else {
-                    param_i
-                }
-            }
-            knaster_core::Param::Desc(desc) => {
-                match T::param_descriptions().iter().position(|d| *d == desc) {
-                    Some(param_i) => param_i,
-                    _ => {
-                        // Fail
-                        return Err(ParameterError::DescriptionNotFound(desc));
-                    }
-                }
-            }
-        };
-        Ok(ParameterChange2 {
-            handle: self,
-            param: param_index,
-            value: None,
-            smoothing: None,
-            token: None,
-            time: None,
-            was_sent: false,
-        })
     }
 
     fn schedule_event(&self, event: SchedulingEvent) -> Result<(), GraphError> {
@@ -294,33 +283,6 @@ impl HandleTrait for AnyHandle {
         };
         self.raw_handle.send(event)
     }
-    fn change(&self, param: impl Into<Param>) -> Result<ParameterChange2<Self>, ParameterError> {
-        let param_index = match param.into() {
-            knaster_core::Param::Index(param_i) => {
-                if param_i >= self.parameters.len() {
-                    return Err(ParameterError::ParameterIndexOutOfBounds);
-                } else {
-                    param_i
-                }
-            }
-            knaster_core::Param::Desc(desc) => {
-                if let Some(param_i) = self.parameters.iter().position(|d| *d == desc) {
-                    param_i
-                } else {
-                    return Err(ParameterError::DescriptionNotFound(desc));
-                }
-            }
-        };
-        Ok(ParameterChange2 {
-            handle: self,
-            param: param_index,
-            value: None,
-            smoothing: None,
-            token: None,
-            time: None,
-            was_sent: false,
-        })
-    }
 
     fn schedule_event(&self, event: SchedulingEvent) -> Result<(), GraphError> {
         self.raw_handle.send(event)
@@ -354,13 +316,7 @@ impl HandleTrait for AnyHandle {
         self.parameter_hints.clone()
     }
 }
-// pub trait Handleable: Sized {
-//     type HandleType: HandleTrait;
-//     fn get_handle(untyped_handle: RawHandle) -> Self::HandleType {
-//         Self::HandleType::from_untyped(untyped_handle)
-//     }
-// }
-//
+/// A parameter change API for the [`HandleTrait`] (deprecated).
 #[derive(Debug)]
 pub struct ParameterChange2<'a, H: HandleTrait> {
     handle: &'a H,
@@ -372,31 +328,38 @@ pub struct ParameterChange2<'a, H: HandleTrait> {
     was_sent: bool,
 }
 impl<H: HandleTrait> ParameterChange2<'_, H> {
+    /// Send a trigger parameter change.
     pub fn trig(mut self) -> Self {
         self.value = Some(ParameterValue::Trigger);
         self
     }
+    /// Send a parameter change with the given value.
     pub fn value(mut self, v: impl Into<ParameterValue>) -> Self {
         self.value = Some(v.into());
         self
     }
+    /// Set the smoothing setting for the parameter.
     pub fn smooth(mut self, v: impl Into<ParameterSmoothing>) -> Self {
         self.smoothing = Some(v.into());
         self
     }
+    /// Use a scheduling token to activate the parameter change.
     pub fn token(mut self, v: impl Into<SchedulingToken>) -> Self {
         self.token = Some(v.into());
         self
     }
+    /// Apply the parameter change after the given time.
     pub fn after(mut self, v: impl Into<Seconds>) -> Self {
         self.time = Some(Time::after(v.into()));
         self
     }
+    /// Apply the parameter change at the given time.
     pub fn at(mut self, v: impl Into<Time>) -> Self {
         let t = v.into().to_absolute();
         self.time = Some(t);
         self
     }
+    /// Send the parameter change.
     pub fn send(mut self) -> Result<(), GraphError> {
         self.was_sent = true;
 
@@ -426,6 +389,7 @@ impl<H: HandleTrait> Drop for ParameterChange2<'_, H> {
         }
     }
 }
+/// Parameter change API (deprecated).
 #[derive(Clone, Debug)]
 pub struct ParameterChange {
     param: Param,

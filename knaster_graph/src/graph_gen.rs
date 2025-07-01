@@ -275,7 +275,7 @@ fn apply_parameter_change<'a, F: Float>(
     keys: &'a [NodeKey],
     tasks: &'a mut [Task<F>],
 ) -> Option<SchedulingEvent> {
-    let mut ready_to_apply = event.token.as_ref().is_none_or(|t| t.ready());
+    let mut ready_to_apply = event.token.as_ref().is_none_or(|t| t.is_activated());
     let mut delay_in_block = 0;
     if let Some(time) = &mut event.time {
         delay_in_block =

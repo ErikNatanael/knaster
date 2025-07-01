@@ -960,6 +960,7 @@ dependencies = [
  "jack",
  "knaster_core",
  "log",
+ "open",
  "paste",
  "rand",
  "rtrb",

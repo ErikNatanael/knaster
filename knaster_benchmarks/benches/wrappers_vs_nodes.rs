@@ -1,13 +1,14 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion,  criterion_group, criterion_main};
+use std::hint::black_box;
 use knaster::Block;
-use knaster::runner::{Runner, RunnerOptions};
+use knaster::processor::{AudioProcessor, AudioProcessorOptions};
 use knaster::typenum::*;
 use knaster::wrappers_core::UGenWrapperCoreExt;
 use knaster_benchmarks::TestNumUGen;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let block_size = 32;
-    let (mut graph, mut runner, _log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+    let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -18,15 +19,15 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     });
     c.bench_function("wr_mul block: 32", |b| {
         b.iter(|| {
-            unsafe { runner.run(&[]) };
-            black_box(runner.output_block().channel_as_slice_mut(0));
+            unsafe { audio_processor.run(&[]) };
+            black_box(audio_processor.output_block().channel_as_slice_mut(0));
             assert_eq!(
-                runner.output_block().channel_as_slice_mut(0)[block_size - 1],
+                audio_processor.output_block().channel_as_slice_mut(0)[block_size - 1],
                 1.0
             );
         })
     });
-    let (mut graph, mut runner, log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+    let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -43,16 +44,16 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     });
     c.bench_function("MathGen Mul block: 32", |b| {
         b.iter(|| {
-            unsafe { runner.run(&[]) };
-            black_box(runner.output_block().channel_as_slice_mut(0));
+            unsafe { audio_processor.run(&[]) };
+            black_box(audio_processor.output_block().channel_as_slice_mut(0));
             assert_eq!(
-                runner.output_block().channel_as_slice_mut(0)[block_size - 1],
+                audio_processor.output_block().channel_as_slice_mut(0)[block_size - 1],
                 1.0
             );
         })
     });
     // 100 nodes
-    let (mut graph, mut runner, log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+    let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -70,15 +71,15 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     // graph.commit_changes().unwrap();
     c.bench_function("100 wr_mul block: 32", |b| {
         b.iter(|| {
-            unsafe { runner.run(&[]) };
-            black_box(runner.output_block().channel_as_slice_mut(0));
+            unsafe { audio_processor.run(&[]) };
+            black_box(audio_processor.output_block().channel_as_slice_mut(0));
             assert_eq!(
-                runner.output_block().channel_as_slice_mut(0)[block_size - 1],
+                audio_processor.output_block().channel_as_slice_mut(0)[block_size - 1],
                 100.0
             );
         })
     });
-    let (mut graph, mut runner, log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+    let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -98,10 +99,10 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     });
     c.bench_function("100 MathGen Mul block: 32", |b| {
         b.iter(|| {
-            unsafe { runner.run(&[]) };
-            black_box(runner.output_block().channel_as_slice_mut(0));
+            unsafe { audio_processor.run(&[]) };
+            black_box(audio_processor.output_block().channel_as_slice_mut(0));
             assert_eq!(
-                runner.output_block().channel_as_slice_mut(0)[block_size - 1],
+                audio_processor.output_block().channel_as_slice_mut(0)[block_size - 1],
                 100.0
             );
         })

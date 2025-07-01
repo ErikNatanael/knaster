@@ -7,14 +7,14 @@ use knaster_core::envelopes::EnvAsr;
 use knaster_core::osc::SinWt;
 use knaster_core::typenum::{U0, U1, U2};
 use knaster_graph::Time;
-use knaster_graph::runner::RunnerOptions;
+use knaster_graph::processor::AudioProcessorOptions;
 use knaster_graph::{
     audio_backend::{
         AudioBackend,
         cpal::{CpalBackend, CpalBackendOptions},
     },
     graph::GraphOptions,
-    runner::Runner,
+    processor::AudioProcessor,
 };
 
 fn main() -> Result<()> {
@@ -23,14 +23,14 @@ fn main() -> Result<()> {
     let mut backend = CpalBackend::new(CpalBackendOptions::default())?;
 
     // Create a graph
-    let (mut top_level_graph, runner, _log_receiver) =
-        Runner::<f32>::new::<U0, U2>(RunnerOptions {
+    let (mut top_level_graph, audio_processor, _log_receiver) =
+        AudioProcessor::<f32>::new::<U0, U2>(AudioProcessorOptions {
             block_size: backend.block_size().unwrap_or(64),
             sample_rate: backend.sample_rate(),
             ring_buffer_size: 200,
             ..Default::default()
         });
-    backend.start_processing(runner)?;
+    backend.start_processing(audio_processor)?;
     let mut graph = top_level_graph.edit(|g| {
         let (gh, graph) = g.subgraph::<U0, U1>(GraphOptions::default(), |_| ());
         gh.out([0, 0]).to_graph_out();

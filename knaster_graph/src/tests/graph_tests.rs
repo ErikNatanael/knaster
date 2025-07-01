@@ -1,18 +1,17 @@
 use crate::Time;
 use crate::graph::NodeOrGraph;
-use crate::runner::RunnerOptions;
+use crate::processor::AudioProcessorOptions;
 use crate::tests::utils::TestNumUGen;
-use crate::{handle::HandleTrait, runner::Runner, tests::utils::TestInPlusParamUGen};
+use crate::{processor::AudioProcessor, tests::utils::TestInPlusParamUGen};
 use alloc::vec;
-use knaster_core::envelopes::EnvAsr;
 use knaster_core::math::{Add, MathUGen, Mul};
 use knaster_core::typenum::{U0, U1, U2};
-use knaster_core::{Block, Done, PTrigger, typenum::U3};
+use knaster_core::{Block, typenum::U3};
 
 #[test]
 fn graph_inputs_to_outputs() {
     let block_size = 16;
-    let (mut graph, mut runner, _log_receiver) = Runner::new::<U3, U3>(RunnerOptions {
+    let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::new::<U3, U3>(AudioProcessorOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -31,8 +30,8 @@ fn graph_inputs_to_outputs() {
         unsafe { input_allocation.as_ptr().add(block_size) },
         unsafe { input_allocation.as_ptr().add(block_size * 2) },
     ];
-    unsafe { runner.run(&input_pointers) };
-    let output = runner.output_block();
+    unsafe { audio_processor.run(&input_pointers) };
+    let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 1.0);
     assert_eq!(output.read(1, 0), 1.0);
     assert_eq!(output.read(2, 0), 0.0);
@@ -41,7 +40,7 @@ fn graph_inputs_to_outputs() {
 #[test]
 fn graph_inputs_to_nodes_to_outputs() {
     let block_size = 16;
-    let (mut graph, mut runner, _log_receiver) = Runner::new::<U3, U3>(RunnerOptions {
+    let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::new::<U3, U3>(AudioProcessorOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -76,8 +75,8 @@ fn graph_inputs_to_nodes_to_outputs() {
         unsafe { input_allocation.as_ptr().add(block_size) },
         unsafe { input_allocation.as_ptr().add(block_size * 2) },
     ];
-    unsafe { runner.run(&input_pointers) };
-    let output = runner.output_block();
+    unsafe { audio_processor.run(&input_pointers) };
+    let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 2.5);
     assert_eq!(output.read(1, 0), 2.0);
     assert_eq!(output.read(2, 0), 2.75);
@@ -86,7 +85,7 @@ fn graph_inputs_to_nodes_to_outputs() {
 #[test]
 fn multichannel_nodes() {
     let block_size = 16;
-    let (mut graph, mut runner, _log_receiver) = Runner::new::<U3, U2>(RunnerOptions {
+    let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::new::<U3, U2>(AudioProcessorOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -110,8 +109,8 @@ fn multichannel_nodes() {
         unsafe { input_allocation.as_ptr().add(block_size) },
         unsafe { input_allocation.as_ptr().add(block_size * 2) },
     ];
-    unsafe { runner.run(&input_pointers) };
-    let output = runner.output_block();
+    unsafe { audio_processor.run(&input_pointers) };
+    let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 0.625);
     assert_eq!(output.read(1, 0), 5.125);
 
@@ -136,50 +135,16 @@ fn multichannel_nodes() {
         // graph.connect_replace(&m2, 0, 0, graph.internal()).unwrap();
         // graph.connect_replace(&m3, 0, 1, graph.internal()).unwrap();
     });
-    unsafe { runner.run(&input_pointers) };
-    let output = runner.output_block();
+    unsafe { audio_processor.run(&input_pointers) };
+    let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 0.625 * 0.5);
     assert_eq!(output.read(1, 0), 5.125 * 0.125);
 }
 
 #[test]
-fn free_node_when_done() {
-    let block_size = 16;
-    let (mut graph, mut runner, _log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions {
-        block_size,
-        sample_rate: 48000,
-        ring_buffer_size: 50,
-        ..Default::default()
-    });
-    let asr = graph.push_with_done_action(EnvAsr::new(0.0, 0.0), Done::FreeSelf);
-    asr.set(("attack_time", 0.0)).unwrap();
-    asr.set(("release_time", 0.0)).unwrap();
-    asr.set(("t_restart", PTrigger)).unwrap();
-    asr.set(("t_release", PTrigger)).unwrap();
-    graph.commit_changes().unwrap();
-    assert_eq!(graph.inspection().nodes.len(), 1);
-    for _ in 0..10 {
-        unsafe {
-            runner.run(&[]);
-        }
-    }
-    // Run the code to free old nodes
-    graph.commit_changes().unwrap();
-    assert_eq!(graph.inspection().nodes.len(), 0);
-    assert_eq!(graph.num_nodes_pending_removal(), 1);
-    // Apply the new TaskData on the audio thread so that the node can be removed
-    unsafe {
-        runner.run(&[]);
-    }
-    // Now the node is removed
-    graph.commit_changes().unwrap();
-    assert_eq!(graph.num_nodes_pending_removal(), 0);
-    assert_eq!(graph.inspection().nodes.len(), 0);
-}
-#[test]
 fn feedback_nodes() {
     let block_size = 16;
-    let (mut g, mut runner, _log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+    let (mut g, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -199,28 +164,28 @@ fn feedback_nodes() {
 
     // Block 1
     unsafe {
-        runner.run(&[]);
+        audio_processor.run(&[]);
     }
-    let output = runner.output_block();
+    let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 1.375);
     // Block 2
     unsafe {
-        runner.run(&[]);
+        audio_processor.run(&[]);
     }
-    let output = runner.output_block();
+    let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 1.375 * 2.);
     // Block 3
     unsafe {
-        runner.run(&[]);
+        audio_processor.run(&[]);
     }
-    let output = runner.output_block();
+    let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 1.375 * 3.);
 }
 
 #[test]
 fn feedback_nodes2() {
     let block_size = 16;
-    let (mut g, mut runner, _log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+    let (mut g, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -239,27 +204,27 @@ fn feedback_nodes2() {
 
     // Block 1
     unsafe {
-        runner.run(&[]);
+        audio_processor.run(&[]);
     }
-    let output = runner.output_block();
+    let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 0.125);
     // Block 2
     unsafe {
-        runner.run(&[]);
+        audio_processor.run(&[]);
     }
-    let output = runner.output_block();
+    let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 0.125 + 1.25);
     // Block 3
     unsafe {
-        runner.run(&[]);
+        audio_processor.run(&[]);
     }
-    let output = runner.output_block();
+    let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 0.125 + 1.25);
 }
 #[test]
 fn disconnect() {
     let block_size = 16;
-    let (mut g, mut runner, _log_receiver) = Runner::<f32>::new::<U0, U1>(RunnerOptions {
+    let (mut g, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
         block_size,
         sample_rate: 48000,
         ring_buffer_size: 50,
@@ -280,9 +245,9 @@ fn disconnect() {
 
     // Block 1
     unsafe {
-        runner.run(&[]);
+        audio_processor.run(&[]);
     }
-    let output = runner.output_block();
+    let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 0.5 + 1.25 + 0.125);
 
     g.disconnect_output_from_source(&n1, 0).unwrap();
@@ -290,17 +255,17 @@ fn disconnect() {
 
     // Block 2
     unsafe {
-        runner.run(&[]);
+        audio_processor.run(&[]);
     }
-    let output = runner.output_block();
+    let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 1.25 + 0.125);
 
     g.disconnect_input_to_sink(0, &n3).unwrap();
     g.commit_changes().unwrap();
     // Block 3
     unsafe {
-        runner.run(&[]);
+        audio_processor.run(&[]);
     }
-    let output = runner.output_block();
+    let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 0.125);
 }

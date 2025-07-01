@@ -5,7 +5,7 @@ use std::time::Duration;
 use anyhow::Result;
 use knaster::buffer::BufferReader;
 use knaster::dsp::buffer::Buffer;
-use knaster::runner::RunnerOptions;
+use knaster::processor::AudioProcessorOptions;
 use knaster::typenum::{U0, U2};
 use knaster::util::Constant;
 use knaster::{
@@ -13,15 +13,15 @@ use knaster::{
         AudioBackend,
         cpal::{CpalBackend, CpalBackendOptions},
     },
-    runner::Runner,
+    processor::AudioProcessor,
 };
 
 fn main() -> Result<()> {
     let mut backend = CpalBackend::new(CpalBackendOptions::default())?;
 
     // Create a graph
-    let (mut top_level_graph, runner, _log_receiver) =
-        Runner::<f64>::new::<U0, U2>(RunnerOptions {
+    let (mut top_level_graph, audio_processor, _log_receiver) =
+        AudioProcessor::<f64>::new::<U0, U2>(AudioProcessorOptions {
             block_size: backend.block_size().unwrap_or(64),
             sample_rate: backend.sample_rate(),
             ring_buffer_size: 200,
@@ -29,7 +29,7 @@ fn main() -> Result<()> {
         });
     dbg!(backend.sample_rate());
     let sr = backend.sample_rate() as f64;
-    backend.start_processing(runner)?;
+    backend.start_processing(audio_processor)?;
     // load a stereo sound file
     let samples: Vec<_> = (0..(sr as usize))
         .flat_map(|i| {

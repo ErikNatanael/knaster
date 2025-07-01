@@ -1,7 +1,12 @@
+//! # CPAL audio backend
+//!
+//! CPAL is the default audio backend, supporting all major platforms. However, it doesn't support
+//! duplex audio streams (audio input and output in the same callback). If you want to process
+//! incoming audio, use a different backend.
 use core::marker::PhantomData;
 
 use crate::audio_backend::{AudioBackend, AudioBackendError};
-use crate::runner::Runner;
+use crate::processor::AudioProcessor;
 use alloc::{boxed::Box, string::String};
 #[cfg(all(debug_assertions, feature = "assert_no_alloc"))]
 use assert_no_alloc::*;
@@ -71,6 +76,7 @@ impl<F> CpalBackend<F> {
     pub fn num_outputs(&self) -> usize {
         self.config.channels() as usize
     }
+    /// Leak the backend, thereby avoiding running `Drop` and closing the audio stream.
     pub fn leak(self) {
         Box::leak(Box::new(self));
     }
@@ -78,7 +84,7 @@ impl<F> CpalBackend<F> {
 
 impl<F: Float> AudioBackend for CpalBackend<F> {
     type Sample = F;
-    fn start_processing(&mut self, runner: Runner<Self::Sample>) -> Result<(), AudioBackendError> {
+    fn start_processing(&mut self, runner: AudioProcessor<Self::Sample>) -> Result<(), AudioBackendError> {
         if self.stream.is_some() {
             return Err(AudioBackendError::BackendAlreadyRunning);
         }
@@ -138,7 +144,7 @@ impl<F: Float> AudioBackend for CpalBackend<F> {
 fn run<T, F: Float>(
     device: &cpal::Device,
     config: &cpal::StreamConfig,
-    mut runner: Runner<F>,
+    mut audio_processor: AudioProcessor<F>,
 ) -> Result<cpal::Stream, AudioBackendError>
 where
     T: cpal::Sample + cpal::FromSample<f32> + cpal::SizedSample + crate::core::fmt::Display,
@@ -148,7 +154,7 @@ where
     // TODO: Send error via ArLogSender instead.
     let err_fn = |err| log::error!("CPAL error: an error occurred on stream: {}", err);
 
-    let graph_block_size = runner.block_size();
+    let graph_block_size = audio_processor.block_size();
     let mut sample_counter = graph_block_size; // Immediately process a block
     let stream = device.build_output_stream(
         config,
@@ -160,10 +166,10 @@ where
                     for frame in output.chunks_mut(channels) {
                         if sample_counter >= graph_block_size {
                             // CPAL currently does not support duplex streams
-                            unsafe { runner.run(&[]) };
+                            unsafe { audio_processor.run(&[]) };
                             sample_counter = 0;
                         }
-                        let out_block = runner.output_block();
+                        let out_block = audio_processor.output_block();
                         for (channel_i, out) in frame.iter_mut().enumerate() {
                             let sample = out_block.read(channel_i, sample_counter);
                             let value: T = T::from_sample(sample.to_f32());
@@ -178,10 +184,10 @@ where
                 for frame in output.chunks_mut(channels) {
                     if sample_counter >= graph_block_size {
                         // CPAL currently does not support duplex streams
-                        unsafe { runner.run(&[]) };
+                        unsafe { audio_processor.run(&[]) };
                         sample_counter = 0;
                     }
-                    let out_block = runner.output_block();
+                    let out_block = audio_processor.output_block();
                     // println!("{}", T::from_sample(buffer.read(0, sample_counter)));
                     for (channel_i, out) in frame.iter_mut().enumerate() {
                         let sample = out_block.read(channel_i, sample_counter);

@@ -25,6 +25,7 @@ pub struct GraphInspection {
     pub num_outputs: u16,
     /// The ID of the graph
     pub graph_id: crate::graph::GraphId,
+    /// The name of the graph
     pub graph_name: EcoString,
     /// The same kind of send that is used in a Handle
     pub param_sender: SchedulingChannelSender,
@@ -196,7 +197,8 @@ impl GraphInspection {
         s.push_str("\n}");
         s
     }
-    #[cfg(feature = "std")]
+    /// Generate a visualization of the graph in the dot format. Requires the `dot` command to be installed and the `dot` feature to be enabled.
+    #[cfg(all(feature = "std", feature = "dot"))]
     pub fn show_dot_svg(&self) {
         let dot_string = self.to_dot_string();
         let mut dot_command = std::process::Command::new("dot")
@@ -222,13 +224,19 @@ pub struct NodeInspection {
     pub name: String,
     /// The address of the n    ode, usable to schedule changes to the node or free it
     pub key: NodeKey,
+    /// The number of inputs to the node
     pub inputs: u16,
+    /// The number of outputs from the node
     pub outputs: u16,
     /// Edges going into this node
     pub input_edges: Vec<EdgeInspection>,
+    /// Parameter descriptions for the node
     pub parameter_descriptions: Vec<&'static str>,
+    /// Parameter hints for the node
     pub parameter_hints: Vec<ParameterHint>,
+    /// Whether the node is unconnected
     pub unconnected: bool,
+    /// Whether the node is a graph. If so, its graph id is stored here.
     pub is_graph: Option<GraphId>,
 }
 

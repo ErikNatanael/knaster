@@ -392,7 +392,7 @@ pub enum Op {
 //         assert_eq!(graph.inspection().nodes.len(), 1);
 //         for _ in 0..10 {
 //             unsafe {
-//                 runner.run(&[]);
+//                 audio_processor.run(&[]);
 //             }
 //         }
 //     }
