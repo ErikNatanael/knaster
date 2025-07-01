@@ -27,6 +27,8 @@ Knaster is a real time sound synthesis framework focused on a balance between pe
 
 ## Example
 
+### Play a sine wave
+
 The following example starts a stereo audio graph with the default backend, adds a simple sine wave with a constant amplitude of 0.2, and plays it in stereo for 2 seconds.
 
 ```rust
@@ -49,6 +51,54 @@ fn main() {
 ```
 
 For more examples, see `knaster/examples`.
+
+### Implement a custom UGen
+
+The following is a simplified version of Knaster's `SinNumeric` UGen, which is used to generate a sine wave with a given frequency.
+
+```rust
+pub struct SinNumeric<F> {
+    phase: F,
+    phase_offset: F,
+    phase_increment: F,
+}
+
+#[impl_ugen]
+impl<F: Float> SinNumeric<F> {
+    pub fn new(freq: F) -> Self {
+        Self {
+            phase: freq,
+            phase_offset: F::ZERO,
+            phase_increment: F::ZERO,
+        }
+    }
+    // The param attribute marks the function as a parameter setter,
+    // creating a parameter with the same name as the function.
+    #[param]
+    pub fn freq(&mut self, freq: PFloat, ctx: &AudioCtx) {
+        self.phase_increment = F::new(freq) / F::new(ctx.sample_rate() as f32);
+    }
+    #[param]
+    pub fn phase_offset(&mut self, phase_offset: PFloat) {
+        self.phase_offset = F::new(phase_offset);
+    }
+    #[param]
+    pub fn reset_phase(&mut self) {
+        self.phase = F::ZERO;
+    }
+    // `process` is a frame by frame processing function. The number of output samples determines the
+    // number of output channels that this UGen has. When relevant for performance, the `process_block`
+    // function can be used to process an entire block or sub-block at once.
+    pub fn process(&mut self) -> [F; 1] {
+        let out = ((self.phase + self.phase_offset) * F::TAU).sin();
+        self.phase += self.phase_increment;
+        if self.phase > F::ONE {
+            self.phase -= F::ONE;
+        }
+        [out]
+    }
+}
+```
 
 ## Project structure
 
