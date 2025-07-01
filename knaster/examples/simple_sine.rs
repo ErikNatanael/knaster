@@ -14,8 +14,8 @@ fn main() -> Result<()> {
     for i in 0..11 {
         // Play rising frequencies
         freq.set(440.0 + i as f32 * 44.0)?;
-        // Flip between 0.1 and 0.5 every other cycle
-        amp.set(if i % 2 == 0 { 0.1 } else { 0.5 })?;
+        // Create a crescendo
+        amp.set((i + 1) as f32 / 20.0)?;
         std::thread::sleep(std::time::Duration::from_secs_f32(0.25));
     }
     std::thread::sleep(std::time::Duration::from_secs(2));

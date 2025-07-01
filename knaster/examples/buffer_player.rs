@@ -1,3 +1,8 @@
+//! # Buffer Player
+//!
+//! This example shows how to use the [`BufferReader`] UGen to play a stereo buffer.
+//!
+//! If you want to load your own sound file, uncomment line 39 and comment out line 41.
 use std::f64::consts::{PI, TAU};
 use std::sync::Arc;
 use std::time::Duration;
@@ -27,32 +32,13 @@ fn main() -> Result<()> {
             ring_buffer_size: 200,
             ..Default::default()
         });
-    dbg!(backend.sample_rate());
+    #[allow(unused)]
     let sr = backend.sample_rate() as f64;
     backend.start_processing(audio_processor)?;
     // load a stereo sound file
-    let samples: Vec<_> = (0..(sr as usize))
-        .flat_map(|i| {
-            let phase0 = i as f64 * (200. + i as f64 * 0.01) / sr;
-            let phase1 = i as f64 * 250. / sr;
-            let phase2 = i as f64 * 0.5 / sr;
-            let amp = (phase2 * TAU).sin();
-            let amp1 = (phase2 * TAU + PI).sin();
-            [
-                (phase0 * TAU).sin() as f32 * amp as f32,
-                (phase1 * TAU).sin() as f32 * amp1 as f32,
-            ]
-        })
-        .map(|v| v as f64)
-        .collect();
-    let samples = samples
-        .iter()
-        .copied()
-        .chain(samples.iter().rev().copied())
-        .collect();
-    let buffer = Buffer::from_vec_interleaved(samples, 2, sr);
-    // buffer.save_to_disk("./stereo_sines.wav").unwrap();
-    // let buffer = Buffer::from_sound_file("./stereo_sines.wav").unwrap();
+    let buffer = load_buffer_from_file()?;
+    // Generate a stereo buffer out of sweeping sine tones
+    // let buffer = generate_stereo_buffer(sr);
     let g = &mut top_level_graph;
     let (mut t_restart, mut loop_param, mut start_secs, mut end_secs) = g.edit(|g| {
         let play = g.push(BufferReader::<_, U2>::new(Arc::new(buffer), 1.0, false));
@@ -64,21 +50,21 @@ fn main() -> Result<()> {
         // g.commit_changes()?;
         (
             play.param("t_restart"),
-            play.param("loop"),
-            play.param("start_secs"),
-            play.param("end_secs"),
+            play.param("looping"),
+            play.param("start_s"),
+            play.param("end_s"),
         )
     });
     std::thread::sleep(Duration::from_secs_f32(2.5));
     t_restart.trig().unwrap();
-    loop_param.set(1).unwrap();
+    loop_param.set(true).unwrap();
     // play.change("t_restart")?.trig().send()?;
     // play.change("loop")?.value(1).send()?;
     std::thread::sleep(Duration::from_secs_f32(3.9));
-    loop_param.set(0).unwrap();
+    loop_param.set(false).unwrap();
     std::thread::sleep(Duration::from_secs_f32(4.));
     t_restart.trig().unwrap();
-    loop_param.set(1).unwrap();
+    loop_param.set(true).unwrap();
     start_secs.set(0.1).unwrap();
     end_secs.set(0.9).unwrap();
     // play.change("t_restart")?.trig().send()?;
@@ -112,4 +98,43 @@ fn main() -> Result<()> {
     // play.change("end_secs")?.value(1.025).send()?;
     std::thread::sleep(Duration::from_secs_f32(1.));
     Ok(())
+}
+
+#[allow(unused)]
+fn generate_stereo_buffer(sr: f64) -> Buffer<f64> {
+    let samples: Vec<_> = (0..(sr as usize))
+        .flat_map(|i| {
+            let phase0 = i as f64 * (200. + i as f64 * 0.01) / sr;
+            let phase1 = i as f64 * 250. / sr;
+            let phase2 = i as f64 * 0.5 / sr;
+            let amp = (phase2 * TAU).sin();
+            let amp1 = (phase2 * TAU + PI).sin();
+            [
+                (phase0 * TAU).sin() as f32 * amp as f32,
+                (phase1 * TAU).sin() as f32 * amp1 as f32,
+            ]
+        })
+        .map(|v| v as f64)
+        .collect();
+    let samples = samples
+        .iter()
+        .copied()
+        .chain(samples.iter().rev().copied())
+        .collect();
+    println!("Generated a 1 second long stereo buffer");
+    Buffer::from_vec_interleaved(samples, 2, sr)
+}
+#[allow(unused)]
+fn load_buffer_from_file() -> anyhow::Result<Buffer<f64>> {
+    let path = rfd::FileDialog::new()
+        .add_filter("audio file", &["wav", "flac", "mp3", "ogg", "aiff"])
+        .pick_file()
+        .ok_or(anyhow::anyhow!("Failed to pick a sound file"))?;
+    let path = path.to_str().unwrap();
+    let buffer = Buffer::from_sound_file(path)?;
+    println!(
+        "Loaded a {} second long buffer from {path:?}",
+        buffer.length_seconds()
+    );
+    Ok(buffer)
 }

@@ -99,6 +99,12 @@ impl<F: Float, Channels: Size> BufferReader<F, Channels> {
     }
     #[param]
     #[allow(missing_docs)]
+    pub fn end_s(&mut self, end_s: PFloat) {
+        let end_time = Seconds::from_secs_f64(end_s);
+        self.end_frame = end_time.to_samples_f64(self.buffer.sample_rate());
+    }
+    #[param]
+    #[allow(missing_docs)]
     pub fn t_restart(&mut self) {
         self.reset();
     }

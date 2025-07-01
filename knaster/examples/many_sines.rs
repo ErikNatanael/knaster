@@ -30,6 +30,8 @@ fn main() -> Result<()> {
             ring_buffer_size: 200,
             ..Default::default()
         });
+    // Start processing audio using the backend. The outputs of the `top_level_graph` will be
+    // connected to your OS default audio output.
     backend.start_processing(audio_processor)?;
     // push some nodes
     let g = &mut top_level_graph;

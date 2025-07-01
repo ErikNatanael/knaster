@@ -1,6 +1,11 @@
-use std::fs;
-use std::io::Write;
-use std::process::{Command, Stdio};
+//! # Graph visualisation
+//!
+//! This example shows how to use the [`Inspection`] API to generate a graph visualisation. The
+//! graph visualisation will be opened in your default svg viewer.
+//!
+//! Prerequisites:
+//! - Install graphviz for the `dot` program and make sure it is in your path
+
 use std::time::Duration;
 
 use anyhow::Result;
@@ -25,12 +30,13 @@ fn main() -> Result<()> {
     let mut backend = CpalBackend::new(CpalBackendOptions::default())?;
 
     // Create a graph
-    let (mut graph, audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U2>(AudioProcessorOptions {
-        block_size: backend.block_size().unwrap_or(64),
-        sample_rate: backend.sample_rate(),
-        ring_buffer_size: 200,
-        ..Default::default()
-    });
+    let (mut graph, audio_processor, _log_receiver) =
+        AudioProcessor::<f32>::new::<U0, U2>(AudioProcessorOptions {
+            block_size: backend.block_size().unwrap_or(64),
+            sample_rate: backend.sample_rate(),
+            ring_buffer_size: 200,
+            ..Default::default()
+        });
     backend.start_processing(audio_processor)?;
     // push some nodes
     let mut osc1 = WrSmoothParams::new(SinNumeric::new(200.));
@@ -42,11 +48,11 @@ fn main() -> Result<()> {
     let ctx = &mut ctx;
     osc1.param(ctx, "freq", 200.)?;
     let (mut osc1_freq, mut osc2_freq, mut osc3_freq) = graph.edit(|graph| {
-        let osc1 = graph.push(osc1.wr_mul(0.2));
+        let osc1 = graph.push(osc1.wr_mul(0.2).smooth_params());
         osc1.param("freq").set(250.).unwrap();
         let mut osc2 = SinNumeric::new(250.);
         osc2.param(ctx, "freq", 300.).unwrap();
-        let osc2 = graph.push(osc2.wr_mul(0.2));
+        let osc2 = graph.push(osc2.wr_mul(0.2).smooth_params());
         let osc3 = graph.push(SinNumeric::new(200. * 4.).wr_mul(0.2));
         osc3.param("freq").set(200. * 4.).unwrap();
         // connect them together
@@ -60,22 +66,8 @@ fn main() -> Result<()> {
         (osc1.param("freq"), osc2.param("freq"), osc3.param("freq"))
     });
 
-    let inspection = graph.inspection();
-    let dot_string = inspection.to_dot_string();
-    println!("{}", dot_string);
-    fs::write("graph.dot", &dot_string)?;
-    let mut dot_command = Command::new("dot")
-        .arg("-Tsvg")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()?;
-    let mut stdin = dot_command.stdin.take().expect("Failed to open stdin");
-    std::thread::spawn(move || {
-        stdin.write_all(dot_string.as_bytes()).unwrap();
-    });
-    let output = dot_command.wait_with_output().unwrap();
-    fs::write("graph.svg", output.stdout).unwrap();
-    open::that("graph.svg").unwrap();
+    // Generate an "inspection", turn that into an SVG of the graph structure, and open the SVG
+    graph.inspection().show_dot_svg();
 
     let mut freq = 200.;
     for _ in 0..5 {
