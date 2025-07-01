@@ -21,6 +21,7 @@ use crate::{
 };
 
 use knaster_core::log::ArLogSender;
+#[allow(unused)]
 use knaster_core::{ParameterError, ParameterSmoothing, ParameterValue, Seconds, rt_log};
 
 /// An event, i.e. a parameter change or a smoothing change, to be scheduled to be applied on the audio thread.
@@ -96,7 +97,7 @@ impl Time {
         block_size: u64,
         sample_rate: u64,
         frame_clock: u64,
-        logger: &mut ArLogSender,
+        #[allow(unused)] logger: &mut ArLogSender,
     ) -> u64 {
         if self.absolute {
             let t = self.seconds.to_samples(sample_rate);
@@ -185,3 +186,4 @@ impl SchedulingToken {
             .store(true, crate::core::sync::atomic::Ordering::SeqCst);
     }
 }
+
