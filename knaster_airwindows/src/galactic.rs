@@ -263,19 +263,16 @@ impl<F: Float> Galactic<F> {
             }
 
             let mut block_0_l = [F::ZERO; 4];
-            for (i, delay) in self.delays_left.iter_mut().enumerate() {
-                block_0_l[i] = delay.read();
+            for (i, sample) in block_0_l.iter_mut().enumerate() {
+                *sample = self.delays_left[i].read();
             }
             // for i in 0..4 {
             //     block_0_l[i] = self.delays_left[i].read();
             // }
             let mut block_0_r = [F::ZERO; 4];
-            for (i, delay) in self.delays_right.iter_mut().enumerate() {
-                block_0_r[i] = delay.read();
+            for (i, sample) in block_0_r.iter_mut().enumerate() {
+                *sample = self.delays_right[i].read();
             }
-            // for i in 0..4 {
-            //     block_0_r[i] = self.delays_right[i].read();
-            // }
             // BLOCK 1
             for i in 0..4 {
                 self.delays_left[i + 4].write_and_advance(
