@@ -1896,8 +1896,15 @@ impl<F: Float> Graph<F> {
         // Remove orphaned internal math nodes.
         // Math nodes should be removed when one of its inputs was removed
         // This could be merged with the loop above, but then math nodes would be removed one step after its input(s)
-        let nodes = unsafe { &mut *self.nodes.get() };
-        for key in nodes.keys() {
+        let node_keys: Vec<NodeKey> = unsafe {
+            self.nodes
+                .get()
+                .as_mut()
+                .expect("nodes are always available")
+                .keys()
+                .collect()
+        };
+        for key in node_keys {
             // TODO: Evaluate for affected nodes when changes occur instead of on all nodes.
             self.evaluate_if_node_should_be_removed(key);
         }
@@ -1907,7 +1914,8 @@ impl<F: Float> Graph<F> {
         while i < self.node_keys_to_free_when_safe.len() {
             let (key, flag) = &self.node_keys_to_free_when_safe[i];
             if flag.load(Ordering::SeqCst) {
-                nodes.remove(*key);
+                unsafe { self.nodes.get().as_mut().unwrap().remove(*key) };
+                // nodes.remove(*key);
                 // self.node_keys_pending_removal.remove(key);
                 self.node_keys_to_free_when_safe.remove(i);
             } else {
