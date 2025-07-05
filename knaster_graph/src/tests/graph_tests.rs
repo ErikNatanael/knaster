@@ -11,12 +11,13 @@ use knaster_core::{Block, typenum::U3};
 #[test]
 fn graph_inputs_to_outputs() {
     let block_size = 16;
-    let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::new::<U3, U3>(AudioProcessorOptions {
-        block_size,
-        sample_rate: 48000,
-        ring_buffer_size: 50,
-        ..Default::default()
-    });
+    let (mut graph, mut audio_processor, _log_receiver) =
+        AudioProcessor::new::<U3, U3>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+            ..Default::default()
+        });
 
     graph.edit(|graph| {
         // Connect input 1 to 0, 2, to 1
@@ -40,12 +41,13 @@ fn graph_inputs_to_outputs() {
 #[test]
 fn graph_inputs_to_nodes_to_outputs() {
     let block_size = 16;
-    let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::new::<U3, U3>(AudioProcessorOptions {
-        block_size,
-        sample_rate: 48000,
-        ring_buffer_size: 50,
-        ..Default::default()
-    });
+    let (mut graph, mut audio_processor, _log_receiver) =
+        AudioProcessor::new::<U3, U3>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+            ..Default::default()
+        });
 
     graph.edit(|graph| {
         graph
@@ -85,12 +87,13 @@ fn graph_inputs_to_nodes_to_outputs() {
 #[test]
 fn multichannel_nodes() {
     let block_size = 16;
-    let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::new::<U3, U2>(AudioProcessorOptions {
-        block_size,
-        sample_rate: 48000,
-        ring_buffer_size: 50,
-        ..Default::default()
-    });
+    let (mut graph, mut audio_processor, _log_receiver) =
+        AudioProcessor::new::<U3, U2>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+            ..Default::default()
+        });
 
     let (v0_0, _v0_1, v1_0, _v1_1, m) = graph.edit(|graph| {
         let v0_0 = graph.push(TestNumUGen::new(0.125));
@@ -144,12 +147,13 @@ fn multichannel_nodes() {
 #[test]
 fn feedback_nodes() {
     let block_size = 16;
-    let (mut g, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
-        block_size,
-        sample_rate: 48000,
-        ring_buffer_size: 50,
-        ..Default::default()
-    });
+    let (mut g, mut audio_processor, _log_receiver) =
+        AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+            ..Default::default()
+        });
 
     g.edit(|g| {
         // These are connected in the most common case where a feedback edge is required
@@ -185,12 +189,13 @@ fn feedback_nodes() {
 #[test]
 fn feedback_nodes2() {
     let block_size = 16;
-    let (mut g, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
-        block_size,
-        sample_rate: 48000,
-        ring_buffer_size: 50,
-        ..Default::default()
-    });
+    let (mut g, mut audio_processor, _log_receiver) =
+        AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+            ..Default::default()
+        });
 
     g.edit(|g| {
         // These could just as well be connected without feedback edge, but the delay should still be
@@ -224,12 +229,13 @@ fn feedback_nodes2() {
 #[test]
 fn disconnect() {
     let block_size = 16;
-    let (mut g, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
-        block_size,
-        sample_rate: 48000,
-        ring_buffer_size: 50,
-        ..Default::default()
-    });
+    let (mut g, mut audio_processor, _log_receiver) =
+        AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+            ..Default::default()
+        });
 
     let n1 = g.push_internal(TestInPlusParamUGen::new());
     g.set(&n1, 0, 0.5, Time::asap()).unwrap();

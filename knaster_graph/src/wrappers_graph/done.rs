@@ -1,23 +1,23 @@
 //! # Done
-//! 
+//!
 //! Some nodes are only active for a specific duration or until a condition is met. It is useful to let them signal that they are done, and then free themselves or the entire graph they are in.
-//! 
-//! To push a node that can mark itself as done, use the [`GraphEdit::push_with_done_action`] function. 
-//! This will wrap the node in a [`WrDone`] wrapper which adds a parameter to the node, called "done_action", 
-//! which can be used to change what action is taken when the node is marked as done. 
+//!
+//! To push a node that can mark itself as done, use the [`GraphEdit::push_with_done_action`] function.
+//! This will wrap the node in a [`WrDone`] wrapper which adds a parameter to the node, called "done_action",
+//! which can be used to change what action is taken when the node is marked as done.
 use crate::core::ops::Add;
 use crate::core::sync::Arc;
 use crate::core::sync::atomic::AtomicBool;
+#[allow(unused)]
+use crate::graph_edit::GraphEdit;
 use knaster_core::numeric_array::NumericArray;
 use knaster_core::typenum::{Add1, B1, Unsigned};
 use knaster_core::{
     AudioCtx, Block, BlockRead, Done, Frame, ParameterHint, ParameterValue, Size, UGen, UGenFlags,
 };
-#[allow(unused)]
-use crate::graph_edit::GraphEdit;
 
-/// Wrapper that can free a node once it has been marked as done. 
-/// 
+/// Wrapper that can free a node once it has been marked as done.
+///
 /// Do not create a [`WrDone`] manually. Unlike most wrappers, this one
 /// can only be added by the [`Graph`] when pushing a node using the corresponding function e.g. [`GraphEdit::push_with_done_action`].
 ///

@@ -9,12 +9,13 @@ use knaster::util::Constant;
 
 pub fn lai_256_sine_mul_0_05_to_out_block_32() {
     let block_size = 32;
-    let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
-        block_size,
-        sample_rate: 48000,
-        ring_buffer_size: 50,
-        ..Default::default()
-    });
+    let (mut graph, mut audio_processor, _log_receiver) =
+        AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+            ..Default::default()
+        });
     graph.edit(|g| {
         for _ in 0..256 {
             let c = g.push(Constant::new(0.05));
@@ -29,12 +30,13 @@ pub fn lai_256_sine_mul_0_05_to_out_block_32() {
 }
 pub fn lai_256_fm_cascade_block_32() {
     let block_size = 32;
-    let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
-        block_size,
-        sample_rate: 48000,
-        ring_buffer_size: 50,
-        ..Default::default()
-    });
+    let (mut graph, mut audio_processor, _log_receiver) =
+        AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+            ..Default::default()
+        });
     graph.edit(|g| {
         let mut last: Option<DH<_, _>> = None;
         for i in 0..256 {

@@ -1,19 +1,20 @@
-use criterion::{Criterion,  criterion_group, criterion_main};
-use std::hint::black_box;
+use criterion::{Criterion, criterion_group, criterion_main};
 use knaster::Block;
 use knaster::processor::{AudioProcessor, AudioProcessorOptions};
 use knaster::typenum::*;
 use knaster::wrappers_core::UGenWrapperCoreExt;
 use knaster_benchmarks::TestNumUGen;
+use std::hint::black_box;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let block_size = 32;
-    let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
-        block_size,
-        sample_rate: 48000,
-        ring_buffer_size: 50,
-        ..Default::default()
-    });
+    let (mut graph, mut audio_processor, _log_receiver) =
+        AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+            ..Default::default()
+        });
     graph.edit(|g| {
         g.push(TestNumUGen::new(2.0).wr_mul(0.5)).to_graph_out();
     });
@@ -27,12 +28,13 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             );
         })
     });
-    let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
-        block_size,
-        sample_rate: 48000,
-        ring_buffer_size: 50,
-        ..Default::default()
-    });
+    let (mut graph, mut audio_processor, _log_receiver) =
+        AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+            ..Default::default()
+        });
     graph.edit(|graph| {
         let g = graph.push(TestNumUGen::new(2.0));
         let v = graph.push(TestNumUGen::new(0.5));
@@ -53,12 +55,13 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         })
     });
     // 100 nodes
-    let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
-        block_size,
-        sample_rate: 48000,
-        ring_buffer_size: 50,
-        ..Default::default()
-    });
+    let (mut graph, mut audio_processor, _log_receiver) =
+        AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+            ..Default::default()
+        });
     graph.edit(|g| {
         for _ in 0..100 {
             g.push(TestNumUGen::new(2.0).wr_mul(0.5)).to_graph_out();
@@ -79,12 +82,13 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             );
         })
     });
-    let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
-        block_size,
-        sample_rate: 48000,
-        ring_buffer_size: 50,
-        ..Default::default()
-    });
+    let (mut graph, mut audio_processor, _log_receiver) =
+        AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+            ..Default::default()
+        });
     graph.edit(|graph| {
         for _ in 0..100 {
             let g = graph.push(TestNumUGen::new(2.0));

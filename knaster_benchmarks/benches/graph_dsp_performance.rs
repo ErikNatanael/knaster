@@ -10,12 +10,13 @@ use knaster::util::Constant;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     for block_size in [16, 32, 128] {
-        let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
-            block_size,
-            sample_rate: 48000,
-            ring_buffer_size: 50,
-            ..Default::default()
-        });
+        let (mut graph, mut audio_processor, _log_receiver) =
+            AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
+                block_size,
+                sample_rate: 48000,
+                ring_buffer_size: 50,
+                ..Default::default()
+            });
         graph.edit(|g| {
             for _ in 0..256 {
                 let c = g.push(Constant::new(0.05));
@@ -34,12 +35,13 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         );
     }
     for block_size in [16, 32, 128] {
-        let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
-            block_size,
-            sample_rate: 48000,
-            ring_buffer_size: 50,
-            ..Default::default()
-        });
+        let (mut graph, mut audio_processor, _log_receiver) =
+            AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
+                block_size,
+                sample_rate: 48000,
+                ring_buffer_size: 50,
+                ..Default::default()
+            });
         graph.edit(|g| {
             let mut last: Option<DH<_, _>> = None;
             for i in 0..256 {

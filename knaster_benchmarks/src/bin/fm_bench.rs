@@ -7,12 +7,13 @@ pub fn main() -> Result<()> {
     let mut backend = JackBackend::new("fm bench")?;
 
     // Create a graph
-    let (mut graph, audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U2>(AudioProcessorOptions {
-        block_size: backend.block_size().unwrap_or(64),
-        sample_rate: backend.sample_rate(),
-        ring_buffer_size: 200,
-        ..Default::default()
-    });
+    let (mut graph, audio_processor, _log_receiver) =
+        AudioProcessor::<f32>::new::<U0, U2>(AudioProcessorOptions {
+            block_size: backend.block_size().unwrap_or(64),
+            sample_rate: backend.sample_rate(),
+            ring_buffer_size: 200,
+            ..Default::default()
+        });
     backend.start_processing(audio_processor)?;
     graph.edit(|g| {
         let mut last: Option<DH<_, _>> = None;

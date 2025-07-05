@@ -24,12 +24,13 @@ fn main() -> Result<()> {
     let mut backend = CpalBackend::new(CpalBackendOptions::default())?;
 
     // Create a graph
-    let (mut top_graph, audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U2>(AudioProcessorOptions {
-        block_size: backend.block_size().unwrap_or(64),
-        sample_rate: backend.sample_rate(),
-        ring_buffer_size: 200,
-        ..Default::default()
-    });
+    let (mut top_graph, audio_processor, _log_receiver) =
+        AudioProcessor::<f32>::new::<U0, U2>(AudioProcessorOptions {
+            block_size: backend.block_size().unwrap_or(64),
+            sample_rate: backend.sample_rate(),
+            ring_buffer_size: 200,
+            ..Default::default()
+        });
     backend.start_processing(audio_processor)?;
     // let mut nodes = vec![];
     let mut second_graph = top_graph.edit(|graph| {

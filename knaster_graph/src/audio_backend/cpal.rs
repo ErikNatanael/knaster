@@ -84,7 +84,10 @@ impl<F> CpalBackend<F> {
 
 impl<F: Float> AudioBackend for CpalBackend<F> {
     type Sample = F;
-    fn start_processing(&mut self, runner: AudioProcessor<Self::Sample>) -> Result<(), AudioBackendError> {
+    fn start_processing(
+        &mut self,
+        runner: AudioProcessor<Self::Sample>,
+    ) -> Result<(), AudioBackendError> {
         if self.stream.is_some() {
             return Err(AudioBackendError::BackendAlreadyRunning);
         }

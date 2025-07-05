@@ -24,7 +24,10 @@ pub trait AudioBackend {
     type Sample: Float;
     /// Starts processing and returns a [`Controller`]. This is the easiest
     /// option and will run the [`Controller`] in a loop on a new thread.
-    fn start_processing(&mut self, audio_processor: AudioProcessor<Self::Sample>) -> Result<(), AudioBackendError>;
+    fn start_processing(
+        &mut self,
+        audio_processor: AudioProcessor<Self::Sample>,
+    ) -> Result<(), AudioBackendError>;
     /// Stop the backend
     fn stop(&mut self) -> Result<(), AudioBackendError>;
     /// Get the native sample rate of the backend

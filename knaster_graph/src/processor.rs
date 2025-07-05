@@ -1,7 +1,7 @@
 //! # Audio processor
-//! 
-//! This module contains the [`AudioProcessor`] which is the main entry point for processing audio. It can either be placed in 
-//! in an [`AudioBackend`], placed in a different audio callback to produce blocks of audio, or manually called in a non-realtime 
+//!
+//! This module contains the [`AudioProcessor`] which is the main entry point for processing audio. It can either be placed in
+//! in an [`AudioBackend`], placed in a different audio callback to produce blocks of audio, or manually called in a non-realtime
 //! context for non-realtime processing.
 
 use knaster_core::Seconds;
@@ -59,8 +59,8 @@ pub struct AudioProcessor<F: Float> {
 }
 impl<F: Float> AudioProcessor<F> {
     /// Create a new [`AudioProcessor`] with the given [`AudioProcessorOptions`].
-    /// 
-    /// Returns a tuple of 
+    ///
+    /// Returns a tuple of
     /// - the [`Graph`], which is where you add audio processing and generating nodes,
     /// - the [`AudioProcessor`], which is how you run the graph to produce audio, and
     /// - the [`ArLogReceiver`], which is how you receive logs from the audio thread.

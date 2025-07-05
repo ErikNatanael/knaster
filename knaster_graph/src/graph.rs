@@ -2479,12 +2479,13 @@ mod tests {
     #[test]
     fn free_node_when_done() {
         let block_size = 16;
-        let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::<f32>::new::<U0, U2>(AudioProcessorOptions {
-            block_size,
-            sample_rate: 48000,
-            ring_buffer_size: 50,
-            ..Default::default()
-        });
+        let (mut graph, mut audio_processor, _log_receiver) =
+            AudioProcessor::<f32>::new::<U0, U2>(AudioProcessorOptions {
+                block_size,
+                sample_rate: 48000,
+                ring_buffer_size: 50,
+                ..Default::default()
+            });
         let asr = graph.push_with_done_action(EnvAsr::new(0.0, 0.0), Done::FreeSelf);
         asr.set(("attack_time", 0.0)).unwrap();
         asr.set(("release_time", 0.0)).unwrap();

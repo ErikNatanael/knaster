@@ -186,4 +186,3 @@ impl SchedulingToken {
             .store(true, crate::core::sync::atomic::Ordering::SeqCst);
     }
 }
-
