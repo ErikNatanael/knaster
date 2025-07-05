@@ -1,3 +1,4 @@
+use float_cmp::approx_eq;
 use knaster_primitives::{Block, StaticBlock, typenum::*};
 
 use crate::{
@@ -79,10 +80,16 @@ fn sample_accurate_parameters_with_wrappers_test() {
     g.process_block(ctx, &mut flags, &in_block, &mut out_block);
 
     let o = out_block.channel_as_slice(0);
-    assert_eq!(
-        o,
-        [
-            0., 0., 0., 0., 0., 5., 6., 6., 8., 9., 10., 10., 10., 10., 10., 10.
-        ]
-    );
+    let expected_values = [
+        0., 0., 0., 0., 0., 5., 6., 6., 8., 9., 10., 10., 10., 10., 10., 10.,
+    ];
+    for (sample, expected) in o.iter().zip(expected_values.iter()) {
+        assert!(approx_eq!(
+            f32,
+            *sample,
+            *expected,
+            epsilon = 0.0002,
+            ulps = 5
+        ))
+    }
 }

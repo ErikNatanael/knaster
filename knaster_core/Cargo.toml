@@ -39,6 +39,8 @@ embassy-sync = { version = "0.6.2", optional = true }
 
 [dev-dependencies]
 anyhow = "1.0.94"
+# For comparing floats in tests for miri
+float-cmp = "0.10.0"
 
 
 [[example]]
