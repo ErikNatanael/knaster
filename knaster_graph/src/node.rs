@@ -1,6 +1,5 @@
 use crate::core::sync::Arc;
 use crate::core::sync::atomic::AtomicBool;
-use crate::core::{vec, vec::Vec};
 use crate::dynugen::UGenEnum;
 /// no_std_compat prelude import, supporting both std and no_std
 use std::prelude::v1::*;
