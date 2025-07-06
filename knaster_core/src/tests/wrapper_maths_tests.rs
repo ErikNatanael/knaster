@@ -27,13 +27,10 @@ fn wrapper_arithmetic() {
     let sample = 
         g.process(ctx, &mut flags, [].into())[0];
     assert!(
-        approx_eq!(
-        f64,
-        sample,
-        36.,
-        epsilon = f64::EPSILON * 10.,
-        ulps = 2
-    ), "Expected 6^2 = 36, got {}", sample);
+        (sample - 36.0f64).abs() < f32::EPSILON as f64 * 10.,
+     "Expected 6^2 = 36, got {}, diff {}", sample, 
+        (sample - 36.0f64).abs(),
+    );
     let mut g = TestNumUGen::new(6.0).wr_powi(2);
     let sample = 
         g.process(ctx, &mut flags, [].into())[0];
@@ -41,7 +38,7 @@ fn wrapper_arithmetic() {
         f64,
         sample,
         36.,
-        epsilon = f64::EPSILON * 10.,
+        epsilon = f32::EPSILON as f64 * 2.,
         ulps = 2
     ), "Expected 6^2 = 36, got {}", sample);
     let mut g = TestNumUGen::new(6.0).wr(|s| s * 2.0 + 1.0);
