@@ -24,21 +24,26 @@ fn wrapper_arithmetic() {
     let mut g = TestNumUGen::new(6.0).wr_v_sub_gen(7.);
     assert_eq!(g.process(ctx, &mut flags, [].into())[0], 1.0);
     let mut g = TestNumUGen::new(6.0).wr_powf(2.);
-    assert!(approx_eq!(
+    let sample = 
+        g.process(ctx, &mut flags, [].into())[0];
+    assert!(
+        approx_eq!(
         f64,
-        g.process(ctx, &mut flags, [].into())[0],
+        sample,
         36.,
         epsilon = f64::EPSILON * 10.,
         ulps = 2
-    ));
+    ), "Expected 6^2 = 36, got {}", sample);
     let mut g = TestNumUGen::new(6.0).wr_powi(2);
+    let sample = 
+        g.process(ctx, &mut flags, [].into())[0];
     assert!(approx_eq!(
         f64,
-        g.process(ctx, &mut flags, [].into())[0],
+        sample,
         36.,
         epsilon = f64::EPSILON * 10.,
         ulps = 2
-    ));
+    ), "Expected 6^2 = 36, got {}", sample);
     let mut g = TestNumUGen::new(6.0).wr(|s| s * 2.0 + 1.0);
     assert_eq!(g.process(ctx, &mut flags, [].into())[0], 13.);
 }
