@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["alloc"]
-# default = ["std", "cpal", "jack", "dot"]
+# default = ["alloc"]
+default = ["std", "cpal", "dot"]
 std = [
   "knaster_core/std",
   "slotmap/std",
