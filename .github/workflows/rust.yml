@@ -35,7 +35,7 @@ jobs:
         SCCACHE_GHA_ENABLED: "true"
         RUSTC_WRAPPER: "sccache"
 
-      run: cargo build --verbose --features=cpal,jack,serde-derive 
+      run: cargo build --verbose --features=std,cpal,jack
     - name: Run tests
       env:
         SCCACHE_GHA_ENABLED: "true"
