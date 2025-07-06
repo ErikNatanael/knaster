@@ -729,9 +729,7 @@ impl<'a, 'b, F: Float, U: UGen<Sample = F>> From<SH<'a, 'b, F, Handle3<U>>> for 
 impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, Handle3<U>> {
     /// Change the name of the node in the [`Graph`].
     pub fn name(self, n: impl Into<EcoString>) -> Self {
-        self.graph
-            .write()
-            .set_name(self.nodes.node_id, n.into());
+        self.graph.write().set_name(self.nodes.node_id, n.into());
         self
     }
     /// Link the parameter to a node output
@@ -825,9 +823,7 @@ impl<'a, 'b, F: Float> DH<'a, 'b, F, DynamicHandle3> {
     }
     /// Change the name of the node in the [`Graph`].
     pub fn name(self, n: impl Into<EcoString>) -> Self {
-        self.graph
-            .write()
-            .set_name(self.nodes.node_id, n.into());
+        self.graph.write().set_name(self.nodes.node_id, n.into());
         self
     }
     /// Link the parameter to a node output

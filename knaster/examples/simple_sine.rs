@@ -1,9 +1,9 @@
 //! # Simple sine
-//! 
+//!
 //! This example shows how to create a simple sine tone and play it back, with a linearly interpolated amplitude.
-//! 
+//!
 //! ## Required features:
-//! - `std` 
+//! - `std`
 //! - `cpal`
 
 use color_eyre::Result;

@@ -131,32 +131,32 @@ impl<F: Float> jack::ProcessHandler for JackProcess<F> {
         #[cfg(all(debug_assertions, feature = "assert_no_alloc"))]
         {
             assert_no_alloc(|| {
-            for (i, in_port) in self.in_ports.iter().enumerate() {
-                let in_port_slice = in_port.as_slice(ps);
-                let in_buffer = self.input_block.channel_as_slice_mut(i);
-                // in_buffer.clone_from_slice(in_port_slice);
-                for (from_jack, graph_in) in in_port_slice.iter().zip(in_buffer.iter_mut()) {
-                    *graph_in = F::new(*from_jack);
-                }
-            }
-            unsafe { self.audio_processor.run(&self.input_block_pointers) }
-
-            let graph_output_buffers = self.audio_processor.output_block();
-            for (i, out_port) in self.out_ports.iter_mut().enumerate() {
-                let out_buffer = graph_output_buffers.channel_as_slice_mut(i);
-                for sample in out_buffer.iter_mut() {
-                    *sample = sample.clamp(-F::ONE, F::ONE);
-                    if sample.is_nan() {
-                        *sample = F::ZERO;
+                for (i, in_port) in self.in_ports.iter().enumerate() {
+                    let in_port_slice = in_port.as_slice(ps);
+                    let in_buffer = self.input_block.channel_as_slice_mut(i);
+                    // in_buffer.clone_from_slice(in_port_slice);
+                    for (from_jack, graph_in) in in_port_slice.iter().zip(in_buffer.iter_mut()) {
+                        *graph_in = F::new(*from_jack);
                     }
                 }
-                let out_port_slice = out_port.as_mut_slice(ps);
-                // out_port_slice.clone_from_slice(out_buffer);
-                for (to_jack, graph_out) in out_port_slice.iter_mut().zip(out_buffer.iter()) {
-                    *to_jack = graph_out.to_f32().unwrap();
+                unsafe { self.audio_processor.run(&self.input_block_pointers) }
+
+                let graph_output_buffers = self.audio_processor.output_block();
+                for (i, out_port) in self.out_ports.iter_mut().enumerate() {
+                    let out_buffer = graph_output_buffers.channel_as_slice_mut(i);
+                    for sample in out_buffer.iter_mut() {
+                        *sample = sample.clamp(-F::ONE, F::ONE);
+                        if sample.is_nan() {
+                            *sample = F::ZERO;
+                        }
+                    }
+                    let out_port_slice = out_port.as_mut_slice(ps);
+                    // out_port_slice.clone_from_slice(out_buffer);
+                    for (to_jack, graph_out) in out_port_slice.iter_mut().zip(out_buffer.iter()) {
+                        *to_jack = graph_out.to_f32().unwrap();
+                    }
                 }
-            }
-            jack::Control::Continue
+                jack::Control::Continue
             })
         }
         #[cfg(not(all(debug_assertions, feature = "assert_no_alloc")))]

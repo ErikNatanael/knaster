@@ -1,12 +1,11 @@
 //! # Many sines
-//! 
+//!
 //! This example creates 600 sine tones with individual envelopes. The frequencies of these sine tones
 //! are then moved to be more and more harmonious, sometimes changing the root frequency.
-//! 
+//!
 //! ## Required features:
-//! - `std` 
+//! - `std`
 //! - `cpal`
-
 
 use std::time::Duration;
 
