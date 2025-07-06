@@ -75,7 +75,7 @@ jobs:
       env:
         SCCACHE_GHA_ENABLED: "true"
         RUSTC_WRAPPER: "sccache"
-      run: cd ../knaster_core && cargo +nightly miri test --verbose
+      run: cd knaster_core && cargo +nightly miri test --verbose
 
   lint:
     runs-on: ubuntu-latest
