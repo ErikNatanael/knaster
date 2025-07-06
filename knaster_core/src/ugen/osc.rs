@@ -15,10 +15,10 @@ use super::AudioCtx;
 #[cfg(any(feature = "alloc", feature = "std"))]
 mod wavetable_vec {
     use crate::core::marker::PhantomData;
-    #[cfg(feature = "alloc")]
+    #[cfg(all(feature = "alloc"))]
     use embassy_sync::lazy_lock::LazyLock;
     use knaster_macros::impl_ugen;
-    #[cfg(feature = "std")]
+    #[cfg(all(feature = "std", not(feature = "alloc")))]
     use std::sync::LazyLock;
 
     use knaster_primitives::{Float, PFloat};
@@ -116,7 +116,7 @@ mod wavetable_vec {
                 phase_increment: 0,
                 _marker: PhantomData,
                 freq_to_phase_inc: 0.0,
-                #[cfg(feature = "std")]
+                #[cfg(all(feature = "std", not(feature = "alloc")))]
                 wavetable: &SINE_WAVETABLE_F32,
                 #[cfg(feature = "alloc")]
                 wavetable: SINE_WAVETABLE_F32.get(),

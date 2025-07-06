@@ -1,7 +1,11 @@
 //! # Graph visualisation
 //!
 //! This example shows how to use the [`Inspection`] API to generate a graph visualisation. The
-//! graph visualisation will be opened in your default svg viewer.
+//! graph visualisation will be opened in your default svg viewer. 
+//! 
+//! ## Required features:
+//! - `std`
+//! - `cpal`
 //!
 //! Prerequisites:
 //! - Install graphviz for the `dot` program and make sure it is in your path

@@ -33,8 +33,9 @@
 
 use crate::core::sync::Arc;
 use crate::graph::OwnedRawBuffer;
-use alloc::vec::Vec;
 use knaster_core::Float;
+/// no_std_compat prelude import, supporting both std and no_std
+use std::prelude::v1::*;
 
 #[derive(Debug)]
 struct AllocatedBlock {

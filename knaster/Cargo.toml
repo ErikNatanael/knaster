@@ -25,3 +25,16 @@ rfd = "0.15.3"
 
 [[example]]
 name = "many_sines"
+required-features = ["std", "cpal"]
+
+[[example]]
+name = "visualize_graph"
+required-features = ["std", "cpal"]
+
+[[example]]
+name = "buffer_player"
+required-features = ["std", "cpal"]
+
+[[example]]
+name = "simple_sine"
+required-features = ["std", "cpal"]

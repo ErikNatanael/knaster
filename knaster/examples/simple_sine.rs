@@ -1,3 +1,11 @@
+//! # Simple sine
+//! 
+//! This example shows how to create a simple sine tone and play it back, with a linearly interpolated amplitude.
+//! 
+//! ## Required features:
+//! - `std` 
+//! - `cpal`
+
 use color_eyre::Result;
 use knaster::preludef32::*;
 fn main() -> Result<()> {

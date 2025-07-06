@@ -1,3 +1,13 @@
+//! # Many sines
+//! 
+//! This example creates 600 sine tones with individual envelopes. The frequencies of these sine tones
+//! are then moved to be more and more harmonious, sometimes changing the root frequency.
+//! 
+//! ## Required features:
+//! - `std` 
+//! - `cpal`
+
+
 use std::time::Duration;
 
 use anyhow::Result;
@@ -17,7 +27,7 @@ use knaster_graph::{
     processor::AudioProcessor,
 };
 use rand::Rng;
-use rand::seq::{IndexedRandom, SliceRandom};
+use rand::seq::{IndexedMutRandom, IndexedRandom};
 
 fn main() -> Result<()> {
     let mut backend = CpalBackend::new(CpalBackendOptions::default())?;
@@ -40,7 +50,7 @@ fn main() -> Result<()> {
     let mut rng = rand::rng();
 
     g.edit(|g| {
-        for _i in 0..300 {
+        for _i in 0..600 {
             let env = EnvAr::new(0.01, 0.1);
             let env = g.push(env);
             let sine = g.push(
@@ -51,20 +61,12 @@ fn main() -> Result<()> {
             envs.push(env.param("t_restart"));
             freqs.push(sine.param("freq"));
         }
-        for _i in 0..300 {
-            let env = EnvAr::new(0.01, 0.1);
-            let env = g.push(env);
-            let sine = g.push(SinWt::new(rng.random_range(6000.0..6500.0)).wr_mul(0.01));
-            (env * sine).out([0, 0]).to_graph_out();
-            envs.push(env.param("t_restart"));
-            freqs.push(sine.param("freq"));
-        }
     });
     let mut loops = 0;
     let mut root = 110.0;
     let ratios = [1.0, 9. / 8., 6. / 5., 3. / 2., 8. / 5., 16. / 9., 2.];
     loop {
-        envs.shuffle(&mut rng);
+        // envs.shuffle(&mut rng);
         let mut j = 0;
         while j < envs.len() {
             if loops % 16 == 0 {
@@ -72,13 +74,16 @@ fn main() -> Result<()> {
                 root =
                     55.0 * 2.0_f32.powi(rng.random_range(1..4)) * ratios.choose(&mut rng).unwrap();
             }
-            let env = &mut envs[j];
-            // env.change("release_time")?
-            //     .value(rng.gen::<f32>().powi(2) * 1.0 + 0.05);
-            env.trig()?;
+            // Set the frequency of the sine tone
             let freq_param = &mut freqs[j];
             let freq = root * ratios[j % ratios.len()];
             freq_param.set(freq)?;
+            // Send a trigger to the envelope of this sine tone to restart.
+            let env = &mut envs[j];
+            env.trig()?;
+            // Trigger some other random envelope as well
+            let env = envs.choose_mut(&mut rng).unwrap();
+            env.trig()?;
             j += rng.random_range(0..10);
             std::thread::sleep(Duration::from_secs_f32(0.01));
         }

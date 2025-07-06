@@ -12,7 +12,8 @@ pub mod cpal;
 #[cfg(feature = "jack")]
 pub mod jack;
 
-use alloc::string::String;
+/// no_std_compat prelude import, supporting both std and no_std
+use std::prelude::v1::*;
 
 use knaster_core::Float;
 

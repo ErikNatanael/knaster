@@ -9,11 +9,12 @@ use crate::{
     graph::NodeOrGraph,
     graph::{GraphError, NodeId},
 };
-use alloc::{string::ToString, vec::Vec};
 use knaster_core::{
     Param, ParameterError, ParameterHint, ParameterSmoothing, ParameterValue, Seconds, UGen,
     typenum::Unsigned,
 };
+/// no_std_compat prelude import, supporting both std and no_std
+use std::prelude::v1::*;
 
 use crate::core::sync::{Arc, Mutex};
 
@@ -44,28 +45,43 @@ impl SchedulingChannelSender {
     /// Returns an error if the graph this sender is connected to was freed or the event channel is
     /// full.
     pub fn send(&self, event: SchedulingEvent) -> Result<(), GraphError> {
-        // Lock should never be poisoned, but if it is we don't care.
-        let mut sender = match self.0.lock() {
-            Ok(s) => s,
-            Err(s) => s.into_inner(),
-        };
-        if sender.is_abandoned() {
-            // A fence might be required, see: https://docs.rs/rtrb/latest/rtrb/struct.Producer.html#method.is_abandoned
-            // std::sync::atomic::fence(std::sync::atomic::Ordering::Acquire);
-            return Err(ParameterError::GraphWasFreed.into());
+        // no_std_compat uses `spin` replacements for Mutex, which has a different API.
+        #[cfg(feature = "std")]
+        {
+            // Lock should never be poisoned, but if it is we don't care.
+            let mut sender = match self.0.lock() {
+                Ok(s) => s,
+                Err(s) => s.into_inner(),
+            };
+            if sender.is_abandoned() {
+                // A fence might be required, see: https://docs.rs/rtrb/latest/rtrb/struct.Producer.html#method.is_abandoned
+                // std::sync::atomic::fence(std::sync::atomic::Ordering::Acquire);
+                return Err(ParameterError::GraphWasFreed.into());
+            }
+            sender
+                .push(event)
+                .map_err(|e| GraphError::PushChangeError(e.to_string()))?;
         }
-        sender
-            .push(event)
-            .map_err(|e| GraphError::PushChangeError(e.to_string()))?;
+        #[cfg(not(feature = "std"))]
+        {
+            let mut sender = self.0.lock();
+            sender
+                .push(event)
+                .map_err(|e| GraphError::PushChangeError(e.to_string()))?;
+        }
         Ok(())
     }
 
     /// Returns true if the graph this sender is connected to is still alive.
     pub fn is_alive(&self) -> bool {
+        #[cfg(feature = "std")]
         match self.0.lock() {
             Ok(s) => !s.is_abandoned(),
             _ => false,
         }
+        // `spin` mutexes don't have a `is_abandoned` method, so we assume true
+        #[cfg(not(feature = "std"))]
+        true
     }
 }
 

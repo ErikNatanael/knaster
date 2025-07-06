@@ -5,10 +5,14 @@ edition = "2024"
 
 [[bin]]
 name = "fm_bench"
+required-features = ["std", "cpal"]
 [[bin]]
 name = "fm_bench2"
+required-features = ["std", "cpal"]
 [[bin]]
 name = "fm_bench_stand_alone"
+required-features = ["std", "cpal"]
+
 
 [dependencies]
 color-eyre = "0.6.5"

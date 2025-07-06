@@ -4,18 +4,27 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["std", "cpal", "jack", "dot"]
-std = ["knaster_core/std", "slotmap/std", "thiserror/std", "ecow/std"]
+default = ["alloc"]
+# default = ["std", "cpal", "jack", "dot"]
+std = [
+  "knaster_core/std",
+  "slotmap/std",
+  "thiserror/std",
+  "ecow/std",
+  "no-std-compat/std",
+]
 dot = ["dep:open"]
 # Enables potential optimisations that require nightly rust
 unstable = ["knaster_core/unstable"]
 jack = ["dep:jack"]
 assert_no_alloc = ["dep:assert_no_alloc"]
 sound_files = ["knaster_core/sound_files"]
+alloc = ["knaster_core/alloc", "no-std-compat/alloc"]
 
 [dependencies]
-knaster_core = { path = "../knaster_core" }
+knaster_core = { path = "../knaster_core", default-features = false }
 
+no-std-compat = { version = "0.4.1", features = ["compat_hash", "compat_sync"] }
 assert_no_alloc = { version = "1.1.2", optional = true }
 cpal = { version = "0.15.3", default-features = false, optional = true }
 jack = { version = "0.13.2", optional = true }
@@ -36,3 +45,17 @@ ecow = { version = "0.2.3", default-features = false }
 anyhow = "1"
 env_logger = "0.11.8"
 rand = "0.9"
+# Enabling the `std` feature for `critical-section` provides a critical section implementation
+# that is can be used when running the no_std tests
+critical-section = { version = "1.1", features = ["std"]}
+
+[[example]]
+name = "quick_test"
+required-features = ["std", "cpal"]
+
+[[example]]
+name = "self_freeing_stress_test"
+required-features = ["std", "cpal"]
+[[example]]
+name = "scheduling_test"
+required-features = ["std", "cpal"]

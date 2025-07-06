@@ -21,19 +21,22 @@
 //! - The generic parameter `F` is the float type, f32 or f64
 #![deny(rustdoc::broken_intra_doc_links)] // error if there are broken intra-doc links
 #![warn(missing_docs)]
-extern crate alloc;
 
-#[cfg(feature = "std")]
-extern crate std;
+// Switches between std and core based on features. This reduces boilerplate when importing.
+extern crate no_std_compat as std;
 
 // Switches between std and core based on features. This reduces boilerplate when importing.
 mod core {
-    #[cfg(not(feature = "std"))]
-    pub use core::*;
-    #[cfg(feature = "std")]
-    pub use std::*;
+    pub use no_std_compat::*;
+    // #[cfg(all(feature = "alloc", not(feature = "std")))]
+    // extern crate alloc as __alloc;
+    // #[cfg(all(feature = "alloc", not(feature = "std")))]
+    // pub use __alloc::*;
+    // #[cfg(not(feature = "std"))]
+    // pub use core::*;
+    // #[cfg(feature = "std")]
+    // pub use std::*;
 }
-
 pub use knaster_core::*;
 
 // Deprecated
@@ -68,11 +71,11 @@ pub use scheduling::*;
 /// # Example
 /// ```rust
 /// # use knaster_graph::osc::SinNumeric;
-/// # use knaster_graph::runner::{Runner, RunnerOptions};
+/// # use knaster_graph::processor::{AudioProcessor, AudioProcessorOptions};
 /// # use knaster_graph::set_many;
 /// # use knaster_core::{Param, UGen, typenum::U0, typenum::U2};
 /// # use knaster_graph::Time;
-/// let (mut graph, mut audio_processor, log_receiver) = Runner::<f32>::new::<U0, U2>(RunnerOptions::default());
+/// let (mut graph, mut audio_processor, log_receiver) = AudioProcessor::<f32>::new::<U0, U2>(AudioProcessorOptions::default());
 /// let osc0 = graph.push(SinNumeric::new(440.));
 /// let osc1 = graph.push(SinNumeric::new(440.));
 /// set_many!(graph, Time::asap(); (&osc0, "freq", 440.), (&osc1, "freq", 880.));

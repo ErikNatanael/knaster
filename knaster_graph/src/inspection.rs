@@ -6,9 +6,10 @@
 use crate::SharedFrameClock;
 use crate::graph::{GraphId, NodeId, NodeKey};
 use crate::handle::{AnyHandle, RawHandle, SchedulingChannelSender};
-use alloc::{format, string::String, string::ToString, vec::Vec};
 use ecow::EcoString;
 use knaster_core::ParameterHint;
+/// no_std_compat prelude import, supporting both std and no_std
+use std::prelude::v1::*;
 
 /// The metadata of a Graph
 // TODO: Feedback edges

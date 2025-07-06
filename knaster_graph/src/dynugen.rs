@@ -3,7 +3,8 @@
 //! This module contains the [`DynUGen`] trait, which is used to store [`UGen`]s as trait objects
 //! in the [`Graph`]. There is no need to use this trait directly.
 
-use alloc::boxed::Box;
+/// no_std_compat prelude import, supporting both std and no_std
+use std::prelude::v1::*;
 
 use crate::block::{AggregateBlockRead, RawBlock};
 #[allow(unused)]

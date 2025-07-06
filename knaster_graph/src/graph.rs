@@ -4,13 +4,14 @@
 use crate::core::collections::VecDeque;
 use crate::core::{
     cell::UnsafeCell,
-    format,
     sync::atomic::{AtomicBool, Ordering},
 };
+
 use crate::core::{
     collections::HashSet,
     sync::{Arc, Mutex},
 };
+
 use crate::{
     SharedFrameClock, Time,
     buffer_allocator::BufferAllocator,
@@ -22,10 +23,11 @@ use crate::{
     node::{Node, NodeData},
     task::{ArParameterChange, BlockOrGraphInput, OutputTask, Task, TaskData},
 };
-use alloc::{boxed::Box, string::String, string::ToString, vec, vec::Vec};
 use core::cell::Cell;
 use ecow::EcoString;
 use knaster_core::numeric_array::NumericArray;
+/// no_std_compat prelude import, supporting both std and no_std
+use std::prelude::v1::*;
 
 use crate::inspection::{EdgeInspection, EdgeSource, GraphInspection, NodeInspection};
 use crate::wrappers_graph::done::WrDone;

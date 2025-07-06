@@ -7,11 +7,12 @@ use core::marker::PhantomData;
 
 use crate::audio_backend::{AudioBackend, AudioBackendError};
 use crate::processor::AudioProcessor;
-use alloc::{boxed::Box, string::String};
 #[cfg(all(debug_assertions, feature = "assert_no_alloc"))]
 use assert_no_alloc::*;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use knaster_core::{Block, Float};
+/// no_std_compat prelude import, supporting both std and no_std
+use std::prelude::v1::*;
 
 #[allow(missing_docs)]
 pub struct CpalBackendOptions {

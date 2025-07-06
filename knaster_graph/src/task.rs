@@ -3,7 +3,8 @@ use crate::core::sync::Arc;
 use crate::core::sync::atomic::AtomicBool;
 use crate::core::sync::atomic::Ordering;
 use crate::dynugen::UGenEnum;
-use alloc::{boxed::Box, vec::Vec};
+/// no_std_compat prelude import, supporting both std and no_std
+use std::prelude::v1::*;
 
 use knaster_core::AudioCtx;
 use knaster_core::Float;

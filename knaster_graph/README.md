@@ -2,7 +2,7 @@
 
 This crate contains everything directly related to the Knaster `Graph` structure and reexports `knaster_core` which reexports `knaster_primitives`.
 
-knaster_graph is `no_std` by default, but requires `alloc` and therefore a global allocator to be available.
+knaster_graph is `no_std` by default, but requires `alloc` and therefore a global allocator to be available. If the `std` feature is not enabled, the `alloc` feature is required. Failure to enable either of these features will result in obscure compile errors.
 
 See the `knaster` crate for more details.
 

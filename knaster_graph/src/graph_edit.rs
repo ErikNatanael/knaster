@@ -15,6 +15,7 @@
 //! - [X] Implement remaining arithmetics
 //! - [ ] API for scheduling parameter changes
 
+use crate::core::sync::{RwLockReadGuard, RwLockWriteGuard};
 use core::mem::MaybeUninit;
 use core::ops::{BitOr, Div, Shr, Sub};
 
@@ -43,22 +44,50 @@ use crate::{
     handle::HandleTrait,
 };
 
+/// A reference to a graph, used to access the graph from a [`GraphEdit`] or an [`SH`] or [`DH`] handle.
+pub struct GraphRef<'a, F: Float>(RwLock<&'a mut Graph<F>>);
+impl<'a, F: Float> GraphRef<'a, F> {
+    fn new(g: &'a mut Graph<F>) -> Self {
+        Self(RwLock::new(g))
+    }
+    fn read(&self) -> RwLockReadGuard<'_, &'a mut Graph<F>> {
+        #[cfg(feature = "std")]
+        {
+            self.0.read().unwrap()
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            self.0.read()
+        }
+    }
+    fn write(&self) -> RwLockWriteGuard<'_, &'a mut Graph<F>> {
+        #[cfg(feature = "std")]
+        {
+            self.0.write().unwrap()
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            self.0.write()
+        }
+    }
+}
+
 /// A wrapper around a [`Graph`] that provides access to an ergonomic and interface for adding and
 /// connecting nodes in the graph. When the `GraphEdit` is dropped, the changes are committed to the
 /// graph.
 pub struct GraphEdit<'b, F: Float> {
-    graph: RwLock<&'b mut Graph<F>>,
+    graph: GraphRef<'b, F>,
 }
 impl<'b, F: Float> GraphEdit<'b, F> {
     /// Use [`Graph::edit`] instead. Creates a new `GraphEdit` wrapper around a `&mut Graph`.
     pub fn new(g: &'b mut Graph<F>) -> Self {
         Self {
-            graph: RwLock::new(g),
+            graph: GraphRef::new(g),
         }
     }
     /// Create a new node in the graph and return a handle to it.
     pub fn push<'a, T: UGen<Sample = F> + 'static>(&'a self, ugen: T) -> SH<'a, 'b, F, Handle3<T>> {
-        let handle = self.graph.write().unwrap().push_internal(ugen);
+        let handle = self.graph.write().push_internal(ugen);
         let node_id = handle.node_id();
         SH {
             nodes: Handle3 {
@@ -84,7 +113,6 @@ impl<'b, F: Float> GraphEdit<'b, F> {
         let handle = self
             .graph
             .write()
-            .unwrap()
             .push_with_done_action(ugen, default_done_action);
         let node_id = handle.node_id();
         SH {
@@ -98,7 +126,7 @@ impl<'b, F: Float> GraphEdit<'b, F> {
     /// Get a non typesafe handle to node with the given [`NodeId`] if it exists.
     pub fn handle<'a>(&'a self, id: impl Into<NodeId>) -> Option<DH<'a, 'b, F, DynamicHandle3>> {
         let id = id.into();
-        self.graph.read().unwrap().node_data(id).map(|data| DH {
+        self.graph.read().node_data(id).map(|data| DH {
             nodes: DynamicHandle3 { node_id: id, data },
             graph: &self.graph,
         })
@@ -110,7 +138,6 @@ impl<'b, F: Float> GraphEdit<'b, F> {
     ) -> Option<DH<'a, 'b, F, DynamicHandle3>> {
         self.graph
             .read()
-            .unwrap()
             .node_data_from_name(name)
             .map(|(id, data)| DH {
                 nodes: DynamicHandle3 { node_id: id, data },
@@ -127,28 +154,28 @@ impl<'b, F: Float> GraphEdit<'b, F> {
         value: impl Into<ParameterValue>,
         t: Time,
     ) -> Result<(), GraphError> {
-        self.graph.read().unwrap().set(node, param, value, t)?;
+        self.graph.read().set(node, param, value, t)?;
         Ok(())
     }
     /// Free a node from the graph. This will remove the node and any of its dependent nodes from the graph.
     pub fn free_node(&self, node: impl Into<NodeId>) -> Result<(), GraphError> {
         let node = node.into();
-        let graph_id = self.graph.read().unwrap().graph_id();
+        let graph_id = self.graph.read().graph_id();
         if !node.graph == graph_id {
             return Err(GraphError::WrongSinkNodeGraph {
                 expected_graph: graph_id,
                 found_graph: node.graph,
             });
         }
-        self.graph.write().unwrap().free_node_from_key(node.key())?;
+        self.graph.write().free_node_from_key(node.key())?;
         Ok(())
     }
     /// Create a new handle to the graph input(s).
     ///
     /// # Example
     /// ```rust,
-    /// # use knaster_graph::{runner::Runner, osc::SinWt, runner::RunnerOptions, typenum::*};
-    /// # let (mut graph, mut audio_processor, _log_receiver) = Runner::new::<U1, U1>(RunnerOptions {
+    /// # use knaster_graph::{processor::AudioProcessor, osc::SinWt, processor::AudioProcessorOptions, typenum::*};
+    /// # let (mut graph, mut audio_processor, _log_receiver) = AudioProcessor::new::<U1, U1>(AudioProcessorOptions{
     /// #     block_size: 16,
     /// #     sample_rate: 48000,
     /// #     ring_buffer_size: 50,
@@ -165,7 +192,7 @@ impl<'b, F: Float> GraphEdit<'b, F> {
         source_channels: impl Into<Channels<N>>,
     ) -> Result<SH<'a, 'b, F, ChannelsHandle<N>>, GraphError> {
         let mut channels = NumericArray::default();
-        let num_inputs = self.graph.read().unwrap().inputs();
+        let num_inputs = self.graph.read().inputs();
         for (i, c) in source_channels.into().into_iter().enumerate() {
             if c >= num_inputs {
                 return Err(GraphError::GraphInputOutOfBounds(c));
@@ -188,7 +215,7 @@ impl<'b, F: Float> GraphEdit<'b, F> {
         SH<'a, 'b, F, Handle3<GraphGen<F, Inputs, Outputs>>>,
         Graph<F>,
     ) {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         let subgraph = g.subgraph_init::<Inputs, Outputs>(options, init_callback);
         (
             SH {
@@ -231,7 +258,7 @@ impl<'b, F: Float> GraphEdit<'b, F> {
 }
 impl<F: Float> Drop for GraphEdit<'_, F> {
     fn drop(&mut self) {
-        self.graph.write().unwrap().commit_changes().unwrap();
+        self.graph.write().commit_changes().unwrap();
     }
 }
 
@@ -239,13 +266,15 @@ impl<F: Float> Drop for GraphEdit<'_, F> {
 #[derive(Clone, Copy)]
 pub struct SH<'a, 'b, F: Float, T> {
     nodes: T,
-    graph: &'a RwLock<&'b mut Graph<F>>,
+    // graph: &'a RwLock<&'b mut Graph<F>>,
+    graph: &'a GraphRef<'b, F>,
 }
 /// Dynamic Handle. Wrapper around dynamic source/sinks
 #[derive(Clone, Copy)]
 pub struct DH<'a, 'b, F: Float, T> {
     nodes: T,
-    graph: &'a RwLock<&'b mut Graph<F>>,
+    // graph: &'a RwLock<&'b mut Graph<F>>,
+    graph: &'a GraphRef<'b, F>,
 }
 impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
     /// Create a new handle to certain outputs from this handle.
@@ -268,7 +297,7 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
     where
         S1::Inputs: Same<S0::Outputs>,
     {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         for ((source, source_channel), (sink, sink_channel)) in
             Static::iter_outputs(&self.nodes).zip(Static::iter_inputs(&n.nodes))
         {
@@ -286,7 +315,7 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
     where
         S1::Inputs: Same<S0::Outputs>,
     {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         for ((source, source_channel), (sink, sink_channel)) in
             Static::iter_outputs(&self.nodes).zip(Static::iter_inputs(&n.nodes))
         {
@@ -305,7 +334,7 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
     where
         S1::Inputs: Same<S0::Outputs>,
     {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         for ((source, source_channel), (sink, sink_channel)) in
             Static::iter_outputs(&self.nodes).zip(Static::iter_inputs(&n.nodes))
         {
@@ -321,7 +350,7 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
     where
         S1::Inputs: Same<S0::Outputs>,
     {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         for ((source, source_channel), (sink, sink_channel)) in
             Static::iter_outputs(&self.nodes).zip(Static::iter_inputs(&n.nodes))
         {
@@ -333,7 +362,7 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
 
     /// Connect the output(s) of self to the graph output(s).
     pub fn to_graph_out(self) {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         for (i, (source, source_channel)) in Static::iter_outputs(&self.nodes).enumerate() {
             g.connect2(source, source_channel, i as u16, NodeOrGraph::Graph)
                 .expect("Error connecting to graph output channel");
@@ -342,7 +371,7 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
     /// Connect the output(s) of self to the graph output(s), replacing any existing connections at
     /// the sink.
     pub fn to_graph_out_replace(self) {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         for (i, (source, source_channel)) in Static::iter_outputs(&self.nodes).enumerate() {
             g.connect2_replace(source, source_channel, i as u16, NodeOrGraph::Graph)
                 .expect("Error connecting to graph output channel");
@@ -354,7 +383,7 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
     where
         N: Size + Same<S0::Outputs>,
     {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         for ((source, source_channel), sink_channel) in
             Static::iter_outputs(&self.nodes).zip(sink_channels.into())
         {
@@ -367,7 +396,7 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
     where
         N: Size + Same<S0::Outputs>,
     {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         for ((source, source_channel), sink_channel) in
             Static::iter_outputs(&self.nodes).zip(sink_channels.into())
         {
@@ -377,7 +406,7 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
     }
     /// Disconnect all outputs from the specified channel.
     pub fn disconnect_output(&self, source_channel: u16) {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         let source = self
             .nodes
             .iter_outputs()
@@ -388,7 +417,7 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
     }
     /// Disconnect any input from the specified channel.
     pub fn disconnect_input(&self, sink_channel: u16) {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         let sink = self
             .nodes
             .iter_inputs()
@@ -458,7 +487,7 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
     /// are made. If you want to handle
     /// the error, use the `try_to` method instead.
     pub fn to<S: Dynamic>(self, n: DH<'a, 'b, F, S>) -> DH<'a, 'b, F, S> {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         for ((source, source_channel), (sink, sink_channel)) in
             self.nodes.iter_outputs().zip(n.nodes.iter_inputs())
         {
@@ -474,7 +503,7 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
     /// are made. If you want to handle
     /// the error, use the `try_to` method instead.
     pub fn to_feedback<S: Dynamic>(self, n: DH<'a, 'b, F, S>) -> DH<'a, 'b, F, S> {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         for ((source, source_channel), (sink, sink_channel)) in
             self.nodes.iter_outputs().zip(n.nodes.iter_inputs())
         {
@@ -490,7 +519,7 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
     /// are made. If you want to handle
     /// the error, use the `try_to` method instead.
     pub fn to_replace<S: Dynamic>(self, n: DH<'a, 'b, F, S>) -> DH<'a, 'b, F, S> {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         for ((source, source_channel), (sink, sink_channel)) in
             self.nodes.iter_outputs().zip(n.nodes.iter_inputs())
         {
@@ -506,7 +535,7 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
     /// are made. If you want to handle
     /// the error, use the `try_to` method instead.
     pub fn to_feedback_replace<S: Dynamic>(self, n: DH<'a, 'b, F, S>) -> DH<'a, 'b, F, S> {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         for ((source, source_channel), (sink, sink_channel)) in
             self.nodes.iter_outputs().zip(n.nodes.iter_inputs())
         {
@@ -522,7 +551,7 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
     /// If there is an error connecting the nodes, that error is returned and the connecting is
     /// interrupted. Any subsequent channels are not connected.
     pub fn try_to<S: Dynamic>(self, n: DH<'a, 'b, F, S>) -> Result<DH<'a, 'b, F, S>, GraphError> {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         for ((source, source_channel), (sink, sink_channel)) in
             self.nodes.iter_outputs().zip(n.nodes.iter_inputs())
         {
@@ -534,7 +563,7 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
     ///
     /// Any errors are logged and subsequent connections are made.
     pub fn to_graph_out(self) {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         for (i, (source, source_channel)) in self.nodes.iter_outputs().enumerate() {
             if let Err(e) = g.connect2(source, source_channel, i as u16, NodeOrGraph::Graph) {
                 log::error!("Failed to connect node to graph output: {e}");
@@ -545,7 +574,7 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
     ///
     /// Any errors are logged and subsequent connections are made.
     pub fn to_graph_out_replace(self) {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         for (i, (source, source_channel)) in self.nodes.iter_outputs().enumerate() {
             if let Err(e) = g.connect2_replace(source, source_channel, i as u16, NodeOrGraph::Graph)
             {
@@ -558,7 +587,7 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
     ///
     /// Any errors are logged and subsequent connections are made.
     pub fn to_graph_out_channels<N: Size>(self, sink_channels: impl Into<Channels<N>>) {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         for ((source, source_channel), sink_channel) in
             self.nodes.iter_outputs().zip(sink_channels.into())
         {
@@ -572,7 +601,7 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
     ///
     /// Any errors are logged and subsequent connections are made.
     pub fn to_graph_out_channels_replace<N: Size>(self, sink_channels: impl Into<Channels<N>>) {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         for ((source, source_channel), sink_channel) in
             self.nodes.iter_outputs().zip(sink_channels.into())
         {
@@ -585,7 +614,7 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
     }
     /// Disconnect all outputs from the specified channel.
     pub fn disconnect_output(&self, source_channel: u16) {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         let source = self
             .nodes
             .iter_outputs()
@@ -596,7 +625,7 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
     }
     /// Disconnect any input from the specified channel.
     pub fn disconnect_input(&self, sink_channel: u16) {
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         let sink = self
             .nodes
             .iter_inputs()
@@ -702,7 +731,6 @@ impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, Handle3<U>> {
     pub fn name(self, n: impl Into<EcoString>) -> Self {
         self.graph
             .write()
-            .unwrap()
             .set_name(self.nodes.node_id, n.into());
         self
     }
@@ -713,7 +741,7 @@ impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, Handle3<U>> {
         source: SH<'a, 'b, F, S>,
     ) -> Self {
         let input = source.nodes.iter_outputs().next().unwrap();
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         if let NodeOrGraph::Node(source_node) = input.0 {
             if let Err(e) =
                 g.connect_replace_to_parameter(source_node, input.1, p, self.nodes.node_id)
@@ -749,7 +777,7 @@ impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, Handle3<U>> {
                     Some(Parameter {
                         node: self.nodes.node_id,
                         param_index: i as u16,
-                        sender: self.graph.read().unwrap().scheduling_channel_sender(),
+                        sender: self.graph.read().scheduling_channel_sender(),
                     })
                 } else {
                     None
@@ -761,7 +789,7 @@ impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, Handle3<U>> {
                         return Some(Parameter {
                             node: self.nodes.node_id,
                             param_index: i as u16,
-                            sender: self.graph.read().unwrap().scheduling_channel_sender(),
+                            sender: self.graph.read().scheduling_channel_sender(),
                         });
                     }
                 }
@@ -799,7 +827,6 @@ impl<'a, 'b, F: Float> DH<'a, 'b, F, DynamicHandle3> {
     pub fn name(self, n: impl Into<EcoString>) -> Self {
         self.graph
             .write()
-            .unwrap()
             .set_name(self.nodes.node_id, n.into());
         self
     }
@@ -810,7 +837,7 @@ impl<'a, 'b, F: Float> DH<'a, 'b, F, DynamicHandle3> {
         source: SH<'a, 'b, F, S>,
     ) -> Self {
         let input = source.nodes.iter_outputs().next().unwrap();
-        let mut g = self.graph.write().unwrap();
+        let mut g = self.graph.write();
         if let NodeOrGraph::Node(source_node) = input.0 {
             if let Err(e) =
                 g.connect_replace_to_parameter(source_node, input.1, p, self.nodes.node_id)
@@ -842,7 +869,7 @@ impl<'a, 'b, F: Float> DH<'a, 'b, F, DynamicHandle3> {
                     Some(Parameter {
                         node: self.nodes.node_id,
                         param_index: i as u16,
-                        sender: self.graph.read().unwrap().scheduling_channel_sender(),
+                        sender: self.graph.read().scheduling_channel_sender(),
                     })
                 } else {
                     None
@@ -854,7 +881,7 @@ impl<'a, 'b, F: Float> DH<'a, 'b, F, DynamicHandle3> {
                         return Some(Parameter {
                             node: self.nodes.node_id,
                             param_index: i as u16,
-                            sender: self.graph.read().unwrap().scheduling_channel_sender(),
+                            sender: self.graph.read().scheduling_channel_sender(),
                         });
                     }
                 }
@@ -902,8 +929,8 @@ impl<U: UGen> Static for Handle3<U> {
             .expect("all the channels should be initialised")
     }
 
-    fn dynamic<F: Float>(&self, graph: &RwLock<&mut Graph<F>>) -> Self::DynamicType {
-        let data = graph.read().unwrap().node_data(self.node_id).unwrap();
+    fn dynamic<F: Float>(&self, graph: &GraphRef<F>) -> Self::DynamicType {
+        let data = graph.read().node_data(self.node_id).unwrap();
         DynamicHandle3 {
             node_id: self.node_id,
             data,
@@ -916,13 +943,13 @@ macro_rules! math_gen_fn_static {
         fn $fn_name<F: Float, S0: Static, S1: Static>(
             s0: S0,
             s1: S1,
-            graph: &RwLock<&mut Graph<F>>,
+            graph: &GraphRef<F>,
         ) -> ChannelsHandle<S1::Outputs>
         where
             S0::Outputs: Same<S1::Outputs>,
         {
             let mut out_channels = ChannelIterBuilder::new();
-            let mut g = graph.write().unwrap();
+            let mut g = graph.write();
             for (s0, s1) in Static::iter_outputs(&s0).zip(s1.iter_outputs()) {
                 let mul = g.push_internal(MathUGen::<_, U1, $op>::new());
                 if let Err(e) = g.connect2(s0.0, s0.1, 0, NodeOrGraph::Node(mul.node_id())) {
@@ -1016,10 +1043,10 @@ macro_rules! math_gen_fn_static_constant {
         fn $fn_name<F: Float, S0: Static, S1: Into<ConstantNumber>>(
             s0: S0,
             s1: S1,
-            graph: &RwLock<&mut Graph<F>>,
+            graph: &GraphRef<F>,
         ) -> ChannelsHandle<S0::Outputs> {
             let mut out_channels = ChannelIterBuilder::new();
-            let mut g = graph.write().unwrap();
+            let mut g = graph.write();
             // TODO: Make a separate UGen for constant number maths to avoid this extra node
             let c: F = s1.into().into_f();
             let c = g.push_internal(Constant::new(c));
@@ -1054,13 +1081,13 @@ macro_rules! math_gen_fn_dynamic {
         fn $fn_name<F: Float, S0: Dynamic, S1: Dynamic>(
             s0: S0,
             s1: S1,
-            graph: &RwLock<&mut Graph<F>>,
+            graph: &GraphRef<F>,
         ) -> DynamicChannelsHandle {
             if s0.outputs() != s1.outputs() {
                 panic!("The number of outputs of the two sources must be the same");
             }
             let mut out_channels = SmallVec::with_capacity(s0.outputs() as usize);
-            let mut g = graph.write().unwrap();
+            let mut g = graph.write();
             for (s0, s1) in Dynamic::iter_outputs(&s0).zip(s1.iter_outputs()) {
                 let mul = g.push_internal(MathUGen::<_, U1, $op>::new());
                 if let Err(e) = g.connect2(s0.0, s0.1, 0, NodeOrGraph::Node(mul.node_id())) {
@@ -1090,10 +1117,10 @@ macro_rules! math_gen_fn_dynamic_constant {
         fn $fn_name<F: Float, S0: Dynamic, S1: Into<ConstantNumber>>(
             s0: S0,
             s1: S1,
-            graph: &RwLock<&mut Graph<F>>,
+            graph: &GraphRef<F>,
         ) -> DynamicChannelsHandle {
             let mut out_channels = SmallVec::with_capacity(s0.outputs() as usize);
-            let mut g = graph.write().unwrap();
+            let mut g = graph.write();
             let c: F = s1.into().into_f();
             let c = g.push_internal(Constant::new(c));
             for s0 in Dynamic::iter_outputs(&s0) {
@@ -1434,7 +1461,7 @@ where
 
     type DynamicType = DynamicChannelsHandle;
 
-    fn dynamic<F: Float>(&self, _graph: &RwLock<&mut Graph<F>>) -> Self::DynamicType {
+    fn dynamic<F: Float>(&self, _graph: &GraphRef<F>) -> Self::DynamicType {
         let mut in_channels = SmallVec::with_capacity(S0::Inputs::USIZE + S1::Inputs::USIZE);
         let mut out_channels = SmallVec::with_capacity(S0::Outputs::USIZE + S1::Outputs::USIZE);
         for chan in Static::iter_inputs(&self.s0) {
@@ -1491,7 +1518,7 @@ impl<O: Size> Static for ChannelsHandle<O> {
 
     type DynamicType = DynamicChannelsHandle;
 
-    fn dynamic<F: Float>(&self, _graph: &RwLock<&mut Graph<F>>) -> Self::DynamicType {
+    fn dynamic<F: Float>(&self, _graph: &GraphRef<F>) -> Self::DynamicType {
         let mut out_channels = SmallVec::with_capacity(self.channels.len());
         for &chan in self.channels.iter() {
             out_channels.push(chan);
@@ -1552,7 +1579,7 @@ pub trait Static {
     /// Convert self to a dynamic handle.
     ///
     /// Dynamic in this context means that the channel configuration is only known at runtime.
-    fn dynamic<F: Float>(&self, graph: &RwLock<&mut Graph<F>>) -> Self::DynamicType;
+    fn dynamic<F: Float>(&self, graph: &GraphRef<F>) -> Self::DynamicType;
 }
 /// Convenience struct for building a [`ChannelIter`].
 struct ChannelIterBuilder<I: Size> {
@@ -1668,7 +1695,7 @@ pub trait Dynamic {
     /// Get the number of input channels
     fn inputs(&self) -> u16;
     /// Get a dynamic handle to this node. Provided for symmetry with [`Static`].
-    fn dynamic<F: Float>(&self, _graph: &RwLock<&mut Graph<F>>) -> &Self {
+    fn dynamic<F: Float>(&self, _graph: &GraphRef<F>) -> &Self {
         self
     }
 }
