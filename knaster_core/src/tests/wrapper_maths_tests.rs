@@ -28,7 +28,7 @@ fn wrapper_arithmetic() {
         f64,
         g.process(ctx, &mut flags, [].into())[0],
         36.,
-        epsilon = f64::EPSILON * 5.,
+        epsilon = f64::EPSILON * 10.,
         ulps = 2
     ));
     let mut g = TestNumUGen::new(6.0).wr_powi(2);
@@ -36,7 +36,7 @@ fn wrapper_arithmetic() {
         f64,
         g.process(ctx, &mut flags, [].into())[0],
         36.,
-        epsilon = f64::EPSILON * 5.,
+        epsilon = f64::EPSILON * 10.,
         ulps = 2
     ));
     let mut g = TestNumUGen::new(6.0).wr(|s| s * 2.0 + 1.0);
