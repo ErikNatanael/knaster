@@ -4,10 +4,47 @@ use crate::processor::AudioProcessorOptions;
 use crate::tests::utils::TestNumUGen;
 use crate::{processor::AudioProcessor, tests::utils::TestInPlusParamUGen};
 use knaster_core::math::{Add, MathUGen, Mul};
-use knaster_core::typenum::{U0, U1, U2};
+use knaster_core::typenum::{U0, U1, U2, U4};
 use knaster_core::{Block, typenum::U3};
 /// no_std_compat prelude import, supporting both std and no_std
 use std::prelude::v1::*;
+
+#[test]
+fn graph_empty_graph_zero_output() {
+    let block_size = 16;
+    let (_graph, mut audio_processor, _log_receiver) =
+        AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 2,
+            ..Default::default()
+        });
+    unsafe { audio_processor.run(&[]) };
+    let output = audio_processor.output_block();
+    assert_eq!(output.read(0, 0), 0.0);
+}
+
+#[test]
+fn graph_empty_graph_zero_output_many_channels() {
+    let block_size = 16;
+    let (_graph, mut audio_processor, _log_receiver) =
+        AudioProcessor::<f32>::new::<U0, U4>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 2,
+            ..Default::default()
+        });
+    unsafe { audio_processor.run(&[]) };
+    let output = audio_processor.output_block();
+    assert_eq!(output.read(0, 0), 0.0);
+    assert_eq!(output.read(1, 0), 0.0);
+    assert_eq!(output.read(2, 0), 0.0);
+    assert_eq!(output.read(3, 0), 0.0);
+    assert_eq!(output.read(0, 14), 0.0);
+    assert_eq!(output.read(1, 13), 0.0);
+    assert_eq!(output.read(2, 12), 0.0);
+    assert_eq!(output.read(3, 11), 0.0);
+}
 
 #[test]
 fn graph_inputs_to_outputs() {

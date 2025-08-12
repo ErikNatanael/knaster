@@ -127,7 +127,7 @@ impl GraphInspection {
             let name = node.name.clone();
             let name = name.replace("<", "&#60;");
             let name = name.replace(">", "&#62;");
-            s.push_str(&format!("{i}: {}\n", name));
+            s.push_str(&format!("{i}: {name}\n"));
             s.push_str("</font></td></tr>\n");
             if node.outputs > 0 {
                 s.push_str("<tr>");
@@ -158,7 +158,7 @@ impl GraphInspection {
                         if let Some(i) = self.nodes.iter().position(|n| n.key == *node_key) {
                             format!("\"{i}_{}\"", self.nodes[i].name)
                         } else {
-                            log::error!("Node in edge not found: {:?}", node_key);
+                            log::error!("Node in edge not found: {node_key:?}");
                             continue;
                         }
                     }
@@ -183,7 +183,7 @@ impl GraphInspection {
                     if let Some(j) = self.nodes.iter().position(|n| n.key == *node_key) {
                         format!("{j}_{}", self.nodes[j].name)
                     } else {
-                        log::error!("Node in edge not found: {:?}", node_key);
+                        log::error!("Node in edge not found: {node_key:?}");
                         continue;
                     }
                 }

@@ -1399,12 +1399,7 @@ impl<F: Float> Graph<F> {
     pub fn set_many(&self, changes: &[(NodeId, Param, ParameterValue)], time: Time) {
         for (node, param, value) in changes {
             if let Err(e) = self.set(*node, *param, *value, time) {
-                log::error!(
-                    "Error setting parameter {:?} on node {:?}: {:?}",
-                    param,
-                    node,
-                    e
-                );
+                log::error!("Error setting parameter {param:?} on node {node:?}: {e:?}",);
             }
         }
     }
