@@ -64,20 +64,31 @@ impl<T: Float> OnePole<T> {
     /// Process one sample assuming the OnePole is set to lowpass
     #[inline]
     pub fn process_lp(&mut self, input: T) -> T {
+        #[cfg(feature = "no_denormals")]
         unsafe {
             no_denormals::no_denormals(|| {
                 self.last_output = input * self.a0 + self.last_output * self.b1;
             })
         }
+        #[cfg(not(feature = "no_denormals"))]
+        {
+            self.last_output = input * self.a0 + self.last_output * self.b1;
+        }
+
         self.last_output
     }
     /// Process one sample assuming the OnePole is set to highpass
     #[inline]
     pub fn process_hp(&mut self, input: T) -> T {
+        #[cfg(feature = "no_denormals")]
         unsafe {
             no_denormals::no_denormals(|| {
                 self.last_output = input * self.a0 + self.last_output * self.b1;
             })
+        }
+        #[cfg(not(feature = "no_denormals"))]
+        {
+            self.last_output = input * self.a0 + self.last_output * self.b1;
         }
         input - self.last_output
     }

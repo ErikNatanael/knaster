@@ -255,6 +255,7 @@ impl<F: Float> SvfFilter<F> {
             ..
         } = self;
 
+        #[cfg(feature = "no_denormals")]
         unsafe {
             no_denormals::no_denormals(|| {
                 let v3 = v0 - *ic2eq;
@@ -265,6 +266,16 @@ impl<F: Float> SvfFilter<F> {
 
                 *m0 * v0 + *m1 * v1 + *m2 * v2
             })
+        }
+        #[cfg(not(feature = "no_denormals"))]
+        {
+                let v3 = v0 - *ic2eq;
+                let v1 = *a1 * *ic1eq + *a2 * v3;
+                let v2 = *ic2eq + *a2 * *ic1eq + *a3 * v3;
+                *ic1eq = F::new(2.) * v1 - *ic1eq;
+                *ic2eq = F::new(2.) * v2 - *ic2eq;
+
+                *m0 * v0 + *m1 * v1 + *m2 * v2
         }
     }
 }

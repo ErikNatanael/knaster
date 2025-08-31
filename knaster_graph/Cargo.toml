@@ -20,6 +20,7 @@ jack = ["dep:jack"]
 assert_no_alloc = ["dep:assert_no_alloc"]
 sound_files = ["knaster_core/sound_files"]
 alloc = ["knaster_core/alloc", "no-std-compat/alloc"]
+no_denormals = ["knaster_core/no_denormals"]
 
 [dependencies]
 knaster_core = { path = "../knaster_core", default-features = false }
@@ -47,7 +48,7 @@ env_logger = "0.11.8"
 rand = "0.9"
 # Enabling the `std` feature for `critical-section` provides a critical section implementation
 # that is can be used when running the no_std tests
-critical-section = { version = "1.1", features = ["std"]}
+critical-section = { version = "1.1", features = ["std"] }
 
 [[example]]
 name = "quick_test"
@@ -59,3 +60,4 @@ required-features = ["std", "cpal"]
 [[example]]
 name = "scheduling_test"
 required-features = ["std", "cpal"]
+

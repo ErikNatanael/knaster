@@ -11,9 +11,10 @@ unstable = ["knaster_graph/unstable"]
 sound_files = ["knaster_graph/sound_files"]
 jack = ["knaster_graph/jack"]
 cpal = ["knaster_graph/cpal"]
+no_denormals = ["knaster_graph/no_denormals"]
 
 [dependencies]
-knaster_graph = { path = "../knaster_graph/" }
+knaster_graph = { path = "../knaster_graph/", default-features = false }
 log = "0.4"
 
 [dev-dependencies]
@@ -39,3 +40,4 @@ required-features = ["std", "cpal"]
 [[example]]
 name = "simple_sine"
 required-features = ["std", "cpal"]
+
