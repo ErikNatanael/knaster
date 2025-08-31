@@ -1,17 +1,11 @@
 #![no_std]
 
-extern crate alloc;
-#[cfg(feature = "std")]
-extern crate std;
+// Switches between std and core based on features. This reduces boilerplate when importing.
+extern crate no_std_compat as std;
 
 // Switches between std and core based on features. This reduces boilerplate when importing.
 mod core {
-    #[cfg(not(feature = "std"))]
-    pub use alloc::*;
-    #[cfg(not(feature = "std"))]
-    pub use core::*;
-    #[cfg(feature = "std")]
-    pub use std::*;
+    pub use no_std_compat::*;
 }
 
 pub mod math_ugens;
@@ -22,19 +16,24 @@ use core::boxed::Box;
 
 pub use knaster_graph::*;
 use knaster_graph::{
-    audio_backend::{AudioBackend, AudioBackendError, cpal::CpalBackendOptions},
+    audio_backend::{AudioBackend, AudioBackendError},
     graph::Graph,
     log::ArLogMessage,
     processor::{AudioProcessor, AudioProcessorOptions},
     typenum::{U0, U2},
 };
 
+#[cfg(feature = "cpal")]
+use knaster_graph::audio_backend::cpal::CpalBackendOptions;
+
+#[cfg(feature = "cpal")]
 #[allow(clippy::type_complexity)]
 pub struct KnasterBuilder<F: Float> {
     runner_options: AudioProcessorOptions,
     backend: Option<Box<dyn AudioBackend<Sample = F>>>,
     log_handler: Option<Box<dyn FnMut(&[ArLogMessage]) + Send>>,
 }
+#[cfg(feature = "cpal")]
 impl<F: Float> KnasterBuilder<F> {
     pub fn start(self) -> Result<Graph<F>, AudioBackendError> {
         let mut backend = if let Some(backend) = self.backend {
@@ -75,6 +74,8 @@ impl<F: Float> KnasterBuilder<F> {
         self
     }
 }
+
+#[cfg(feature = "cpal")]
 pub fn knaster<F: Float>() -> KnasterBuilder<F> {
     KnasterBuilder {
         runner_options: AudioProcessorOptions::default(),

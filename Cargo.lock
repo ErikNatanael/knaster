@@ -1409,6 +1409,7 @@ dependencies = [
  "env_logger",
  "knaster_graph",
  "log",
+ "no-std-compat",
  "open",
  "rand",
  "rfd",

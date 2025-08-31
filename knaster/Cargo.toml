@@ -5,7 +5,8 @@ edition = "2024"
 
 [features]
 default = ["std", "cpal", "dot"]
-std = ["knaster_graph/std"]
+std = ["knaster_graph/std", "no-std-compat/std"]
+alloc = ["knaster_graph/alloc", "no-std-compat/alloc"]
 dot = ["knaster_graph/dot"]
 unstable = ["knaster_graph/unstable"]
 sound_files = ["knaster_graph/sound_files"]
@@ -15,6 +16,7 @@ no_denormals = ["knaster_graph/no_denormals"]
 
 [dependencies]
 knaster_graph = { path = "../knaster_graph/", default-features = false }
+no-std-compat = { version = "0.4.1", features = ["compat_hash", "compat_sync"] }
 log = "0.4"
 
 [dev-dependencies]
