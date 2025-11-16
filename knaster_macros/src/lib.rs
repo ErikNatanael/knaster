@@ -606,7 +606,6 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
                     ParameterType::Trigger => quote! {},
                 },
                 ParameterArgumentTypes::Ctx => quote! { ctx },
-                ParameterArgumentTypes::Flags => quote! { _flags },
             });
             quote! { #index => { Self::#fn_name (self, #(#arguments),*); } }
         })
@@ -829,13 +828,6 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
                         syn::Type::Path(path) => {
                             if path.path.segments.iter().any(|seg| seg.ident == "AudioCtx") {
                                 pdata.arguments.push(ParameterArgumentTypes::Ctx);
-                            } else if path
-                                .path
-                                .segments
-                                .iter()
-                                .any(|seg| seg.ident == "UGenFlags")
-                            {
-                                pdata.arguments.push(ParameterArgumentTypes::Flags);
                             } else {
                                 return Err(syn::Error::new(
                                     input.span(),
@@ -974,7 +966,6 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
 enum ParameterArgumentTypes {
     Parameter(ParameterType),
     Ctx,
-    Flags,
 }
 
 // TODO: Move to knaster_primitives and depend on it, both here and in knaster_core
