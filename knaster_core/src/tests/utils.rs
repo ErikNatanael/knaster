@@ -27,13 +27,15 @@ impl<F: Float> UGen for TestNumUGen<F> {
     ) -> crate::Frame<Self::Sample, Self::Outputs> {
         [self.number].into()
     }
-    type Parameters = U0;
+    type FloatParameters = U0;
 
-    fn param_descriptions() -> crate::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions()
+    -> crate::numeric_array::NumericArray<&'static str, Self::FloatParameters> {
         [].into()
     }
 
-    fn param_hints() -> crate::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    fn param_hints()
+    -> crate::numeric_array::NumericArray<crate::ParameterHint, Self::FloatParameters> {
         [].into()
     }
 
@@ -67,13 +69,15 @@ impl<F: Float> UGen for TestInPlusParamGen<F> {
     ) -> crate::Frame<Self::Sample, Self::Outputs> {
         [self.number + input[0]].into()
     }
-    type Parameters = U1;
+    type FloatParameters = U1;
 
-    fn param_descriptions() -> crate::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions()
+    -> crate::numeric_array::NumericArray<&'static str, Self::FloatParameters> {
         ["number"].into()
     }
 
-    fn param_hints() -> crate::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    fn param_hints()
+    -> crate::numeric_array::NumericArray<crate::ParameterHint, Self::FloatParameters> {
         [ParameterHint::infinite_float()].into()
     }
 

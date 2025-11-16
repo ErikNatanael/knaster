@@ -729,7 +729,7 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
             #atype_sample
             #atype_inputs
             #atype_outputs
-            type Parameters = #crate_ident::typenum::#num_params ;
+            type FloatParameters = #crate_ident::typenum::#num_params ;
 
             #init_impl
 
@@ -739,12 +739,12 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
 
 
             fn param_hints()
-            -> #crate_ident::numeric_array::NumericArray<#crate_ident::ParameterHint, Self::Parameters> {
+            -> #crate_ident::numeric_array::NumericArray<#crate_ident::ParameterHint, Self::FloatParameters> {
                 [ #(#parameter_hints),* ].into()
             }
 
             fn param_descriptions(
-            ) -> #crate_ident::numeric_array::NumericArray<&'static str, Self::Parameters> {
+            ) -> #crate_ident::numeric_array::NumericArray<&'static str, Self::FloatParameters> {
                 [ #(#parameter_descriptions)* ].into()
             }
 

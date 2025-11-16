@@ -35,7 +35,7 @@ impl<F: Float, I: Size, O: Size> UGen for UGenClosure<F, I, O> {
 
     type Outputs = O;
 
-    type Parameters = U0;
+    type FloatParameters = U0;
 
     fn process(
         &mut self,
@@ -47,7 +47,8 @@ impl<F: Float, I: Size, O: Size> UGen for UGenClosure<F, I, O> {
     }
 
     fn param_hints()
-    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::FloatParameters>
+    {
         [].into()
     }
 

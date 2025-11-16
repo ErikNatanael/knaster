@@ -41,15 +41,15 @@ impl<F: Float> UGen for TestInPlusParamUGen<F> {
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         [self.number + input[0]].into()
     }
-    type Parameters = U1;
+    type FloatParameters = U1;
 
     fn param_descriptions()
-    -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    -> knaster_core::numeric_array::NumericArray<&'static str, Self::FloatParameters> {
         ["number"].into()
     }
 
     fn param_hints()
-    -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::Parameters>
+    -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::FloatParameters>
     {
         [ParameterHint::infinite_float()].into()
     }

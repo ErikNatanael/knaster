@@ -83,9 +83,9 @@ impl<F: Float> UGen for Osc<F> {
         }
         NumericArray::from([out])
     }
-    type Parameters = U3;
+    type FloatParameters = U3;
 
-    fn param_types() -> NumericArray<ParameterType, Self::Parameters> {
+    fn param_types() -> NumericArray<ParameterType, Self::FloatParameters> {
         NumericArray::from([
             ParameterType::Float,
             ParameterType::Float,
@@ -93,11 +93,11 @@ impl<F: Float> UGen for Osc<F> {
         ])
     }
 
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions() -> NumericArray<&'static str, Self::FloatParameters> {
         NumericArray::from(["freq", "phase_offset", "reset_phase"])
     }
 
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::FloatParameters> {
         todo!()
     }
 
@@ -122,7 +122,7 @@ impl<F: Float> UGen for Osc<F> {
         let ctx = ctx.into();
         let var_name = match param.into() {
             Param::Index(i) => {
-                if i >= Self::Parameters::USIZE {
+                if i >= Self::FloatParameters::USIZE {
                     return Err(ParameterError::ParameterIndexOutOfBounds);
                 }
                 self.param_apply(ctx, i, value.into());

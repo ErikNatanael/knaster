@@ -15,7 +15,7 @@ use crate::{AudioCtx, UGen, parameters::ParameterValue};
 /// wrap a [`UGen`] for audio rate parameter changes to take effect.
 pub struct WrArParams<T: UGen> {
     ugen: T,
-    buffers: NumericArray<Option<*const T::Sample>, T::Parameters>,
+    buffers: NumericArray<Option<*const T::Sample>, T::FloatParameters>,
     // Keeps track of where we are in a block if processing sample-by-sample
     block_index: usize,
 }
@@ -62,13 +62,13 @@ impl<T: UGen> UGen for WrArParams<T> {
     }
     // TODO: Be more efficient about processing
 
-    type Parameters = T::Parameters;
+    type FloatParameters = T::FloatParameters;
 
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions() -> NumericArray<&'static str, Self::FloatParameters> {
         T::param_descriptions()
     }
 
-    fn param_hints() -> NumericArray<crate::parameters::ParameterHint, Self::Parameters> {
+    fn param_hints() -> NumericArray<crate::parameters::ParameterHint, Self::FloatParameters> {
         T::param_hints()
     }
 
@@ -84,7 +84,7 @@ impl<T: UGen> UGen for WrArParams<T> {
         index: usize,
         buffer: *const T::Sample,
     ) {
-        debug_assert!(index < T::Parameters::USIZE);
+        debug_assert!(index < T::FloatParameters::USIZE);
         self.buffers[index] = Some(buffer);
     }
 }
@@ -160,13 +160,13 @@ where
             }
         }
     }
-    type Parameters = T::Parameters;
+    type FloatParameters = T::FloatParameters;
 
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions() -> NumericArray<&'static str, Self::FloatParameters> {
         T::param_descriptions()
     }
 
-    fn param_hints() -> NumericArray<crate::parameters::ParameterHint, Self::Parameters> {
+    fn param_hints() -> NumericArray<crate::parameters::ParameterHint, Self::FloatParameters> {
         T::param_hints()
     }
 

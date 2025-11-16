@@ -107,8 +107,8 @@ impl<'b, F: Float> GraphEdit<'b, F> {
     ) -> SH<'a, 'b, F, Handle3<WrDone<T>>>
     where
         // Make sure we can add a parameter
-        <T as UGen>::Parameters: crate::core::ops::Add<B1>,
-        <<T as UGen>::Parameters as crate::core::ops::Add<B1>>::Output: Size,
+        <T as UGen>::FloatParameters: crate::core::ops::Add<B1>,
+        <<T as UGen>::FloatParameters as crate::core::ops::Add<B1>>::Output: Size,
     {
         let handle = self
             .graph
@@ -771,7 +771,7 @@ impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, Handle3<U>> {
         let p = p.into();
         match p {
             Param::Index(i) => {
-                if i < U::Parameters::USIZE {
+                if i < U::FloatParameters::USIZE {
                     Some(Parameter {
                         node: self.nodes.node_id,
                         param_index: i as u16,

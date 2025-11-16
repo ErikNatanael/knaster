@@ -54,15 +54,16 @@ impl<T: UGen, C: FnMut(T::Sample) -> T::Sample + 'static> UGen for WrClosure<T, 
         }
     }
 
-    type Parameters = T::Parameters;
+    type FloatParameters = T::FloatParameters;
 
     fn param_descriptions()
-    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::FloatParameters> {
         T::param_descriptions()
     }
 
     fn param_hints()
-    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::FloatParameters>
+    {
         T::param_hints()
     }
 

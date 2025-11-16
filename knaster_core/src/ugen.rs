@@ -19,7 +19,7 @@ pub mod util;
 use crate::log::ArLogSender;
 use crate::numeric_array::NumericArray;
 use crate::{Param, ParameterError, ParameterHint, ParameterType, ParameterValue, rt_log};
-use knaster_primitives::{Block, BlockRead, Float, Frame, Size, typenum::*};
+use knaster_primitives::{Block, BlockRead, Float, Frame, PFloat, Size, typenum::*};
 
 /// Contains basic metadata about the context in which an audio process is
 /// running which is often necessary for correct calculation, initialisation etc.
@@ -256,7 +256,7 @@ pub trait UGen {
     /// The number of output audio channels.
     type Outputs: Size;
     /// The number of parameters this Gen has.
-    type Parameters: Size;
+    type FloatParameters: Size;
     /// `init()` is the place where you should implement initialisation of
     /// internal state with knowledge of the sample rate and the block size. It
     /// is safe to allocate here.
@@ -306,18 +306,24 @@ pub trait UGen {
     /// is also used by some wrappers_graph to implement type specific functionality.
     ///
     /// If not manually implemented, types are inferred from [`Gen::param_range`]
-    fn param_types() -> NumericArray<ParameterType, Self::Parameters> {
+    fn param_types() -> NumericArray<ParameterType, Self::FloatParameters> {
         Self::param_hints().into_iter().map(|r| r.ty()).collect()
     }
     /// Specifies a name per parameter which can be used to refer to that parameter
     /// when calling [`Gen::param`].
     ///
     /// Not required to be implemented, but provides a better developer experience.
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions() -> NumericArray<&'static str, Self::FloatParameters> {
         NumericArray::default()
     }
     /// Specifies the range that is valid for each parameter.
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters>;
+    fn param_hints() -> NumericArray<ParameterHint, Self::FloatParameters>;
+    /// Set a new value for a float parameter.
+    // fn float_param_fn(
+    //     &mut self,
+    //     ctx: &mut AudioCtx,
+    //     index: usize,
+    // ) -> fn(ugen: &mut Self, value: PFloat);
     /// Set the parameter value without range or type checks.
     /// See Parameterable::param for a safer and more ergonomic interface.
     ///
@@ -367,7 +373,7 @@ pub trait UGen {
     ) -> Result<(), ParameterError> {
         match param.into() {
             Param::Index(i) => {
-                if i >= Self::Parameters::USIZE {
+                if i >= Self::FloatParameters::USIZE {
                     return Err(ParameterError::ParameterIndexOutOfBounds);
                 }
                 self.param_apply(ctx, i, value.into());

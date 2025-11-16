@@ -43,13 +43,13 @@ impl<F: Float> UGen for TestNumUGen<F> {
     ) -> Frame<Self::Sample, Self::Outputs> {
         [self.number].into()
     }
-    type Parameters = U0;
+    type FloatParameters = U0;
 
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions() -> NumericArray<&'static str, Self::FloatParameters> {
         [].into()
     }
 
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::FloatParameters> {
         [].into()
     }
 

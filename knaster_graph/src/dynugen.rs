@@ -85,7 +85,7 @@ impl<F: Float, T: UGen<Sample = F> + 'static> DynUGen<F> for T {
         T::Outputs::U16
     }
     fn parameters(&self) -> u16 {
-        T::Parameters::U16
+        T::FloatParameters::U16
     }
 
     unsafe fn set_ar_param_buffer(&mut self, ctx: &mut AudioCtx, index: usize, buffer: *const F) {

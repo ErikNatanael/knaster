@@ -28,8 +28,8 @@ impl<T: UGen> WrMul<T> {
 impl<T: UGen> UGen for WrMul<T>
 where
     // Make sure we can add a parameter
-    <T as UGen>::Parameters: Add<B1>,
-    <<T as UGen>::Parameters as Add<B1>>::Output: Size,
+    <T as UGen>::FloatParameters: Add<B1>,
+    <<T as UGen>::FloatParameters as Add<B1>>::Output: Size,
     T::Sample: Float,
 {
     type Sample = T::Sample;
@@ -69,27 +69,28 @@ where
             }
         }
     }
-    type Parameters = Add1<T::Parameters>;
+    type FloatParameters = Add1<T::FloatParameters>;
 
     fn param_descriptions()
-    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::FloatParameters> {
         let gd = T::param_descriptions();
         let mut d = NumericArray::default();
-        for i in 0..T::Parameters::USIZE {
+        for i in 0..T::FloatParameters::USIZE {
             d[i] = gd[i];
         }
-        d[T::Parameters::USIZE] = "wr_mul";
+        d[T::FloatParameters::USIZE] = "wr_mul";
         d
     }
 
     fn param_hints()
-    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::FloatParameters>
+    {
         let gd = T::param_hints();
         let mut d = NumericArray::default();
-        for i in 0..T::Parameters::USIZE {
+        for i in 0..T::FloatParameters::USIZE {
             d[i] = gd[i];
         }
-        d[T::Parameters::USIZE] = ParameterHint::new_float(|h| h.logarithmic(true).infinite());
+        d[T::FloatParameters::USIZE] = ParameterHint::new_float(|h| h.logarithmic(true).infinite());
         d
     }
 
@@ -99,7 +100,7 @@ where
         index: usize,
         value: crate::ParameterValue,
     ) {
-        if index == T::Parameters::USIZE {
+        if index == T::FloatParameters::USIZE {
             self.value = T::Sample::new(value.float().unwrap());
         } else {
             T::param_apply(&mut self.ugen, ctx, index, value)
@@ -169,15 +170,16 @@ impl<T: UGen> UGen for WrAdd<T> {
             }
         }
     }
-    type Parameters = T::Parameters;
+    type FloatParameters = T::FloatParameters;
 
     fn param_descriptions()
-    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::FloatParameters> {
         T::param_descriptions()
     }
 
     fn param_hints()
-    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::FloatParameters>
+    {
         T::param_hints()
     }
 
@@ -253,15 +255,16 @@ impl<T: UGen> UGen for WrSub<T> {
             }
         }
     }
-    type Parameters = T::Parameters;
+    type FloatParameters = T::FloatParameters;
 
     fn param_descriptions()
-    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::FloatParameters> {
         T::param_descriptions()
     }
 
     fn param_hints()
-    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::FloatParameters>
+    {
         T::param_hints()
     }
 
@@ -333,15 +336,16 @@ impl<T: UGen> UGen for WrVSub<T> {
             }
         }
     }
-    type Parameters = T::Parameters;
+    type FloatParameters = T::FloatParameters;
 
     fn param_descriptions()
-    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::FloatParameters> {
         T::param_descriptions()
     }
 
     fn param_hints()
-    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::FloatParameters>
+    {
         T::param_hints()
     }
 
@@ -412,15 +416,16 @@ impl<T: UGen> UGen for WrDiv<T> {
             }
         }
     }
-    type Parameters = T::Parameters;
+    type FloatParameters = T::FloatParameters;
 
     fn param_descriptions()
-    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::FloatParameters> {
         T::param_descriptions()
     }
 
     fn param_hints()
-    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::FloatParameters>
+    {
         T::param_hints()
     }
 
@@ -492,15 +497,16 @@ impl<T: UGen> UGen for WrVDiv<T> {
             }
         }
     }
-    type Parameters = T::Parameters;
+    type FloatParameters = T::FloatParameters;
 
     fn param_descriptions()
-    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::FloatParameters> {
         T::param_descriptions()
     }
 
     fn param_hints()
-    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::FloatParameters>
+    {
         T::param_hints()
     }
 
@@ -572,15 +578,16 @@ impl<T: UGen> UGen for WrPowf<T> {
             }
         }
     }
-    type Parameters = T::Parameters;
+    type FloatParameters = T::FloatParameters;
 
     fn param_descriptions()
-    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::FloatParameters> {
         T::param_descriptions()
     }
 
     fn param_hints()
-    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::FloatParameters>
+    {
         T::param_hints()
     }
 
@@ -651,14 +658,15 @@ impl<T: UGen> UGen for WrPowi<T> {
             }
         }
     }
-    type Parameters = T::Parameters;
+    type FloatParameters = T::FloatParameters;
 
     fn param_descriptions()
-    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::FloatParameters> {
         T::param_descriptions()
     }
     fn param_hints()
-    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::FloatParameters>
+    {
         T::param_hints()
     }
 

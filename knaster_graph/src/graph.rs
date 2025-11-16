@@ -397,8 +397,8 @@ impl<F: Float> Graph<F> {
     ) -> Handle<WrDone<T>>
     where
         // Make sure we can add a parameter
-        <T as UGen>::Parameters: crate::core::ops::Add<B1>,
-        <<T as UGen>::Parameters as crate::core::ops::Add<B1>>::Output: Size,
+        <T as UGen>::FloatParameters: crate::core::ops::Add<B1>,
+        <<T as UGen>::FloatParameters as crate::core::ops::Add<B1>>::Output: Size,
     {
         let free_self_flag = Arc::new(AtomicBool::new(false));
         let ugen = WrDone {
@@ -2372,7 +2372,7 @@ impl<F: Float> UGen for FeedbackSink<F> {
     type Sample = F;
     type Inputs = U1;
     type Outputs = U0;
-    type Parameters = U0;
+    type FloatParameters = U0;
 
     fn process(
         &mut self,
@@ -2399,7 +2399,7 @@ impl<F: Float> UGen for FeedbackSink<F> {
     }
 
     fn param_hints()
-    -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::Parameters>
+    -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::FloatParameters>
     {
         [].into()
     }
@@ -2426,7 +2426,7 @@ impl<F: Float> UGen for FeedbackSource<F> {
     type Sample = F;
     type Inputs = U0;
     type Outputs = U1;
-    type Parameters = U0;
+    type FloatParameters = U0;
 
     fn process(
         &mut self,
@@ -2455,7 +2455,7 @@ impl<F: Float> UGen for FeedbackSource<F> {
     }
 
     fn param_hints()
-    -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::Parameters>
+    -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::FloatParameters>
     {
         [].into()
     }

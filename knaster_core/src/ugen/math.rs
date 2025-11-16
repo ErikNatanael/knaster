@@ -155,11 +155,11 @@ where
         }
         // dbg!(input.channel_as_slice(1));
     }
-    type Parameters = U0;
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+    type FloatParameters = U0;
+    fn param_descriptions() -> NumericArray<&'static str, Self::FloatParameters> {
         NumericArray::default()
     }
-    fn param_hints() -> NumericArray<crate::ParameterHint, Self::Parameters> {
+    fn param_hints() -> NumericArray<crate::ParameterHint, Self::FloatParameters> {
         NumericArray::from([])
     }
     fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: crate::ParameterValue) {}
@@ -295,11 +295,11 @@ impl<F: Float, Op: Operation1<F>> UGen for Math1UGen<F, Op> {
     {
         Op::apply(input.channel_as_slice(0), output.channel_as_slice_mut(0));
     }
-    type Parameters = U0;
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+    type FloatParameters = U0;
+    fn param_descriptions() -> NumericArray<&'static str, Self::FloatParameters> {
         NumericArray::default()
     }
-    fn param_hints() -> NumericArray<crate::ParameterHint, Self::Parameters> {
+    fn param_hints() -> NumericArray<crate::ParameterHint, Self::FloatParameters> {
         NumericArray::from([])
     }
     fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: crate::ParameterValue) {}

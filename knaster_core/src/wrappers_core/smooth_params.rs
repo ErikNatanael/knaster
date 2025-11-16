@@ -12,9 +12,9 @@ use crate::{AudioCtx, Rate, UGen, UGenFlags, parameters::*};
 /// The value will be interpolated from the old to the new value.
 pub struct WrSmoothParams<T: UGen> {
     ugen: T,
-    parameters: NumericArray<Rate, T::Parameters>,
-    smoothing: NumericArray<ParameterSmoothing, T::Parameters>,
-    smoothing_state: NumericArray<ParameterSmoothingState, T::Parameters>,
+    parameters: NumericArray<Rate, T::FloatParameters>,
+    smoothing: NumericArray<ParameterSmoothing, T::FloatParameters>,
+    smoothing_state: NumericArray<ParameterSmoothingState, T::FloatParameters>,
 }
 
 impl<T: UGen> WrSmoothParams<T> {
@@ -188,18 +188,18 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
             self.ugen.process_block(ctx, flags, input, output);
         }
     }
-    type Parameters = T::Parameters;
+    type FloatParameters = T::FloatParameters;
 
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions() -> NumericArray<&'static str, Self::FloatParameters> {
         T::param_descriptions()
     }
 
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::FloatParameters> {
         T::param_hints()
     }
 
     fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
-        if index >= T::Parameters::USIZE {
+        if index >= T::FloatParameters::USIZE {
             return;
         }
         // Received a new parameter change.

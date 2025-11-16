@@ -48,8 +48,8 @@ impl<T: UGen> WrDone<T> {
 impl<T: UGen> UGen for WrDone<T>
 where
     // Make sure we can add a parameter
-    <T as UGen>::Parameters: Add<B1>,
-    <<T as UGen>::Parameters as Add<B1>>::Output: Size,
+    <T as UGen>::FloatParameters: Add<B1>,
+    <<T as UGen>::FloatParameters as Add<B1>>::Output: Size,
 {
     type Sample = T::Sample;
 
@@ -89,30 +89,30 @@ where
         self.ugen.process_block(ctx, flags, input, output);
         self.process_flags(ctx, flags);
     }
-    type Parameters = Add1<T::Parameters>;
+    type FloatParameters = Add1<T::FloatParameters>;
 
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions() -> NumericArray<&'static str, Self::FloatParameters> {
         let gd = T::param_descriptions();
         let mut d = NumericArray::default();
-        for i in 0..T::Parameters::USIZE {
+        for i in 0..T::FloatParameters::USIZE {
             d[i] = gd[i];
         }
-        d[T::Parameters::USIZE] = "done_action";
+        d[T::FloatParameters::USIZE] = "done_action";
         d
     }
 
-    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::FloatParameters> {
         let gd = T::param_hints();
         let mut d = NumericArray::default();
-        for i in 0..T::Parameters::USIZE {
+        for i in 0..T::FloatParameters::USIZE {
             d[i] = gd[i];
         }
-        d[T::Parameters::USIZE] = ParameterHint::from_pinteger_enum::<Done>();
+        d[T::FloatParameters::USIZE] = ParameterHint::from_pinteger_enum::<Done>();
         d
     }
 
     fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
-        if index == T::Parameters::USIZE {
+        if index == T::FloatParameters::USIZE {
             self.done_action = value.integer().unwrap().into();
         } else {
             self.ugen.param_apply(ctx, index, value);

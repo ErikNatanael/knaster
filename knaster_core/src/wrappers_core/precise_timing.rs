@@ -14,7 +14,7 @@ pub struct WrPreciseTiming<const DELAYED_CHANGES_PER_BLOCK: usize, T: UGen> {
     // frame in block, parameter index, value
     waiting_changes: [Option<(u16, usize, ParameterValue)>; DELAYED_CHANGES_PER_BLOCK],
     // The time that the next change to the given parameter index should be delayed by.
-    next_delay: NumericArray<u16, T::Parameters>,
+    next_delay: NumericArray<u16, T::FloatParameters>,
     // The number of delayed changes this block to avoid unnecessary loops
     next_delay_i: usize,
 }
@@ -110,13 +110,13 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
         self.next_delay_i = 0;
     }
 
-    type Parameters = T::Parameters;
+    type FloatParameters = T::FloatParameters;
 
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions() -> NumericArray<&'static str, Self::FloatParameters> {
         T::param_descriptions()
     }
 
-    fn param_hints() -> NumericArray<crate::parameters::ParameterHint, Self::Parameters> {
+    fn param_hints() -> NumericArray<crate::parameters::ParameterHint, Self::FloatParameters> {
         T::param_hints()
     }
 

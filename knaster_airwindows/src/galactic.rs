@@ -48,7 +48,7 @@ impl<F: Float> UGen for Galactic<F> {
 
     type Outputs = U2;
 
-    type Parameters = U5;
+    type FloatParameters = U5;
 
     fn init(&mut self, sample_rate: u32, _block_size: usize) {
         for (delay, time) in self.delays_left.iter_mut().zip(GALACTIC_DELAY_TIMES) {
@@ -104,7 +104,7 @@ impl<F: Float> UGen for Galactic<F> {
     }
 
     fn param_hints()
-    -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::Parameters>
+    -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::FloatParameters>
     {
         [
             ParameterHint::one(),
@@ -116,7 +116,7 @@ impl<F: Float> UGen for Galactic<F> {
         .into()
     }
     fn param_descriptions()
-    -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    -> knaster_core::numeric_array::NumericArray<&'static str, Self::FloatParameters> {
         ["replace", "detune", "brightness", "bigness", "wet"].into()
     }
 

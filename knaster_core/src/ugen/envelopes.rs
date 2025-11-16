@@ -399,7 +399,7 @@ mod alloc_envelopes {
         type Sample = F;
         type Inputs = U0;
         type Outputs = U1;
-        type Parameters = U4;
+        type FloatParameters = U4;
 
         fn init(&mut self, sample_rate: u32, _block_size: usize) {
             self.base_scale = 1.0 / sample_rate as f64;
@@ -462,10 +462,10 @@ mod alloc_envelopes {
             }
             [out].into()
         }
-        fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+        fn param_descriptions() -> NumericArray<&'static str, Self::FloatParameters> {
             ["time_scale", "jump_to_segment", "t_restart", "t_stop"].into()
         }
-        fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
+        fn param_hints() -> NumericArray<ParameterHint, Self::FloatParameters> {
             [
                 ParameterHint::new_float(|h| h.logarithmic(true).minmax(0.0, 20.0)),
                 ParameterHint::new_integer((PInteger::ZERO, PInteger::MAX), |h| h),

@@ -246,13 +246,13 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         unreachable!()
     }
-    type Parameters = U0;
+    type FloatParameters = U0;
 
-    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions() -> NumericArray<&'static str, Self::FloatParameters> {
         [].into()
     }
 
-    fn param_hints() -> NumericArray<knaster_core::ParameterHint, Self::Parameters> {
+    fn param_hints() -> NumericArray<knaster_core::ParameterHint, Self::FloatParameters> {
         [].into()
     }
 
