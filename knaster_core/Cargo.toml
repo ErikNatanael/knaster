@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["std", "sound_files"]
+default = ["std"]
 # Enables the alloc in no_std. `alloc` does nothing if `std` is enabled.
 alloc = ["knaster_primitives/alloc", "no-std-compat/alloc", "dep:embassy-sync"]
 # Enables the standard library. `alloc` does nothing if `std` is enabled.
@@ -15,11 +15,6 @@ unstable = [
   "no-std-compat/unstable",
   "knaster_primitives/unstable",
 ]
-# Requires std to be enabled
-symphonia = ["dep:symphonia"]
-# Requires std to be enabled
-hound = ["dep:hound"]
-sound_files = ["symphonia", "hound"]
 
 [dependencies]
 knaster_primitives = { path = "../knaster_primitives" }
@@ -29,8 +24,6 @@ target-features = { version = "0.1.6", optional = true }
 thiserror = { version = "2.0.3", default-features = false }
 fastrand = { version = "2.3.0", default-features = false }
 fastapprox = "0.3.1"
-symphonia = { version = "0.5.4", optional = true, features = ["all-codecs"] }
-hound = { version = "3.5.1", optional = true }
 no_denormals = { version = "0.2.0", optional = true }
 rtrb = { version = "0.3.2", default-features = false }
 log = "0.4.26"
@@ -39,8 +32,6 @@ embassy-sync = { version = "0.6.2", optional = true }
 
 [dev-dependencies]
 anyhow = "1.0.94"
-# For comparing floats in tests for miri
-float-cmp = "0.10.0"
 
 
 [[example]]

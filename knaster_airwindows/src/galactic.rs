@@ -7,9 +7,11 @@
 
 use knaster_core::{
     AudioCtx, Float, ParameterHint, UGen,
+    typenum::{U2, U5},
+};
+use knaster_core_dsp::{
     delay::StaticSampleDelay,
     noise::next_randomness_seed,
-    typenum::{U2, U5},
 };
 
 pub struct Galactic<F> {

@@ -3,9 +3,9 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use knaster_core::envelopes::EnvAsr;
-use knaster_core::osc::SinWt;
 use knaster_core::typenum::{U0, U1, U2};
+use knaster_core_dsp::envelopes::EnvAsr;
+use knaster_core_dsp::osc::SinWt;
 use knaster_graph::Time;
 use knaster_graph::processor::AudioProcessorOptions;
 use knaster_graph::{

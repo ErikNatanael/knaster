@@ -4,8 +4,8 @@
 use core::marker::PhantomData;
 
 #[allow(unused)]
-use crate::UGen;
-use knaster_primitives::Float;
+use knaster_core::UGen;
+use knaster_core::{AudioCtx, Float, UGenFlags, impl_ugen};
 
 /// Safety limiter
 ///
@@ -14,7 +14,7 @@ use knaster_primitives::Float;
 pub struct SafetyLimiter<F: Float> {
     _float: PhantomData<F>,
 }
-#[knaster_macros::impl_ugen]
+#[impl_ugen]
 impl<F: Float> SafetyLimiter<F> {
     #[allow(clippy::new_without_default)]
     #[allow(missing_docs)]
@@ -25,8 +25,8 @@ impl<F: Float> SafetyLimiter<F> {
     }
     fn process(
         &mut self,
-        _ctx: &mut super::AudioCtx,
-        _flags: &mut super::UGenFlags,
+        _ctx: &mut AudioCtx,
+        _flags: &mut UGenFlags,
         input: [F; 1],
     ) -> [F; 1] {
         let s = input[0];

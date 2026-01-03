@@ -1,12 +1,9 @@
-use crate::{ParameterHint, core::ops::Add};
-
-use knaster_primitives::{
-    Float, FloatMethods, Size,
+use crate::core::ops::Add;
+use knaster_core::{
+    AudioCtx, Float, FloatMethods, ParameterHint, ParameterValue, Size, UGen, UGenFlags,
     numeric_array::NumericArray,
     typenum::{Add1, Unsigned, bit::B1},
 };
-
-use crate::{AudioCtx, UGen, UGenFlags};
 
 // TODO: SIMD implementations for blocks
 // TODO: SIMD implementations for multi channel frame by frame outputs
@@ -42,10 +39,10 @@ where
 
     fn process(
         &mut self,
-        ctx: &mut crate::AudioCtx,
+        ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
-        input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
-    ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
+        input: knaster_core::Frame<Self::Sample, Self::Inputs>,
+    ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         let mut out = self.ugen.process(ctx, flags, input);
         for sample in &mut out {
             *sample *= self.value;
@@ -59,8 +56,8 @@ where
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_core::Block<Sample = Self::Sample>,
     {
         self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
@@ -72,7 +69,7 @@ where
     type Parameters = Add1<T::Parameters>;
 
     fn param_descriptions()
-    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
         let gd = T::param_descriptions();
         let mut d = NumericArray::default();
         for i in 0..T::Parameters::USIZE {
@@ -82,8 +79,7 @@ where
         d
     }
 
-    fn param_hints()
-    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    fn param_hints() -> knaster_core::numeric_array::NumericArray<ParameterHint, Self::Parameters> {
         let gd = T::param_hints();
         let mut d = NumericArray::default();
         for i in 0..T::Parameters::USIZE {
@@ -93,12 +89,7 @@ where
         d
     }
 
-    fn param_apply(
-        &mut self,
-        ctx: &mut crate::AudioCtx,
-        index: usize,
-        value: crate::ParameterValue,
-    ) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         if index == T::Parameters::USIZE {
             self.value = T::Sample::new(value.float().unwrap());
         } else {
@@ -107,7 +98,7 @@ where
     }
     unsafe fn set_ar_param_buffer(
         &mut self,
-        ctx: &mut crate::AudioCtx,
+        ctx: &mut AudioCtx,
         index: usize,
         buffer: *const T::Sample,
     ) {
@@ -142,10 +133,10 @@ impl<T: UGen> UGen for WrAdd<T> {
     }
     fn process(
         &mut self,
-        ctx: &mut crate::AudioCtx,
+        ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
-        input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
-    ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
+        input: knaster_core::Frame<Self::Sample, Self::Inputs>,
+    ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         let mut out = self.ugen.process(ctx, flags, input);
         for sample in &mut out {
             *sample += self.value;
@@ -154,13 +145,13 @@ impl<T: UGen> UGen for WrAdd<T> {
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,
-        ctx: &mut crate::AudioCtx,
+        ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_core::Block<Sample = Self::Sample>,
     {
         self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
@@ -172,26 +163,20 @@ impl<T: UGen> UGen for WrAdd<T> {
     type Parameters = T::Parameters;
 
     fn param_descriptions()
-    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
 
-    fn param_hints()
-    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    fn param_hints() -> knaster_core::numeric_array::NumericArray<ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 
-    fn param_apply(
-        &mut self,
-        ctx: &mut crate::AudioCtx,
-        index: usize,
-        value: crate::ParameterValue,
-    ) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         T::param_apply(&mut self.ugen, ctx, index, value)
     }
     unsafe fn set_ar_param_buffer(
         &mut self,
-        ctx: &mut crate::AudioCtx,
+        ctx: &mut AudioCtx,
         index: usize,
         buffer: *const T::Sample,
     ) {
@@ -228,8 +213,8 @@ impl<T: UGen> UGen for WrSub<T> {
         &mut self,
         ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
-        input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
-    ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
+        input: knaster_core::Frame<Self::Sample, Self::Inputs>,
+    ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         let mut out = self.ugen.process(ctx, flags, input);
         for sample in &mut out {
             *sample -= self.value;
@@ -243,8 +228,8 @@ impl<T: UGen> UGen for WrSub<T> {
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_core::Block<Sample = Self::Sample>,
     {
         self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
@@ -256,16 +241,15 @@ impl<T: UGen> UGen for WrSub<T> {
     type Parameters = T::Parameters;
 
     fn param_descriptions()
-    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
 
-    fn param_hints()
-    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    fn param_hints() -> knaster_core::numeric_array::NumericArray<ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 
-    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         T::param_apply(&mut self.ugen, ctx, index, value)
     }
     unsafe fn set_ar_param_buffer(
@@ -307,8 +291,8 @@ impl<T: UGen> UGen for WrVSub<T> {
         &mut self,
         ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
-        input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
-    ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
+        input: knaster_core::Frame<Self::Sample, Self::Inputs>,
+    ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         let mut out = self.ugen.process(ctx, flags, input);
         for sample in &mut out {
             *sample = self.value - *sample;
@@ -323,8 +307,8 @@ impl<T: UGen> UGen for WrVSub<T> {
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_core::Block<Sample = Self::Sample>,
     {
         self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
@@ -336,16 +320,15 @@ impl<T: UGen> UGen for WrVSub<T> {
     type Parameters = T::Parameters;
 
     fn param_descriptions()
-    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
 
-    fn param_hints()
-    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    fn param_hints() -> knaster_core::numeric_array::NumericArray<ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 
-    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         T::param_apply(&mut self.ugen, ctx, index, value)
     }
     unsafe fn set_ar_param_buffer(
@@ -387,8 +370,8 @@ impl<T: UGen> UGen for WrDiv<T> {
         &mut self,
         ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
-        input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
-    ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
+        input: knaster_core::Frame<Self::Sample, Self::Inputs>,
+    ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         let mut out = self.ugen.process(ctx, flags, input);
         for sample in &mut out {
             *sample /= self.value;
@@ -402,8 +385,8 @@ impl<T: UGen> UGen for WrDiv<T> {
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_core::Block<Sample = Self::Sample>,
     {
         self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
@@ -415,16 +398,15 @@ impl<T: UGen> UGen for WrDiv<T> {
     type Parameters = T::Parameters;
 
     fn param_descriptions()
-    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
 
-    fn param_hints()
-    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    fn param_hints() -> knaster_core::numeric_array::NumericArray<ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 
-    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         T::param_apply(&mut self.ugen, ctx, index, value)
     }
     unsafe fn set_ar_param_buffer(
@@ -466,8 +448,8 @@ impl<T: UGen> UGen for WrVDiv<T> {
         &mut self,
         ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
-        input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
-    ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
+        input: knaster_core::Frame<Self::Sample, Self::Inputs>,
+    ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         let mut out = self.ugen.process(ctx, flags, input);
         for sample in &mut out {
             *sample = self.value / *sample;
@@ -482,8 +464,8 @@ impl<T: UGen> UGen for WrVDiv<T> {
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_core::Block<Sample = Self::Sample>,
     {
         self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
@@ -495,16 +477,15 @@ impl<T: UGen> UGen for WrVDiv<T> {
     type Parameters = T::Parameters;
 
     fn param_descriptions()
-    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
 
-    fn param_hints()
-    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    fn param_hints() -> knaster_core::numeric_array::NumericArray<ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 
-    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         T::param_apply(&mut self.ugen, ctx, index, value)
     }
     unsafe fn set_ar_param_buffer(
@@ -546,8 +527,8 @@ impl<T: UGen> UGen for WrPowf<T> {
         &mut self,
         ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
-        input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
-    ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
+        input: knaster_core::Frame<Self::Sample, Self::Inputs>,
+    ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         let mut out = self.ugen.process(ctx, flags, input);
         for sample in &mut out {
             *sample = sample.powf(self.value);
@@ -562,8 +543,8 @@ impl<T: UGen> UGen for WrPowf<T> {
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_core::Block<Sample = Self::Sample>,
     {
         self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
@@ -575,16 +556,15 @@ impl<T: UGen> UGen for WrPowf<T> {
     type Parameters = T::Parameters;
 
     fn param_descriptions()
-    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
 
-    fn param_hints()
-    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    fn param_hints() -> knaster_core::numeric_array::NumericArray<ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 
-    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         T::param_apply(&mut self.ugen, ctx, index, value)
     }
     unsafe fn set_ar_param_buffer(
@@ -626,8 +606,8 @@ impl<T: UGen> UGen for WrPowi<T> {
         &mut self,
         ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
-        input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
-    ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
+        input: knaster_core::Frame<Self::Sample, Self::Inputs>,
+    ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         let mut out = self.ugen.process(ctx, flags, input);
         for sample in &mut out {
             *sample = sample.powi(self.value);
@@ -641,8 +621,8 @@ impl<T: UGen> UGen for WrPowi<T> {
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_core::Block<Sample = Self::Sample>,
     {
         self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
@@ -654,15 +634,14 @@ impl<T: UGen> UGen for WrPowi<T> {
     type Parameters = T::Parameters;
 
     fn param_descriptions()
-    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
-    fn param_hints()
-    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    fn param_hints() -> knaster_core::numeric_array::NumericArray<ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 
-    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         T::param_apply(&mut self.ugen, ctx, index, value)
     }
     unsafe fn set_ar_param_buffer(

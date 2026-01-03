@@ -33,13 +33,9 @@ mod core {
     // pub use std::*;
 }
 
-pub mod dsp;
 pub mod log;
 mod parameters;
-#[cfg(test)]
-mod tests;
 mod ugen;
-pub mod wrappers_core;
 
 pub use knaster_macros::*;
 use knaster_primitives::num_derive::*;

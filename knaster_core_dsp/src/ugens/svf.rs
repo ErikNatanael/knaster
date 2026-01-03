@@ -3,11 +3,11 @@
 //! Implemented based on [a technical paper by Andrew Simper, Cytomic, 2013](https://cytomic.com/files/dsp/SvfLinearTrapOptimised2.pdf) also available at <https://cytomic.com/technical-papers/>
 //!
 
-use crate::num_derive::{FromPrimitive, ToPrimitive};
-use crate::{AudioCtx, PInteger};
-use knaster_macros::{KnasterIntegerParameter, impl_ugen};
-use knaster_primitives::Float;
-use knaster_primitives::{PFloat, num_traits};
+use knaster_core::{
+    AudioCtx, Float, KnasterIntegerParameter, PFloat, PInteger, impl_ugen,
+    num_derive::{FromPrimitive, ToPrimitive},
+    num_traits,
+};
 use std::prelude::v1::*;
 
 /// Different supported filter types
@@ -85,7 +85,7 @@ impl<F: Float> SvfFilter<F> {
             self.cutoff_freq,
             self.q,
             self.gain_db,
-            F::from(ctx.sample_rate).unwrap(),
+            F::new(ctx.sample_rate() as f32),
         );
     }
     #[allow(missing_docs)]
@@ -96,7 +96,7 @@ impl<F: Float> SvfFilter<F> {
             self.cutoff_freq,
             self.q,
             self.gain_db,
-            F::from(ctx.sample_rate).unwrap(),
+            F::new(ctx.sample_rate() as f32),
         );
     }
     /// Set gain in dB
@@ -107,7 +107,7 @@ impl<F: Float> SvfFilter<F> {
             self.cutoff_freq,
             self.q,
             self.gain_db,
-            F::from(ctx.sample_rate).unwrap(),
+            F::new(ctx.sample_rate() as f32),
         );
     }
     /// Set filter type
@@ -118,7 +118,7 @@ impl<F: Float> SvfFilter<F> {
             self.cutoff_freq,
             self.q,
             self.gain_db,
-            F::from(ctx.sample_rate).unwrap(),
+            F::new(ctx.sample_rate() as f32),
         );
     }
     /// Trigger recalculations of coefficients
@@ -128,7 +128,7 @@ impl<F: Float> SvfFilter<F> {
             self.cutoff_freq,
             self.q,
             self.gain_db,
-            F::from(ctx.sample_rate).unwrap(),
+            F::new(ctx.sample_rate() as f32),
         );
     }
     fn init(&mut self, sample_rate: u32, _block_size: usize) {
@@ -136,7 +136,7 @@ impl<F: Float> SvfFilter<F> {
             self.cutoff_freq,
             self.q,
             self.gain_db,
-            F::from(sample_rate).unwrap(),
+            F::new(sample_rate as f32),
         );
     }
     fn process(&mut self, input: [F; 1]) -> [F; 1] {

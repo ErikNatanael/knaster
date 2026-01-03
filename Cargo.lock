@@ -1421,6 +1421,7 @@ version = "0.1.0"
 dependencies = [
  "fastrand",
  "knaster_core",
+ "knaster_core_dsp",
  "numeric_literals",
 ]
 
@@ -1442,10 +1443,27 @@ dependencies = [
  "embassy-sync",
  "fastapprox",
  "fastrand",
- "float-cmp",
- "hound",
  "knaster_macros",
  "knaster_primitives",
+ "log",
+ "no-std-compat",
+ "no_denormals",
+ "rtrb",
+ "target-features",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "knaster_core_dsp"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "embassy-sync",
+ "fastapprox",
+ "fastrand",
+ "float-cmp",
+ "hound",
+ "knaster_core",
  "log",
  "no-std-compat",
  "no_denormals",
@@ -1467,6 +1485,7 @@ dependencies = [
  "env_logger",
  "jack",
  "knaster_core",
+ "knaster_core_dsp",
  "log",
  "no-std-compat",
  "open",

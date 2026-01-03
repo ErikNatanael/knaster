@@ -3,9 +3,9 @@ use crate::graph::NodeOrGraph;
 use crate::processor::AudioProcessorOptions;
 use crate::tests::utils::TestNumUGen;
 use crate::{processor::AudioProcessor, tests::utils::TestInPlusParamUGen};
-use knaster_core::math::{Add, MathUGen, Mul};
 use knaster_core::typenum::{U0, U1, U2, U4};
 use knaster_core::{Block, typenum::U3};
+use knaster_core_dsp::math::{Add, MathUGen, Mul};
 /// no_std_compat prelude import, supporting both std and no_std
 use std::prelude::v1::*;
 

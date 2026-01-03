@@ -10,10 +10,7 @@ use crate::core::path::PathBuf;
 use crate::core::{string::String, vec::Vec};
 use std::prelude::v1::*;
 
-#[allow(unused)]
-use crate::ugen::buffer::BufferReader;
-
-use knaster_primitives::Float;
+use knaster_core::Float;
 #[cfg(feature = "symphonia")]
 use symphonia::core::errors::Error as SymphoniaError;
 #[cfg(feature = "symphonia")]

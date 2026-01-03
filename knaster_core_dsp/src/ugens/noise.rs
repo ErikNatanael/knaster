@@ -4,8 +4,8 @@
 
 use crate::core::marker::PhantomData;
 use crate::core::sync::atomic::AtomicU64;
-use crate::{AudioCtx, PFloat, UGenFlags};
-use knaster_primitives::Float;
+use knaster_core::Float;
+use knaster_core::{AudioCtx, PFloat, UGenFlags, impl_ugen};
 
 /// Used to seed random number generating Gens to create a deterministic result as long as all Gens are created in the same order from start.
 static NEXT_SEED: AtomicU64 = AtomicU64::new(0);
@@ -14,7 +14,7 @@ static NEXT_SEED: AtomicU64 = AtomicU64::new(0);
 /// randomness. If all [`UGen`]s use deterministic algorithms and are seeded using this function,
 /// a graph constructed in the same order will have deterministic randomness.
 /// ```
-/// # use crate::knaster_core::noise::next_randomness_seed;
+/// # use crate::knaster_core_dsp::noise::next_randomness_seed;
 /// let rng = fastrand::Rng::with_seed(next_randomness_seed());
 /// ```
 pub fn next_randomness_seed() -> u64 {
@@ -27,7 +27,7 @@ pub struct WhiteNoise<F: Copy = f32> {
     rng: fastrand::Rng,
     _marker: PhantomData<F>,
 }
-#[knaster_macros::impl_ugen]
+#[impl_ugen]
 impl<F: Float> WhiteNoise<F> {
     #[allow(missing_docs)]
     pub fn new() -> Self {
@@ -62,7 +62,7 @@ pub struct PinkNoise<F: Copy = f32> {
     pink: F,
     rng: fastrand::Rng,
 }
-#[knaster_macros::impl_ugen]
+#[impl_ugen]
 impl<F: Float> PinkNoise<F> {
     #[allow(missing_docs)]
     pub fn new() -> Self {
@@ -127,7 +127,7 @@ pub struct BrownNoise<F: Copy = f32> {
     last_output: F,
 }
 
-#[knaster_macros::impl_ugen]
+#[impl_ugen]
 impl<F: Float> BrownNoise<F> {
     #[allow(missing_docs)]
     pub fn new() -> Self {
@@ -166,7 +166,7 @@ pub struct RandomLin<F: Copy = f32> {
     freq_to_phase_inc: F,
 }
 
-#[knaster_macros::impl_ugen]
+#[impl_ugen]
 impl<F: Float> RandomLin<F> {
     /// Create a new RandomLin, seeding it from the global atomic seed.
     pub fn new(freq: F) -> Self {

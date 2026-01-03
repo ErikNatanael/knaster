@@ -33,10 +33,10 @@ use crate::node::NodeData;
 use crate::wrappers_graph::done::WrDone;
 
 use ecow::EcoString;
-use knaster_core::math::MathUGen;
-use knaster_core::util::Constant;
 use knaster_core::{Done, ParameterSmoothing, ParameterValue, Seconds};
 use knaster_core::{Float, Param, Size, UGen, numeric_array::NumericArray, typenum::*};
+use knaster_core_dsp::math::MathUGen;
+use knaster_core_dsp::util::Constant;
 use smallvec::SmallVec;
 
 use crate::{
@@ -965,11 +965,11 @@ macro_rules! math_gen_fn_static {
         }
     };
 }
-math_gen_fn_static!(add_sources, knaster_core::math::Add);
-math_gen_fn_static!(sub_sources, knaster_core::math::Sub);
-math_gen_fn_static!(mul_sources, knaster_core::math::Mul);
-math_gen_fn_static!(div_sources, knaster_core::math::Div);
-math_gen_fn_static!(pow_sources, knaster_core::math::Pow);
+math_gen_fn_static!(add_sources, knaster_core_dsp::math::Add);
+math_gen_fn_static!(sub_sources, knaster_core_dsp::math::Sub);
+math_gen_fn_static!(mul_sources, knaster_core_dsp::math::Mul);
+math_gen_fn_static!(div_sources, knaster_core_dsp::math::Div);
+math_gen_fn_static!(pow_sources, knaster_core_dsp::math::Pow);
 
 /// A number that can be used as a constant in a graph.
 pub enum ConstantNumber {
@@ -1065,10 +1065,10 @@ macro_rules! math_gen_fn_static_constant {
         }
     };
 }
-math_gen_fn_static_constant!(add_sources_static_constant, knaster_core::math::Add);
-math_gen_fn_static_constant!(sub_sources_static_constant, knaster_core::math::Sub);
-math_gen_fn_static_constant!(mul_sources_static_constant, knaster_core::math::Mul);
-math_gen_fn_static_constant!(div_sources_static_constant, knaster_core::math::Div);
+math_gen_fn_static_constant!(add_sources_static_constant, knaster_core_dsp::math::Add);
+math_gen_fn_static_constant!(sub_sources_static_constant, knaster_core_dsp::math::Sub);
+math_gen_fn_static_constant!(mul_sources_static_constant, knaster_core_dsp::math::Mul);
+math_gen_fn_static_constant!(div_sources_static_constant, knaster_core_dsp::math::Div);
 // math_gen_fn_static_constant!(pow_sources_static_constant, knaster_core::math::Pow);
 
 // Macros for implementing arithmetics on sources without statically known channel configurations
@@ -1101,11 +1101,11 @@ macro_rules! math_gen_fn_dynamic {
         }
     };
 }
-math_gen_fn_dynamic!(add_sources_dynamic, knaster_core::math::Add);
-math_gen_fn_dynamic!(sub_sources_dynamic, knaster_core::math::Sub);
-math_gen_fn_dynamic!(mul_sources_dynamic, knaster_core::math::Mul);
-math_gen_fn_dynamic!(div_sources_dynamic, knaster_core::math::Div);
-math_gen_fn_dynamic!(pow_sources_dynamic, knaster_core::math::Pow);
+math_gen_fn_dynamic!(add_sources_dynamic, knaster_core_dsp::math::Add);
+math_gen_fn_dynamic!(sub_sources_dynamic, knaster_core_dsp::math::Sub);
+math_gen_fn_dynamic!(mul_sources_dynamic, knaster_core_dsp::math::Mul);
+math_gen_fn_dynamic!(div_sources_dynamic, knaster_core_dsp::math::Div);
+math_gen_fn_dynamic!(pow_sources_dynamic, knaster_core_dsp::math::Pow);
 
 // Macros for implementing arithmetics on sources without statically known channel configurations
 macro_rules! math_gen_fn_dynamic_constant {
@@ -1136,10 +1136,10 @@ macro_rules! math_gen_fn_dynamic_constant {
         }
     };
 }
-math_gen_fn_dynamic_constant!(add_sources_dynamic_constant, knaster_core::math::Add);
-math_gen_fn_dynamic_constant!(sub_sources_dynamic_constant, knaster_core::math::Sub);
-math_gen_fn_dynamic_constant!(mul_sources_dynamic_constant, knaster_core::math::Mul);
-math_gen_fn_dynamic_constant!(div_sources_dynamic_constant, knaster_core::math::Div);
+math_gen_fn_dynamic_constant!(add_sources_dynamic_constant, knaster_core_dsp::math::Add);
+math_gen_fn_dynamic_constant!(sub_sources_dynamic_constant, knaster_core_dsp::math::Sub);
+math_gen_fn_dynamic_constant!(mul_sources_dynamic_constant, knaster_core_dsp::math::Mul);
+math_gen_fn_dynamic_constant!(div_sources_dynamic_constant, knaster_core_dsp::math::Div);
 // math_gen_fn_dynamic_constant!(pow_sources_dynamic_constant, knaster_core::math::Pow);
 
 // Arithmetics with static types
@@ -1999,9 +1999,10 @@ mod tests {
         Time,
         processor::{AudioProcessor, AudioProcessorOptions},
     };
-    use knaster_core::{
-        Block, Seconds, noise::WhiteNoise, onepole::OnePoleLpf, osc::SinWt, pan::Pan2, typenum::*,
-        util::Constant, wrappers_core::UGenWrapperCoreExt,
+    use knaster_core::{Block, Seconds, typenum::*};
+    use knaster_core_dsp::{
+        noise::WhiteNoise, onepole::OnePoleLpf, osc::SinWt, pan::Pan2, util::Constant,
+        wrappers_core::UGenWrapperCoreExt,
     };
 
     #[test]

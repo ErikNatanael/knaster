@@ -32,11 +32,10 @@ use std::prelude::v1::*;
 use crate::inspection::{EdgeInspection, EdgeSource, GraphInspection, NodeInspection};
 use crate::wrappers_graph::done::WrDone;
 use knaster_core::{
-    AudioCtx, Done, Float, Param, ParameterError, ParameterValue, Size, UGen,
-    log::ArLogSender,
-    math::{Add, MathUGen},
+    AudioCtx, Done, Float, Param, ParameterError, ParameterValue, Size, UGen, log::ArLogSender,
     typenum::*,
 };
+use knaster_core_dsp::math::{Add, MathUGen};
 use rtrb::RingBuffer;
 use slotmap::{SecondaryMap, SlotMap, new_key_type};
 
@@ -2472,9 +2471,9 @@ impl<F: Float> UGen for FeedbackSource<F> {
 mod tests {
     use knaster_core::{
         Done, PTrigger,
-        envelopes::EnvAsr,
         typenum::{U0, U2},
     };
+    use knaster_core_dsp::envelopes::EnvAsr;
 
     use crate::{
         handle::HandleTrait,

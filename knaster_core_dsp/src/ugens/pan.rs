@@ -3,8 +3,7 @@
 //! UGens related to panning
 use core::marker::PhantomData;
 
-use knaster_macros::impl_ugen;
-use knaster_primitives::Float;
+use knaster_core::{Float, impl_ugen};
 
 /// Pan a mono signal to stereo using the cos/sine pan law. Pan value should be
 /// between -1 and 1, 0 being in the center.

@@ -29,11 +29,11 @@ Permission has been granted to release this port under the WDL/IPlug license:
     3. This notice may not be removed or altered from any source distribution.
 */
 
-use crate::PInteger;
 use crate::core::ops::Mul;
-use crate::num_derive::{FromPrimitive, ToPrimitive};
-use knaster_macros::{KnasterIntegerParameter, impl_ugen};
-use knaster_primitives::{Float, PFloat};
+use knaster_core::{
+    Float, KnasterIntegerParameter, PFloat, PInteger, impl_ugen,
+    num_derive::{FromPrimitive, ToPrimitive},
+};
 use std::prelude::v1::*;
 
 fn square_number<T: Mul + Copy>(num: T) -> <T as Mul>::Output {
@@ -70,7 +70,7 @@ fn blamp<F: Float>(mut t: F, dt: F) -> F {
 fn bitwise_or_zero<F: Float>(t: F) -> F {
     t.trunc()
 }
-use knaster_primitives::num_traits;
+use knaster_core::num_traits;
 
 #[derive(
     Default,

@@ -2,16 +2,14 @@
 //!
 //! UGens related to buffer playback. This module requires `std` or `alloc`.
 
-use crate::core::sync::Arc;
-use crate::{core::marker::PhantomData, rt_log};
+use crate::core::{marker::PhantomData, sync::Arc};
 
-use knaster_primitives::PFloat;
-use knaster_primitives::{Float, Seconds, Size, numeric_array::NumericArray, typenum::U0};
+use knaster_core::{
+    AudioCtx, Float, PFloat, Seconds, Size, UGenFlags, impl_ugen, numeric_array::NumericArray,
+    rt_log, typenum::U0,
+};
 
 use crate::dsp::buffer::Buffer;
-
-use super::AudioCtx;
-
 /// Reads a frame from a buffer and outputs it. The generic `Channels` determines how many
 /// channels will be read from the buffer.
 ///
@@ -36,7 +34,7 @@ pub struct BufferReader<F: Copy, Channels: Size> {
     _marker: PhantomData<Channels>,
 }
 
-#[knaster_macros::impl_ugen]
+#[impl_ugen]
 impl<F: Float, Channels: Size> BufferReader<F, Channels> {
     type Inputs = U0;
     type Outputs = Channels;
@@ -124,9 +122,9 @@ impl<F: Float, Channels: Size> BufferReader<F, Channels> {
     fn process(
         &mut self,
         _ctx: &mut AudioCtx,
-        flags: &mut super::UGenFlags,
-        _input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
-    ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
+        flags: &mut UGenFlags,
+        _input: knaster_core::Frame<Self::Sample, Self::Inputs>,
+    ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         let mut output = NumericArray::default();
         if self.finished {
             output.fill(F::ZERO);
@@ -151,12 +149,12 @@ impl<F: Float, Channels: Size> BufferReader<F, Channels> {
     fn process_block<InBlock, OutBlock>(
         &mut self,
         ctx: &mut AudioCtx,
-        flags: &mut super::UGenFlags,
+        flags: &mut UGenFlags,
         _input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_core::Block<Sample = Self::Sample>,
     {
         let mut stop_sample = None;
         if !self.finished {

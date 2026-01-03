@@ -1,8 +1,7 @@
-use knaster_primitives::{
-    Block, BlockRead, Frame, PFloat, numeric_array::NumericArray, typenum::*,
+use knaster_core::{
+    AudioCtx, Block, BlockRead, Frame, PFloat, ParameterHint, ParameterSmoothing, ParameterValue,
+    Rate, UGen, UGenFlags, numeric_array::NumericArray, typenum::*,
 };
-
-use crate::{AudioCtx, Rate, UGen, UGenFlags, parameters::*};
 
 /// Wrapper that enables input parameter smoothing for a [`UGen`]. Smoothing only
 /// works with `Float` type parameters.

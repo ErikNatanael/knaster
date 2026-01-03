@@ -1,15 +1,10 @@
-use crate::{
+use crate::core::{marker::PhantomData, ops::Add};
+use knaster_core::{
+    AudioCtx, Block, BlockRead, Float, Frame, PFloat, ParameterHint, ParameterValue, Size, UGen,
     UGenFlags,
-    core::{marker::PhantomData, ops::Add},
-};
-
-use knaster_primitives::{
-    Block, BlockRead, Float, Frame, PFloat, Size,
     numeric_array::NumericArray,
     typenum::{Add1, B1, Cmp, Less, Unsigned},
 };
-
-use crate::{AudioCtx, UGen, parameters::ParameterValue};
 
 /// Wrapper that enables setting a parameter to an audio rate signal. This must
 /// wrap a [`UGen`] for audio rate parameter changes to take effect.
@@ -68,7 +63,7 @@ impl<T: UGen> UGen for WrArParams<T> {
         T::param_descriptions()
     }
 
-    fn param_hints() -> NumericArray<crate::parameters::ParameterHint, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 
@@ -166,7 +161,7 @@ where
         T::param_descriptions()
     }
 
-    fn param_hints() -> NumericArray<crate::parameters::ParameterHint, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 

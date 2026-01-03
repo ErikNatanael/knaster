@@ -42,6 +42,7 @@ mod core {
     // pub use std::*;
 }
 pub use knaster_core::*;
+pub use knaster_core_dsp::*;
 
 // All these cfg are to make sure the error message for neither std nor alloc is shown. Without
 // them, too many other errors are shown which is confusing.
