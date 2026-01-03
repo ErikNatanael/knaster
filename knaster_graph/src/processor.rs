@@ -50,6 +50,8 @@ pub struct AudioProcessor<F: Float> {
     graph_node: Node<F>,
     sample_rate: u32,
     block_size: usize,
+    input_pointers: crate::core::vec::Vec<*const F>,
+    // The buffer referenced by `output_block`. OwnedRawBuffer will drop the allocation when dropped.
     _output_buffer: OwnedRawBuffer<F>,
     output_block: RawBlock<F>,
     frame_clock: u64,
@@ -88,8 +90,14 @@ impl<F: Float> AudioProcessor<F> {
         let log_receiver = ArLogReceiver::new();
         let (log_sender, log_receiver) = log_receiver.sender(options.log_channel_capacity);
         let ctx = AudioCtx::new(sample_rate, block_size, log_sender);
+
+        let mut input_pointers = crate::core::vec::Vec::with_capacity(Inputs::USIZE);
+        for _ in 0..Inputs::USIZE {
+            input_pointers.push(crate::core::ptr::null());
+        }
         let audio_processor = AudioProcessor {
             graph_node: node,
+            input_pointers,
             output_block: unsafe {
                 RawBlock::new(
                     output_buffer.add(0).expect("This is infallible"),
@@ -107,7 +115,42 @@ impl<F: Float> AudioProcessor<F> {
         (graph, audio_processor, log_receiver)
     }
 
+    /// Produce one block of audio with the given inputs
+    pub fn run(&mut self, inputs: &[&[F]]) {
+        assert_eq!(inputs.len(), self.input_pointers.len());
+        for (slice, ptr) in inputs.iter().zip(self.input_pointers.iter_mut()) {
+            *ptr = slice.as_ptr();
+        }
+        self.ctx.block.set_frame_clock(self.frame_clock);
+        let mut flags = UGenFlags::new();
+        let ugen = self
+            .graph_node
+            .ugen()
+            .expect("The top level graph should be guaranteed to be local to its node");
+        // SAFETY: The input pointers were just created from shared references
+        let input = unsafe { AggregateBlockRead::new(&self.input_pointers, self.block_size) };
+        ugen.process_block(&mut self.ctx, &mut flags, &input, &mut self.output_block);
+        self.frame_clock += self.block_size as u64;
+        self.shared_frame_clock
+            .store_new_time(Seconds::from_samples(
+                self.frame_clock,
+                self.sample_rate as u64,
+            ));
+    }
+
+    /// Produce one block of audio for a graph with no inputs
+    pub fn run_without_inputs(&mut self) {
+        assert_eq!(self.inputs(), 0);
+        // SAFETY: The input pointer slice is empty
+        unsafe {
+            self.run_raw_ptr_inputs(&[]);
+        }
+    }
+
     /// Produce one block of audio
+    ///
+    /// Prefer using [`run`] instead, unless you already need to store the raw pointers,
+    /// or creating the slice of slices is not feasible.
     ///
     /// # Safety
     ///
@@ -117,7 +160,7 @@ impl<F: Float> AudioProcessor<F> {
     /// the number of inputs to the top level Graph inside. There must be no
     /// mutable references to the allocations they point to until this function
     /// returns. The pointers will not be stored past this function call.
-    pub unsafe fn run(&mut self, input_pointers: &[*const F]) {
+    pub unsafe fn run_raw_ptr_inputs(&mut self, input_pointers: &[*const F]) {
         assert!(input_pointers.len() == self.inputs() as usize);
         self.ctx.block.set_frame_clock(self.frame_clock);
         let mut flags = UGenFlags::new();

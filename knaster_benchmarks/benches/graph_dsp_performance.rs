@@ -28,7 +28,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             &format!("256 sine * 0.05 -> out, block: {block_size}"),
             |b| {
                 b.iter(|| {
-                    unsafe { audio_processor.run(&[]) };
+                    audio_processor.run_without_inputs();
                     black_box(audio_processor.output_block().channel_as_slice_mut(0));
                 })
             },
@@ -65,7 +65,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         });
         c.bench_function(&format!("256 FM cascade, block: {block_size}"), |b| {
             b.iter(|| {
-                unsafe { audio_processor.run(&[]) };
+                audio_processor.run_without_inputs();
                 black_box(audio_processor.output_block().channel_as_slice_mut(0));
             })
         });
