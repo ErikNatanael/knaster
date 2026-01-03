@@ -37,10 +37,10 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
     for WrPreciseTiming<DELAYED_CHANGES_PER_BLOCK, T>
 {
     type Sample = T::Sample;
-
     type Inputs = T::Inputs;
-
     type Outputs = T::Outputs;
+    type FloatParameters = T::FloatParameters;
+    type Parameters = T::Parameters;
 
     fn init(&mut self, sample_rate: u32, block_size: usize) {
         self.ugen.init(sample_rate, block_size);
@@ -110,13 +110,11 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
         self.next_delay_i = 0;
     }
 
-    type FloatParameters = T::FloatParameters;
-
-    fn param_descriptions() -> NumericArray<&'static str, Self::FloatParameters> {
+    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
 
-    fn param_hints() -> NumericArray<crate::parameters::ParameterHint, Self::FloatParameters> {
+    fn param_hints() -> NumericArray<crate::parameters::ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 
@@ -142,5 +140,13 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
 
     fn set_delay_within_block_for_param(&mut self, _ctx: &mut AudioCtx, index: usize, delay: u16) {
         self.next_delay[index] = delay;
+    }
+
+    fn float_param_set_fn(
+        &mut self,
+        ctx: &mut AudioCtx,
+        index: usize,
+    ) -> fn(ugen: &mut Self, value: Self::Sample, ctx: &mut AudioCtx) {
+        todo!()
     }
 }

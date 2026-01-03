@@ -128,13 +128,10 @@ fn main() {
         TestInPlusParamGen::<f32, U1, U1>::param_descriptions()[3],
         "number4"
     );
-    let p3_descriptions = TestInPlusParamGen::<f32, U100, U0>::param_hints()[3]
-        .integer_hint()
-        .unwrap()
-        .descriptions()
-        .unwrap();
-    assert_eq!(p3_descriptions[0].1, "Zero");
-    assert_eq!(p3_descriptions[3].1, "Three");
+    let hints = TestInPlusParamGen::<f32, U8, U9>::param_hints();
+    let p3_hints = hints[3].integer_hint().unwrap();
+    assert_eq!(p3_hints.description(PInteger(0)), Some("Zero"));
+    assert_eq!(p3_hints.description(PInteger(3)), Some("Three"));
     let mut ctx = AudioCtx::new(44100, 64, ArLogSender::non_rt());
     let mut flags = UGenFlags::new();
     let mut ugen = TestInPlusParamGen::<f64, U1, U1>::new();

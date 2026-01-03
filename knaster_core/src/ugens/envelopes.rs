@@ -313,7 +313,7 @@ mod alloc_envelopes {
     use knaster_primitives::{
         Float, Frame,
         numeric_array::NumericArray,
-        typenum::{U0, U1, U4},
+        typenum::{U0, U1, U3, U4},
     };
 
     use crate::{AudioCtx, PInteger, ParameterHint, ParameterValue, UGen, UGenFlags};
@@ -399,7 +399,8 @@ mod alloc_envelopes {
         type Sample = F;
         type Inputs = U0;
         type Outputs = U1;
-        type FloatParameters = U4;
+        type FloatParameters = U1;
+        type Parameters = U3;
 
         fn init(&mut self, sample_rate: u32, _block_size: usize) {
             self.base_scale = 1.0 / sample_rate as f64;
@@ -524,6 +525,14 @@ mod alloc_envelopes {
                 }
                 _ => (),
             }
+        }
+
+        fn float_param_set_fn(
+            &mut self,
+            ctx: &mut AudioCtx,
+            index: usize,
+        ) -> fn(ugen: &mut Self, value: Self::Sample, ctx: &mut AudioCtx) {
+            todo!()
         }
     }
 }

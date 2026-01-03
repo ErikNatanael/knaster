@@ -126,11 +126,16 @@ where
     ) -> Frame<Self::Sample, Self::Outputs> {
         // The index T::Inputs is one more than the previous number of audio
         // inputs, i.e. the one we added with the wrapper.
-        self.ugen.param_apply(
-            ctx,
-            ParamIndex::USIZE,
-            ParameterValue::Float(input[<T as UGen>::Inputs::USIZE].to_f64() as PFloat),
-        );
+        let value = input[<T as UGen>::Inputs::USIZE];
+        self.ugen
+            .float_param_set_fn(ctx, ParamIndex::USIZE)
+            .expect("param index out of bounds")
+            .call(&mut self.ugen, value, ctx);
+        // self.ugen.param_apply(
+        //     ctx,
+        //     ParamIndex::USIZE,
+        //     ParameterValue::Float(input[<T as UGen>::Inputs::USIZE].to_f64() as PFloat),
+        // );
         let mut new_input = NumericArray::default();
         for i in 0..T::Inputs::USIZE {
             new_input[i] = input[i];
@@ -172,5 +177,13 @@ where
 
     fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         self.ugen.param_apply(ctx, index, value);
+    }
+
+    fn float_param_set_fn(
+        &mut self,
+        ctx: &mut AudioCtx,
+        index: usize,
+    ) -> fn(ugen: &mut Self, value: Self::Sample, ctx: &mut AudioCtx) {
+        todo!()
     }
 }

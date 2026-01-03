@@ -101,8 +101,6 @@ impl ParameterValue {
     }
 }
 
-#[allow(unused)]
-use crate::wrappers_core::WrSmoothParams;
 /// A setting for smoothing of parameter changes.
 ///
 /// Used to interpolate parameter changes over time when the UGen is wrapped in a [`WrSmoothParams`]

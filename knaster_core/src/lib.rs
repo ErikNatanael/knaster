@@ -38,7 +38,13 @@ pub mod log;
 mod parameters;
 #[cfg(test)]
 mod tests;
+
 mod ugen;
+#[cfg(feature = "ugens")]
+mod ugens;
+#[cfg(feature = "ugens")]
+pub use ugens::*;
+#[cfg(feature = "ugens")]
 pub mod wrappers_core;
 
 pub use knaster_macros::*;

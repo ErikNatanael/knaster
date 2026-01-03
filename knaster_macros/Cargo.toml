@@ -3,6 +3,9 @@ name = "knaster_macros"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+fail_on_parameter_signature_conversion = []
+
 [dependencies]
 syn = { version = "2.0", features = ["full", "extra-traits"] }
 proc-macro2 = "1.0"
@@ -16,7 +19,7 @@ proc-macro = true
 
 [dev-dependencies]
 trybuild = { version = "1.0", features = ["diff"] }
-knaster_core = { path = "../knaster_core" }
+knaster_core = { path = "../knaster_core", default-features = false }
 
 [[test]]
 name = "tests"

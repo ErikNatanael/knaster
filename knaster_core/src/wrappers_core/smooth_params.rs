@@ -1,5 +1,5 @@
 use knaster_primitives::{
-    Block, BlockRead, Frame, PFloat, numeric_array::NumericArray, typenum::*,
+    Block, BlockRead, Float, Frame, PFloat, numeric_array::NumericArray, typenum::*,
 };
 
 use crate::{AudioCtx, Rate, UGen, UGenFlags, parameters::*};
@@ -14,7 +14,7 @@ pub struct WrSmoothParams<T: UGen> {
     ugen: T,
     parameters: NumericArray<Rate, T::FloatParameters>,
     smoothing: NumericArray<ParameterSmoothing, T::FloatParameters>,
-    smoothing_state: NumericArray<ParameterSmoothingState, T::FloatParameters>,
+    smoothing_state: NumericArray<ParameterSmoothingState<T::Sample>, T::FloatParameters>,
 }
 
 impl<T: UGen> WrSmoothParams<T> {
@@ -104,10 +104,10 @@ impl<T: UGen> WrSmoothParams<T> {
 }
 impl<T: UGen> UGen for WrSmoothParams<T> {
     type Sample = T::Sample;
-
     type Inputs = T::Inputs;
-
     type Outputs = T::Outputs;
+    type FloatParameters = T::FloatParameters;
+    type Parameters = T::Parameters;
 
     fn init(&mut self, sample_rate: u32, block_size: usize) {
         self.ugen.init(sample_rate, block_size)
@@ -123,7 +123,11 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
         for (j, state) in self.smoothing_state.iter_mut().enumerate() {
             if let Some(new_value) = state.next_value(1, 0) {
                 self.ugen
-                    .param_apply(ctx, j, ParameterValue::Float(new_value))
+                    .float_param_set_fn(ctx, j)
+                    .expect("param index out of bounds")
+                    .call(&mut self.ugen, new_value, ctx);
+                // self.ugen
+                //     .param_apply(ctx, j, ParameterValue::Float(new_value))
             }
         }
         self.ugen.process(ctx, flags, input)
@@ -188,18 +192,17 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
             self.ugen.process_block(ctx, flags, input, output);
         }
     }
-    type FloatParameters = T::FloatParameters;
 
-    fn param_descriptions() -> NumericArray<&'static str, Self::FloatParameters> {
+    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
 
-    fn param_hints() -> NumericArray<ParameterHint, Self::FloatParameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 
     fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
-        if index >= T::FloatParameters::USIZE {
+        if index >= T::Parameters::USIZE {
             return;
         }
         // Received a new parameter change.
@@ -243,24 +246,32 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
             }
         }
     }
+
+    fn float_param_set_fn(
+        &mut self,
+        ctx: &mut AudioCtx,
+        index: usize,
+    ) -> fn(ugen: &mut Self, value: Self::Sample, ctx: &mut AudioCtx) {
+        todo!()
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
 /// Represents the internal state of a channel of parameter smoothing.
-enum ParameterSmoothingState {
+enum ParameterSmoothingState<F> {
     None {
-        current_value: PFloat,
+        current_value: F,
     },
     Linear {
-        start_value: PFloat,
-        end_value: PFloat,
+        start_value: F,
+        end_value: F,
         duration_frames: usize,
         frames_elapsed: usize,
         rate: Rate,
         done: bool,
     },
 }
-impl ParameterSmoothingState {
+impl<F: Float> ParameterSmoothingState<F> {
     pub fn next_value(&mut self, block_size: usize, frame_in_block: usize) -> Option<PFloat> {
         match self {
             ParameterSmoothingState::None { .. } => None,
@@ -310,8 +321,10 @@ impl ParameterSmoothingState {
         }
     }
 }
-impl Default for ParameterSmoothingState {
+impl<F: Float> Default for ParameterSmoothingState<F> {
     fn default() -> Self {
-        ParameterSmoothingState::None { current_value: 0. }
+        ParameterSmoothingState::None {
+            current_value: F::ZERO,
+        }
     }
 }

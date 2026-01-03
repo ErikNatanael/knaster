@@ -11,7 +11,7 @@ use knaster_primitives::{Float, PFloat};
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub use wavetable_vec::*;
 
-use super::AudioCtx;
+use crate::AudioCtx;
 #[cfg(any(feature = "alloc", feature = "std"))]
 mod wavetable_vec {
     use crate::core::marker::PhantomData;

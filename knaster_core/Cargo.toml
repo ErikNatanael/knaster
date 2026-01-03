@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["std", "sound_files"]
+default = ["std", "sound_files", "ugens"]
 # Enables the alloc in no_std. `alloc` does nothing if `std` is enabled.
 alloc = ["knaster_primitives/alloc", "no-std-compat/alloc", "dep:embassy-sync"]
 # Enables the standard library. `alloc` does nothing if `std` is enabled.
@@ -20,6 +20,8 @@ symphonia = ["dep:symphonia"]
 # Requires std to be enabled
 hound = ["dep:hound"]
 sound_files = ["symphonia", "hound"]
+# Enables the UGen implementations. This is optional to avoid a circular dependency with knaster_macros
+ugens = []
 
 [dependencies]
 knaster_primitives = { path = "../knaster_primitives" }

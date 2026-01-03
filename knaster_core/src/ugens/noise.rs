@@ -180,6 +180,8 @@ impl<F: Float> RandomLin<F> {
             phase_step: freq,
         }
     }
+    #[param]
+    fn test(&mut self, f: F, ctx: &mut AudioCtx) {}
 
     #[inline]
     fn new_value(&mut self) {

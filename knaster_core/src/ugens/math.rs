@@ -12,7 +12,7 @@ use knaster_primitives::{
 
 use crate::UGen;
 
-use super::{AudioCtx, UGenFlags};
+use crate::{AudioCtx, UGenFlags};
 
 /// A maths operation of the form 2 in 1 out e.g. addition, multiplication etc.
 pub trait Operation<T> {
@@ -112,6 +112,8 @@ where
     type Sample = F;
     type Inputs = Double<Channels>;
     type Outputs = Channels;
+    type FloatParameters = U0;
+    type Parameters = U0;
 
     fn process(
         &mut self,
@@ -155,7 +157,6 @@ where
         }
         // dbg!(input.channel_as_slice(1));
     }
-    type FloatParameters = U0;
     fn param_descriptions() -> NumericArray<&'static str, Self::FloatParameters> {
         NumericArray::default()
     }
@@ -163,6 +164,13 @@ where
         NumericArray::from([])
     }
     fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: crate::ParameterValue) {}
+
+    fn float_param_set_fn(
+        &mut self,
+        ctx: &mut AudioCtx,
+        index: usize,
+    ) -> fn(ugen: &mut Self, value: Self::Sample, ctx: &mut AudioCtx) {
+    }
 }
 
 /// Mathematical operation of the form 1 in 1 out (e.g. sqrt, fract, ceil)
