@@ -38,7 +38,7 @@ pub fn main() {
         // graph.commit_changes().unwrap();
     });
     loop {
-        unsafe { audio_processor.run(&[]) };
+        audio_processor.run_without_inputs();
         black_box(audio_processor.output_block().channel_as_slice_mut(0));
     }
 }

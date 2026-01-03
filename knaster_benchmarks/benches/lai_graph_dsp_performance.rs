@@ -24,7 +24,7 @@ pub fn lai_256_sine_mul_0_05_to_out_block_32() {
         }
     });
     for _ in 0..256 {
-        unsafe { audio_processor.run(&[]) };
+        audio_processor.run_without_inputs();
         black_box(audio_processor.output_block().channel_as_slice_mut(0));
     }
 }
@@ -59,7 +59,7 @@ pub fn lai_256_fm_cascade_block_32() {
         // graph.commit_changes().unwrap();
     });
     for _ in 0..256 {
-        unsafe { audio_processor.run(&[]) };
+        audio_processor.run_without_inputs();
         black_box(audio_processor.output_block().channel_as_slice_mut(0));
     }
 }

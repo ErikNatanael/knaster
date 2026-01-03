@@ -127,40 +127,9 @@ unsafe impl<F: Float> Sync for JackProcess<F> {}
 
 impl<F: Float> jack::ProcessHandler for JackProcess<F> {
     fn process(&mut self, _: &jack::Client, ps: &jack::ProcessScope) -> jack::Control {
-        // Duplication due to conditional compilation
-        #[cfg(all(debug_assertions, feature = "assert_no_alloc"))]
-        {
-            assert_no_alloc(|| {
-                for (i, in_port) in self.in_ports.iter().enumerate() {
-                    let in_port_slice = in_port.as_slice(ps);
-                    let in_buffer = self.input_block.channel_as_slice_mut(i);
-                    // in_buffer.clone_from_slice(in_port_slice);
-                    for (from_jack, graph_in) in in_port_slice.iter().zip(in_buffer.iter_mut()) {
-                        *graph_in = F::new(*from_jack);
-                    }
-                }
-                unsafe { self.audio_processor.run(&self.input_block_pointers) }
-
-                let graph_output_buffers = self.audio_processor.output_block();
-                for (i, out_port) in self.out_ports.iter_mut().enumerate() {
-                    let out_buffer = graph_output_buffers.channel_as_slice_mut(i);
-                    for sample in out_buffer.iter_mut() {
-                        *sample = sample.clamp(-F::ONE, F::ONE);
-                        if sample.is_nan() {
-                            *sample = F::ZERO;
-                        }
-                    }
-                    let out_port_slice = out_port.as_mut_slice(ps);
-                    // out_port_slice.clone_from_slice(out_buffer);
-                    for (to_jack, graph_out) in out_port_slice.iter_mut().zip(out_buffer.iter()) {
-                        *to_jack = graph_out.to_f32().unwrap();
-                    }
-                }
-                jack::Control::Continue
-            })
-        }
-        #[cfg(not(all(debug_assertions, feature = "assert_no_alloc")))]
-        {
+        let do_the_thing = || {
+            // TODO: For an f32 JackProcess, we should be able to use the buffers as is without
+            // copying the data, but setting the input pointers instead.
             for (i, in_port) in self.in_ports.iter().enumerate() {
                 let in_port_slice = in_port.as_slice(ps);
                 let in_buffer = self.input_block.channel_as_slice_mut(i);
@@ -169,7 +138,10 @@ impl<F: Float> jack::ProcessHandler for JackProcess<F> {
                     *graph_in = F::new(*from_jack);
                 }
             }
-            unsafe { self.audio_processor.run(&self.input_block_pointers) }
+            unsafe {
+                self.audio_processor
+                    .run_raw_ptr_inputs(&self.input_block_pointers)
+            }
 
             let graph_output_buffers = self.audio_processor.output_block();
             for (i, out_port) in self.out_ports.iter_mut().enumerate() {
@@ -187,7 +159,13 @@ impl<F: Float> jack::ProcessHandler for JackProcess<F> {
                 }
             }
             jack::Control::Continue
+        };
+        #[cfg(all(debug_assertions, feature = "assert_no_alloc"))]
+        {
+            assert_no_alloc(do_the_thing)
         }
+        #[cfg(not(all(debug_assertions, feature = "assert_no_alloc")))]
+        do_the_thing()
     }
 }
 
