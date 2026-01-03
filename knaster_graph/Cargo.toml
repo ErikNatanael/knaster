@@ -20,7 +20,7 @@ unstable = ["knaster_core/unstable", "knaster_core_dsp/unstable"]
 jack = ["dep:jack"]
 assert_no_alloc = ["dep:assert_no_alloc"]
 alloc = ["knaster_core/alloc", "knaster_core_dsp/alloc", "no-std-compat/alloc"]
-no_denormals = ["knaster_core/no_denormals", "knaster_core_dsp/no_denormals"]
+no_denormals = ["knaster_core_dsp/no_denormals"]
 
 [dependencies]
 knaster_core = { path = "../knaster_core", default-features = false }

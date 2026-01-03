@@ -777,15 +777,15 @@ checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
 name = "embassy-sync"
-version = "0.6.2"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d2c8cdff05a7a51ba0087489ea44b0b1d97a296ca6b1d6d1a33ea7423d34049"
+checksum = "73974a3edbd0bd286759b3d483540f0ebef705919a5f56f4fc7709066f71689b"
 dependencies = [
  "cfg-if",
  "critical-section",
  "embedded-io-async",
+ "futures-core",
  "futures-sink",
- "futures-util",
  "heapless",
 ]
 
@@ -1440,14 +1440,10 @@ name = "knaster_core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "embassy-sync",
- "fastapprox",
- "fastrand",
  "knaster_macros",
  "knaster_primitives",
  "log",
  "no-std-compat",
- "no_denormals",
  "rtrb",
  "target-features",
  "thiserror 2.0.12",
@@ -1671,9 +1667,9 @@ dependencies = [
 
 [[package]]
 name = "no_denormals"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50a63f8a8efd33b4706cecbc4b845b0c63e9c883f8a5404a0fd7ce2a0933421f"
+checksum = "b6bcfe410abc339c9f8c226aceebf946bf26e3e2eca738be3fec9e9ee97d54aa"
 
 [[package]]
 name = "nom"
