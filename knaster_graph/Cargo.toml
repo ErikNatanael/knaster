@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-# default = ["alloc"]
-default = ["std", "cpal", "dot"]
+default = ["alloc"]
+# default = ["std", "cpal", "dot"]
 std = [
   "knaster_core/std",
   "knaster_core_dsp/std",
@@ -19,14 +19,20 @@ dot = ["dep:open"]
 unstable = ["knaster_core/unstable", "knaster_core_dsp/unstable"]
 jack = ["dep:jack"]
 assert_no_alloc = ["dep:assert_no_alloc"]
-alloc = ["knaster_core/alloc", "knaster_core_dsp/alloc", "no-std-compat/alloc"]
+alloc = [
+  "knaster_core/alloc",
+  "knaster_core_dsp/alloc",
+  "no-std-compat/alloc",
+  "dep:spin",
+]
 no_denormals = ["knaster_core_dsp/no_denormals"]
 
 [dependencies]
 knaster_core = { path = "../knaster_core", default-features = false }
 knaster_core_dsp = { path = "../knaster_core_dsp", default-features = false }
 
-no-std-compat = { version = "0.4.1", features = ["compat_hash", "compat_sync"] }
+no-std-compat = { version = "0.4.1", features = ["compat_hash"] }
+spin = { version = "0.10.0", optional = true }
 assert_no_alloc = { version = "1.1.2", optional = true }
 cpal = { version = "0.15.3", default-features = false, optional = true }
 jack = { version = "0.13.2", optional = true }

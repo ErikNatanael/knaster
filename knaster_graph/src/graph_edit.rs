@@ -15,7 +15,7 @@
 //! - [X] Implement remaining arithmetics
 //! - [ ] API for scheduling parameter changes
 
-use crate::core::sync::{RwLockReadGuard, RwLockWriteGuard};
+use crate::core::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use core::mem::MaybeUninit;
 use core::ops::{BitOr, Div, Shr, Sub};
 
@@ -24,7 +24,6 @@ use crate::core::{
     clone::Clone,
     marker::PhantomData,
     ops::{Add, Mul},
-    sync::RwLock,
 };
 use crate::graph::{Channels, GraphError, GraphOptions, NodeOrGraph};
 use crate::graph_gen::GraphGen;
