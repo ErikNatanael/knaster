@@ -23,12 +23,7 @@ impl<F: Float> SafetyLimiter<F> {
             _float: PhantomData,
         }
     }
-    fn process(
-        &mut self,
-        _ctx: &mut AudioCtx,
-        _flags: &mut UGenFlags,
-        input: [F; 1],
-    ) -> [F; 1] {
+    fn process(&mut self, _ctx: &mut AudioCtx, _flags: &mut UGenFlags, input: [F; 1]) -> [F; 1] {
         let s = input[0];
         let s = s.clamp(F::new(-1.0), F::new(1.0));
         let s = if s.is_nan() { F::new(0.0) } else { s };
