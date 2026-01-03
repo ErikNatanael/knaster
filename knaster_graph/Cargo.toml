@@ -18,6 +18,7 @@ dot = ["dep:open"]
 # Enables potential optimisations that require nightly rust
 unstable = ["knaster_core/unstable", "knaster_core_dsp/unstable"]
 jack = ["dep:jack"]
+sound_files = ["knaster_core_dsp/sound_files"]
 assert_no_alloc = ["dep:assert_no_alloc"]
 alloc = [
   "knaster_core/alloc",
