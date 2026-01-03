@@ -127,7 +127,8 @@ unsafe impl<F: Float> Sync for JackProcess<F> {}
 
 impl<F: Float> jack::ProcessHandler for JackProcess<F> {
     fn process(&mut self, _: &jack::Client, ps: &jack::ProcessScope) -> jack::Control {
-        let do_the_thing = || {
+        #[allow(unused_mut)]
+        let mut do_the_thing = || {
             // TODO: For an f32 JackProcess, we should be able to use the buffers as is without
             // copying the data, but setting the input pointers instead.
             for (i, in_port) in self.in_ports.iter().enumerate() {
