@@ -1,6 +1,6 @@
-use knaster_primitives::{Frame, numeric_array::NumericArray};
+use knaster_core::{Frame, numeric_array::NumericArray};
 
-use crate::{AudioCtx, ParameterValue, UGen, UGenFlags, rt_log};
+use knaster_core::{AudioCtx, ParameterHint, ParameterValue, UGen, UGenFlags, rt_log};
 
 /// Enables sample accurate parameter changes within a block. Changes must be
 /// scheduled in the order they are to be applied.
@@ -67,8 +67,8 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_core::Block<Sample = Self::Sample>,
     {
         let mut block_i = 0;
         let mut change_i = 0;
@@ -116,7 +116,7 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
         T::param_descriptions()
     }
 
-    fn param_hints() -> NumericArray<crate::parameters::ParameterHint, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 

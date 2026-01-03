@@ -2,10 +2,10 @@
 //!
 //! [`UGen`]s for delays.
 
+use knaster_core::impl_ugen;
 #[allow(unused)]
-use crate::{AudioCtx, PFloat, UGen, UGenFlags};
-use knaster_macros::impl_ugen;
-use knaster_primitives::{Float, Seconds};
+use knaster_core::{AudioCtx, PFloat, UGen, UGenFlags};
+use knaster_core::{Float, Seconds};
 use std::prelude::v1::*;
 
 /// Delay by an integer number of samples, no interpolation. This is good for e.g. triggers.
@@ -32,7 +32,7 @@ impl<F: Float> SampleDelay<F> {
     /// Set delay time in seconds
     #[param]
     pub fn delay_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
-        self.delay_samples = (seconds * ctx.sample_rate as PFloat) as usize;
+        self.delay_samples = (seconds * ctx.sample_rate() as PFloat) as usize;
     }
     fn process(&mut self, _ctx: &mut AudioCtx, _flags: &mut UGenFlags, input: [F; 1]) -> [F; 1] {
         self.buffer[self.write_position] = input[0];
@@ -135,7 +135,7 @@ impl<F: Float> AllpassDelay<F> {
     /// Set delay time in seconds
     #[param]
     pub fn delay_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
-        let delay_frames = seconds * ctx.sample_rate as PFloat;
+        let delay_frames = seconds * ctx.sample_rate() as PFloat;
         if (delay_frames as usize) < self.buffer.len() {
             self.set_delay_in_frames(F::new(delay_frames));
         }
@@ -230,7 +230,7 @@ impl<F: Float> AllpassFeedbackDelay<F> {
     /// Set delay time in seconds
     #[param]
     pub fn delay_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
-        self.set_delay_in_frames(F::new(seconds * ctx.sample_rate as f64));
+        self.set_delay_in_frames(F::new(seconds * ctx.sample_rate() as f64));
         self.previous_delay_time = F::new(seconds);
     }
     /// Set delay feedback
@@ -272,7 +272,7 @@ impl<F: Float> AllpassFeedbackDelay<F> {
 ///
 /// # Examples
 /// ```
-/// # use knaster_core::delay::StaticSampleDelay;
+/// # use knaster_core_dsp::delay::StaticSampleDelay;
 /// let mut delay = StaticSampleDelay::<f64>::new(4);
 /// assert_eq!(delay.read(), 0.0);
 /// delay.write_and_advance(1.0);

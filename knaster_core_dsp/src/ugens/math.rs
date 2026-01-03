@@ -4,15 +4,14 @@
 //! or operators, rather than manually pushing and connecting UGens.
 use core::marker::PhantomData;
 
-use knaster_primitives::{
-    Float, Size,
+use knaster_core::{
+    Float, ParameterHint, ParameterValue, Size,
     numeric_array::NumericArray,
     typenum::{Double, U0, U1},
 };
 
-use crate::UGen;
-
-use super::{AudioCtx, UGenFlags};
+use knaster_core::UGen;
+use knaster_core::{AudioCtx, UGenFlags};
 
 /// A maths operation of the form 2 in 1 out e.g. addition, multiplication etc.
 pub trait Operation<T> {
@@ -106,8 +105,8 @@ impl<F: Float, Channels: Size, Op: Operation<F>> MathUGen<F, Channels, Op> {
 }
 impl<F: Float, Channels: Size, Op: Operation<F>> UGen for MathUGen<F, Channels, Op>
 where
-    Channels: crate::core::ops::Shl<knaster_primitives::typenum::B1> + Send,
-    <Channels as crate::core::ops::Shl<knaster_primitives::typenum::B1>>::Output: Size,
+    Channels: crate::core::ops::Shl<knaster_core::typenum::B1> + Send,
+    <Channels as crate::core::ops::Shl<knaster_core::typenum::B1>>::Output: Size,
 {
     type Sample = F;
     type Inputs = Double<Channels>;
@@ -117,8 +116,8 @@ where
         &mut self,
         _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
-        input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
-    ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
+        input: knaster_core::Frame<Self::Sample, Self::Inputs>,
+    ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         // This is probably quite inefficient, but block processing will be the
         // standard way of running.
         //
@@ -143,8 +142,8 @@ where
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_core::Block<Sample = Self::Sample>,
     {
         for channel in 0..Channels::USIZE {
             Op::apply(
@@ -159,10 +158,10 @@ where
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         NumericArray::default()
     }
-    fn param_hints() -> NumericArray<crate::ParameterHint, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         NumericArray::from([])
     }
-    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: crate::ParameterValue) {}
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: ParameterValue) {}
 }
 
 /// Mathematical operation of the form 1 in 1 out (e.g. sqrt, fract, ceil)
@@ -270,8 +269,8 @@ impl<F: Float, Op: Operation1<F>> UGen for Math1UGen<F, Op> {
         &mut self,
         _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
-        input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
-    ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
+        input: knaster_core::Frame<Self::Sample, Self::Inputs>,
+    ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         // This is probably quite inefficient, but block processing will be the
         // standard way of running.
         //
@@ -290,8 +289,8 @@ impl<F: Float, Op: Operation1<F>> UGen for Math1UGen<F, Op> {
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_primitives::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_primitives::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
+        OutBlock: knaster_core::Block<Sample = Self::Sample>,
     {
         Op::apply(input.channel_as_slice(0), output.channel_as_slice_mut(0));
     }
@@ -299,8 +298,93 @@ impl<F: Float, Op: Operation1<F>> UGen for Math1UGen<F, Op> {
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         NumericArray::default()
     }
-    fn param_hints() -> NumericArray<crate::ParameterHint, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         NumericArray::from([])
     }
-    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: crate::ParameterValue) {}
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: ParameterValue) {}
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::math::{Add, Div, MathUGen, Mul, Sub};
+    use knaster_core::{
+        AudioCtx, Block, StaticBlock, UGen, UGenFlags,
+        log::ArLogReceiver,
+        typenum::{U1, U2, U4},
+    };
+
+    #[test]
+    fn gen_arithmetics() {
+        const SR: u32 = 48000;
+        const BLOCK: usize = 4;
+        let log_receiver = ArLogReceiver::new();
+        let (logger, _log_receiver) = log_receiver.sender(100);
+        let mut ctx = AudioCtx::new(SR, BLOCK, logger);
+        let ctx = &mut ctx;
+        let mut flags = UGenFlags::new();
+        let mut b0 = StaticBlock::<f32, U2, U4>::new();
+        let mut b1 = StaticBlock::<f32, U2, U4>::new();
+        b0.channel_as_slice_mut(0).fill(3.0);
+        b0.channel_as_slice_mut(1).fill(2.0);
+
+        // Addition
+        let mut m = MathUGen::<f32, U1, Add>::new();
+        assert_eq!(m.process(ctx, &mut flags, [3.0, 2.0].into())[0], 5.0);
+        m.process_block(ctx, &mut flags, &b0, &mut b1);
+        for &sample in b1.channel_as_slice(0) {
+            assert_eq!(sample, 5.0);
+        }
+        //Sub
+        let mut m = MathUGen::<f32, U1, Sub>::new();
+        assert_eq!(m.process(ctx, &mut flags, [3.0, 2.0].into())[0], 1.0);
+        m.process_block(ctx, &mut flags, &b0, &mut b1);
+        for &sample in b1.channel_as_slice(0) {
+            assert_eq!(sample, 1.0);
+        }
+        // Div
+        let mut m = MathUGen::<f32, U1, Div>::new();
+        assert_eq!(m.process(ctx, &mut flags, [3.0, 2.0].into())[0], 1.5);
+        m.process_block(ctx, &mut flags, &b0, &mut b1);
+        for &sample in b1.channel_as_slice(0) {
+            assert_eq!(sample, 1.5);
+        }
+        // Mul
+        let mut m = MathUGen::<f32, U1, Mul>::new();
+        assert_eq!(m.process(ctx, &mut flags, [3.0, 2.0].into())[0], 6.0);
+        m.process_block(ctx, &mut flags, &b0, &mut b1);
+        for &sample in b1.channel_as_slice(0) {
+            assert_eq!(sample, 6.0);
+        }
+    }
+    #[test]
+    fn gen_arithmetics_multichannel() {
+        const SR: u32 = 48000;
+        const BLOCK: usize = 4;
+        let log_receiver = ArLogReceiver::new();
+        let (logger, _log_receiver) = log_receiver.sender(100);
+        let mut ctx = AudioCtx::new(SR, BLOCK, logger);
+        let ctx = &mut ctx;
+        let mut flags = UGenFlags::new();
+        let mut b0 = StaticBlock::<f64, U4, U4>::new();
+        let mut b1 = StaticBlock::<f64, U2, U4>::new();
+        // Channels are laid out so that all the LHS come first, then all the RHS
+        b0.channel_as_slice_mut(0).fill(3.0);
+        b0.channel_as_slice_mut(1).fill(7.0);
+        b0.channel_as_slice_mut(2).fill(2.0);
+        b0.channel_as_slice_mut(3).fill(4.0);
+
+        // Addition
+        let mut m = MathUGen::<f64, U2, Add>::new();
+        assert_eq!(
+            m.process(ctx, &mut flags, [3.0, 7.0, 2.0, 4.0].into())[0..2],
+            [5.0, 11.0]
+        );
+        m.process_block(ctx, &mut flags, &b0, &mut b1);
+        for &sample in b1.channel_as_slice(0) {
+            assert_eq!(sample, 5.0);
+        }
+        for &sample in b1.channel_as_slice(1) {
+            assert_eq!(sample, 11.0);
+        }
+    }
 }

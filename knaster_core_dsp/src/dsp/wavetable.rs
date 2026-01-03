@@ -67,7 +67,7 @@ mod wavetable_vec {
     use crate::core::f64::consts::PI;
     use crate::dsp::xorrng::XOrShift32Rng;
 
-    use knaster_primitives::Float;
+    use knaster_core::Float;
 
     /// Non-anti-aliased wavetable.
     ///

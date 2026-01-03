@@ -1,12 +1,14 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use knaster_core::envelopes::EnvAsr;
 use knaster_core::typenum::U1;
 use knaster_core::{
     Done,
-    osc::SinNumeric,
     typenum::{U0, U2},
+};
+use knaster_core_dsp::{
+    envelopes::EnvAsr,
+    osc::SinNumeric,
     wrappers_core::{UGenWrapperCoreExt, WrSmoothParams},
 };
 use knaster_graph::graph_edit::Parameter;

@@ -2,20 +2,14 @@
 //!
 //! Utility UGens
 use crate::core::marker::PhantomData;
-use crate::rt_log;
-
-use knaster_macros::impl_ugen;
-use knaster_primitives::Float;
-use knaster_primitives::PFloat;
-
-use crate::{AudioCtx, UGenFlags};
+use knaster_core::{AudioCtx, Float, PFloat, UGenFlags, impl_ugen, rt_log};
 
 /// Sets the done flag when it receives a trigger. Use in combination with `Graph::push_with_done_action` or [`WrDone`] and a [`Done`] which frees more than the current node.
 pub struct DoneOnTrig<F> {
     triggered: bool,
     _phantom: PhantomData<F>,
 }
-#[knaster_macros::impl_ugen]
+#[impl_ugen]
 impl<F: Float> DoneOnTrig<F> {
     #[allow(clippy::new_without_default)]
     #[allow(missing_docs)]
@@ -70,7 +64,7 @@ impl<F: Float> Constant<F> {
 }
 
 #[allow(unused)]
-use crate::log::ArLogReceiver;
+use knaster_core::log::ArLogReceiver;
 /// Log the input to this UGen to the audio rate log every N samples. See [`ArLogReceiver`] for how
 /// to receive the log messages.
 pub struct LogProbe<F: Float> {
@@ -79,7 +73,7 @@ pub struct LogProbe<F: Float> {
     name: &'static str,
     _phantom: PhantomData<F>,
 }
-#[knaster_macros::impl_ugen]
+#[impl_ugen]
 impl<F: Float> LogProbe<F> {
     #[allow(missing_docs)]
     pub fn new(name: &'static str) -> Self {

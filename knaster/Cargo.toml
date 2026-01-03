@@ -4,12 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
+alloc = ["knaster_graph/alloc", "no-std-compat/alloc"]
 default = ["std", "cpal", "dot"]
 std = ["knaster_graph/std", "no-std-compat/std"]
-alloc = ["knaster_graph/alloc", "no-std-compat/alloc"]
 dot = ["knaster_graph/dot"]
 unstable = ["knaster_graph/unstable"]
-sound_files = ["knaster_graph/sound_files"]
+# sound_files = ["knaster_core_dsp/sound_files"]
 jack = ["knaster_graph/jack"]
 cpal = ["knaster_graph/cpal"]
 no_denormals = ["knaster_graph/no_denormals"]
@@ -42,4 +42,3 @@ required-features = ["std", "cpal"]
 [[example]]
 name = "simple_sine"
 required-features = ["std", "cpal"]
-

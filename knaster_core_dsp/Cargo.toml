@@ -1,0 +1,44 @@
+[package]
+name = "knaster_core_dsp"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["std", "sound_files"]
+# Enables the alloc in no_std. `alloc` does nothing if `std` is enabled.
+alloc = ["knaster_core/alloc", "no-std-compat/alloc", "dep:embassy-sync"]
+# Enables the standard library. `alloc` does nothing if `std` is enabled.
+std = ["knaster_core/std", "no-std-compat/std"]
+# Enables unstable Rust features that may speed up execution
+unstable = [
+  "dep:target-features",
+  "no-std-compat/unstable",
+  "knaster_core/unstable",
+]
+# Requires std to be enabled
+symphonia = ["dep:symphonia"]
+# Requires std to be enabled
+hound = ["dep:hound"]
+sound_files = ["symphonia", "hound"]
+
+[dependencies]
+# Knaster dependencies
+knaster_core = { path = "../knaster_core" }
+# DSP dependencies
+symphonia = { version = "0.5.4", optional = true, features = ["all-codecs"] }
+hound = { version = "3.5.1", optional = true }
+no_denormals = { version = "0.3.0", optional = true }
+# Other dependencies
+target-features = { version = "0.1.6", optional = true }
+thiserror = { version = "2.0.3", default-features = false }
+fastrand = { version = "2.3.0", default-features = false }
+fastapprox = "0.3.1"
+rtrb = { version = "0.3.2", default-features = false }
+log = "0.4.26"
+no-std-compat = "0.4.1"
+embassy-sync = { version = "0.7.2", optional = true }
+
+[dev-dependencies]
+anyhow = "1.0"
+# For comparing floats in tests for miri
+float-cmp = "0.10.0"

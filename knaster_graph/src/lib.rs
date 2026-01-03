@@ -32,16 +32,14 @@ extern crate no_std_compat as std;
 mod core {
     #[cfg(any(feature = "std", feature = "alloc"))]
     pub use no_std_compat::*;
-    // #[cfg(all(feature = "alloc", not(feature = "std")))]
-    // extern crate alloc as __alloc;
-    // #[cfg(all(feature = "alloc", not(feature = "std")))]
-    // pub use __alloc::*;
-    // #[cfg(not(feature = "std"))]
-    // pub use core::*;
-    // #[cfg(feature = "std")]
-    // pub use std::*;
+    #[cfg(all(feature = "alloc", not(feature = "std")))]
+    pub mod sync {
+        pub use no_std_compat::sync::{Arc, atomic};
+        pub use spin::*;
+    }
 }
 pub use knaster_core::*;
+pub use knaster_core_dsp::*;
 
 // All these cfg are to make sure the error message for neither std nor alloc is shown. Without
 // them, too many other errors are shown which is confusing.

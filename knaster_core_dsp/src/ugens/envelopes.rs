@@ -1,10 +1,10 @@
 //! # Envelopes
 //!
 //! Various envelop [`UGen`]s
+use knaster_core::impl_ugen;
 #[allow(unused)]
-use crate::{AudioCtx, UGen, UGenFlags};
-use knaster_macros::impl_ugen;
-use knaster_primitives::{Block, BlockRead, Float, PFloat};
+use knaster_core::{AudioCtx, UGen, UGenFlags};
+use knaster_core::{Block, BlockRead, Float, PFloat};
 
 #[derive(Debug, Clone, Copy)]
 enum AsrState {
@@ -90,7 +90,7 @@ impl<F: Float> EnvAsr<F> {
                 self.attack_rate = F::ONE;
             } else {
                 self.attack_rate =
-                    F::ONE / (self.attack_seconds * F::from(ctx.sample_rate).unwrap());
+                    F::ONE / (self.attack_seconds * F::from(ctx.sample_rate()).unwrap());
             }
         }
     }
@@ -104,7 +104,7 @@ impl<F: Float> EnvAsr<F> {
                 self.release_rate = F::ONE;
             } else {
                 self.release_rate =
-                    F::ONE / (self.release_seconds * F::from(ctx.sample_rate).unwrap());
+                    F::ONE / (self.release_seconds * F::from(ctx.sample_rate()).unwrap());
             }
         }
     }
@@ -241,7 +241,7 @@ impl<F: Float> EnvAr<F> {
                 self.attack_rate = F::ONE;
             } else {
                 self.attack_rate =
-                    F::ONE / (self.attack_seconds * F::from(ctx.sample_rate).unwrap());
+                    F::ONE / (self.attack_seconds * F::from(ctx.sample_rate()).unwrap());
             }
         }
     }
@@ -255,7 +255,7 @@ impl<F: Float> EnvAr<F> {
                 self.release_rate = F::ONE;
             } else {
                 self.release_rate =
-                    F::ONE / (self.release_seconds * F::from(ctx.sample_rate).unwrap());
+                    F::ONE / (self.release_seconds * F::from(ctx.sample_rate()).unwrap());
             }
         }
     }
@@ -310,13 +310,12 @@ mod alloc_envelopes {
 
     use core::marker::PhantomData;
 
-    use knaster_primitives::{
+    use knaster_core::{AudioCtx, PInteger, ParameterHint, ParameterValue, UGen, UGenFlags};
+    use knaster_core::{
         Float, Frame,
         numeric_array::NumericArray,
         typenum::{U0, U1, U4},
     };
-
-    use crate::{AudioCtx, PInteger, ParameterHint, ParameterValue, UGen, UGenFlags};
 
     /// An envelope segment for an [`Envelope`]
     #[derive(Copy, Clone, Debug)]

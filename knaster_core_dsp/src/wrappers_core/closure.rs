@@ -1,5 +1,4 @@
-use crate::{AudioCtx, UGen, UGenFlags};
-use knaster_primitives::{Block, BlockRead};
+use knaster_core::{AudioCtx, Block, BlockRead, ParameterHint, ParameterValue, UGen, UGenFlags};
 
 /// Applies the closure to every sample of every channel in the [`UGen`] output
 ///
@@ -28,8 +27,8 @@ impl<T: UGen, C: FnMut(T::Sample) -> T::Sample + 'static> UGen for WrClosure<T, 
         &mut self,
         ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
-        input: knaster_primitives::Frame<Self::Sample, Self::Inputs>,
-    ) -> knaster_primitives::Frame<Self::Sample, Self::Outputs> {
+        input: knaster_core::Frame<Self::Sample, Self::Inputs>,
+    ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         let mut out = self.ugen.process(ctx, flags, input);
         for sample in &mut out {
             *sample = (self.closure)(*sample);
@@ -57,16 +56,15 @@ impl<T: UGen, C: FnMut(T::Sample) -> T::Sample + 'static> UGen for WrClosure<T, 
     type Parameters = T::Parameters;
 
     fn param_descriptions()
-    -> knaster_primitives::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
 
-    fn param_hints()
-    -> knaster_primitives::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    fn param_hints() -> knaster_core::numeric_array::NumericArray<ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 
-    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         T::param_apply(&mut self.ugen, ctx, index, value)
     }
     unsafe fn set_ar_param_buffer(

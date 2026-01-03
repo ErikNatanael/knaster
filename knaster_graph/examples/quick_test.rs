@@ -1,15 +1,17 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use knaster_core::envelopes::EnvAsr;
 use knaster_core::log::ArLogSender;
-use knaster_core::noise::{RandomLin, WhiteNoise};
-use knaster_core::onepole::OnePoleHpf;
 use knaster_core::{AudioCtx, Done, Seconds};
 use knaster_core::{
     UGen,
-    osc::SinNumeric,
     typenum::{U0, U1, U2},
+};
+use knaster_core_dsp::envelopes::EnvAsr;
+use knaster_core_dsp::noise::{RandomLin, WhiteNoise};
+use knaster_core_dsp::onepole::OnePoleHpf;
+use knaster_core_dsp::{
+    osc::SinNumeric,
     wrappers_core::{UGenWrapperCoreExt, WrSmoothParams},
 };
 use knaster_graph::graph::GraphError;

@@ -777,15 +777,15 @@ checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
 name = "embassy-sync"
-version = "0.6.2"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d2c8cdff05a7a51ba0087489ea44b0b1d97a296ca6b1d6d1a33ea7423d34049"
+checksum = "73974a3edbd0bd286759b3d483540f0ebef705919a5f56f4fc7709066f71689b"
 dependencies = [
  "cfg-if",
  "critical-section",
  "embedded-io-async",
+ "futures-core",
  "futures-sink",
- "futures-util",
  "heapless",
 ]
 
@@ -1421,6 +1421,7 @@ version = "0.1.0"
 dependencies = [
  "fastrand",
  "knaster_core",
+ "knaster_core_dsp",
  "numeric_literals",
 ]
 
@@ -1439,13 +1440,26 @@ name = "knaster_core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "knaster_macros",
+ "knaster_primitives",
+ "log",
+ "no-std-compat",
+ "rtrb",
+ "target-features",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "knaster_core_dsp"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
  "embassy-sync",
  "fastapprox",
  "fastrand",
  "float-cmp",
  "hound",
- "knaster_macros",
- "knaster_primitives",
+ "knaster_core",
  "log",
  "no-std-compat",
  "no_denormals",
@@ -1467,6 +1481,7 @@ dependencies = [
  "env_logger",
  "jack",
  "knaster_core",
+ "knaster_core_dsp",
  "log",
  "no-std-compat",
  "open",
@@ -1475,6 +1490,7 @@ dependencies = [
  "rtrb",
  "slotmap",
  "smallvec",
+ "spin 0.10.0",
  "thiserror 2.0.12",
 ]
 
@@ -1552,6 +1568,15 @@ name = "litemap"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "241eaef5fd12c88705a01fc1066c48c4b36e0dd4377dcdc7ec3942cea7a69956"
+
+[[package]]
+name = "lock_api"
+version = "0.4.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "224399e74b87b5f3557511d98dff8b14089b3dadafcab6bb93eab67d3aace965"
+dependencies = [
+ "scopeguard",
+]
 
 [[package]]
 name = "log"
@@ -1647,14 +1672,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b93853da6d84c2e3c7d730d6473e8817692dd89be387eb01b94d7f108ecb5b8c"
 dependencies = [
  "hashbrown 0.8.2",
- "spin",
+ "spin 0.5.2",
 ]
 
 [[package]]
 name = "no_denormals"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50a63f8a8efd33b4706cecbc4b845b0c63e9c883f8a5404a0fd7ce2a0933421f"
+checksum = "b6bcfe410abc339c9f8c226aceebf946bf26e3e2eca738be3fec9e9ee97d54aa"
 
 [[package]]
 name = "nom"
@@ -2178,6 +2203,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "scopeguard"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
 name = "serde"
 version = "1.0.219"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2279,6 +2310,15 @@ name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
+
+[[package]]
+name = "spin"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5fe4ccb98d9c292d56fec89a5e07da7fc4cf0dc11e156b41793132775d3e591"
+dependencies = [
+ "lock_api",
+]
 
 [[package]]
 name = "stable_deref_trait"

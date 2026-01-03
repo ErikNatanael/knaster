@@ -1,5 +1,6 @@
-use crate::{
-    AudioCtx, Float, PFloat, ParameterHint, UGen, UGenFlags,
+use knaster_core::{
+    AudioCtx, Float, Frame, PFloat, ParameterHint, ParameterValue, UGen, UGenFlags,
+    numeric_array::NumericArray,
     typenum::{U0, U1},
 };
 
@@ -23,21 +24,21 @@ impl<F: Float> UGen for TestNumUGen<F> {
         &mut self,
         _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
-        _input: crate::Frame<Self::Sample, Self::Inputs>,
-    ) -> crate::Frame<Self::Sample, Self::Outputs> {
+        _input: Frame<Self::Sample, Self::Inputs>,
+    ) -> Frame<Self::Sample, Self::Outputs> {
         [self.number].into()
     }
     type Parameters = U0;
 
-    fn param_descriptions() -> crate::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         [].into()
     }
 
-    fn param_hints() -> crate::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         [].into()
     }
 
-    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: crate::ParameterValue) {}
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: ParameterValue) {}
 }
 
 /// Outputs a static number every frame
@@ -63,21 +64,21 @@ impl<F: Float> UGen for TestInPlusParamGen<F> {
         &mut self,
         _ctx: &mut AudioCtx,
         _flags: &mut UGenFlags,
-        input: crate::Frame<Self::Sample, Self::Inputs>,
-    ) -> crate::Frame<Self::Sample, Self::Outputs> {
+        input: Frame<Self::Sample, Self::Inputs>,
+    ) -> Frame<Self::Sample, Self::Outputs> {
         [self.number + input[0]].into()
     }
     type Parameters = U1;
 
-    fn param_descriptions() -> crate::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         ["number"].into()
     }
 
-    fn param_hints() -> crate::numeric_array::NumericArray<crate::ParameterHint, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         [ParameterHint::infinite_float()].into()
     }
 
-    fn param_apply(&mut self, _ctx: &mut AudioCtx, index: usize, value: crate::ParameterValue) {
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         if index == 0 {
             self.number(value.float().unwrap());
         }

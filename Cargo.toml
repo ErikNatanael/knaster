@@ -7,6 +7,7 @@ members = [
   "knaster_airwindows",
   "knaster",
   "knaster_macros",
+  "knaster_core_dsp",
 ]
 resolver = "2"
 
