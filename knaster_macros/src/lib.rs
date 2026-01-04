@@ -551,8 +551,8 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
                         input: &InBlock,
                         output: &mut OutBlock,
                     ) where
-                        InBlock: #crate_ident::BlockRead<Sample = Self::Sample>,
-                        OutBlock: #crate_ident::Block<Sample = Self::Sample>,
+                        InBlock: #crate_ident::BlockRead<Sample = Self::Sample> + ?Sized,
+                        OutBlock: #crate_ident::Block<Sample = Self::Sample> + ?Sized,
                     {
                         let input_array: [&[F]; #num_input_channels ] = [ #(#input_array_elements)* ];
                         let mut outputs = output.iter_mut();

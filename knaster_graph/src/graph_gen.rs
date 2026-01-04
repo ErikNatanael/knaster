@@ -81,8 +81,8 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_core::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample> + ?Sized,
+        OutBlock: knaster_core::Block<Sample = Self::Sample> + ?Sized,
     {
         if self.freed {
             for output_channel in output.iter_mut() {

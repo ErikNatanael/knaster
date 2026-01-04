@@ -1,6 +1,6 @@
 use crate::core::sync::Arc;
 use crate::core::sync::atomic::AtomicBool;
-use crate::dynugen::UGenEnum;
+use crate::dynugen::{LocalOutBlock, UGenEnum};
 /// no_std_compat prelude import, supporting both std and no_std
 use std::prelude::v1::*;
 
@@ -83,7 +83,7 @@ pub(crate) struct Node<F: Float> {
     pub(crate) remove_me: Option<Arc<AtomicBool>>,
 }
 impl<F: Float> Node<F> {
-    pub fn new<T: DynUGen<F> + 'static>(name: EcoString, ugen: T) -> Self {
+    pub fn new<T: DynUGen<F, LocalOutBlock<F>> + 'static>(name: EcoString, ugen: T) -> Self {
         let parameter_descriptions_fn = ugen.param_description_fn();
         let parameter_hints_fn = ugen.param_hints_fn();
         let parameters = ugen.parameters();

@@ -42,8 +42,8 @@ impl<T: UGen, C: FnMut(T::Sample) -> T::Sample + 'static> UGen for WrClosure<T, 
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: BlockRead<Sample = Self::Sample>,
-        OutBlock: Block<Sample = Self::Sample>,
+        InBlock: BlockRead<Sample = Self::Sample> + ?Sized,
+        OutBlock: Block<Sample = Self::Sample> + ?Sized,
     {
         self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {

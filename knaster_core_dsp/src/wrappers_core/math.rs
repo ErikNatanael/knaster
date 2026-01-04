@@ -56,8 +56,8 @@ where
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_core::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample> + ?Sized,
+        OutBlock: knaster_core::Block<Sample = Self::Sample> + ?Sized,
     {
         self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
@@ -150,8 +150,8 @@ impl<T: UGen> UGen for WrAdd<T> {
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_core::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample> + ?Sized,
+        OutBlock: knaster_core::Block<Sample = Self::Sample> + ?Sized,
     {
         self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
@@ -228,8 +228,8 @@ impl<T: UGen> UGen for WrSub<T> {
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_core::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample> + ?Sized,
+        OutBlock: knaster_core::Block<Sample = Self::Sample> + ?Sized,
     {
         self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
@@ -307,8 +307,8 @@ impl<T: UGen> UGen for WrVSub<T> {
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_core::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample> + ?Sized,
+        OutBlock: knaster_core::Block<Sample = Self::Sample> + ?Sized,
     {
         self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
@@ -385,8 +385,8 @@ impl<T: UGen> UGen for WrDiv<T> {
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_core::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample> + ?Sized,
+        OutBlock: knaster_core::Block<Sample = Self::Sample> + ?Sized,
     {
         self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
@@ -464,8 +464,8 @@ impl<T: UGen> UGen for WrVDiv<T> {
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_core::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample> + ?Sized,
+        OutBlock: knaster_core::Block<Sample = Self::Sample> + ?Sized,
     {
         self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
@@ -543,8 +543,8 @@ impl<T: UGen> UGen for WrPowf<T> {
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_core::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample> + ?Sized,
+        OutBlock: knaster_core::Block<Sample = Self::Sample> + ?Sized,
     {
         self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {
@@ -621,8 +621,8 @@ impl<T: UGen> UGen for WrPowi<T> {
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_core::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample> + ?Sized,
+        OutBlock: knaster_core::Block<Sample = Self::Sample> + ?Sized,
     {
         self.ugen.process_block(ctx, flags, input, output);
         for channel in output.iter_mut() {

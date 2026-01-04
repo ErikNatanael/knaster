@@ -2389,8 +2389,8 @@ impl<F: Float> UGen for FeedbackSink<F> {
         input: &InBlock,
         _output: &mut OutBlock,
     ) where
-        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_core::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample> + ?Sized,
+        OutBlock: knaster_core::Block<Sample = Self::Sample> + ?Sized,
     {
         let bufnum = self.bufnum.get();
         let input = input.channel_as_slice(0);
@@ -2443,8 +2443,8 @@ impl<F: Float> UGen for FeedbackSource<F> {
         _input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_core::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample> + ?Sized,
+        OutBlock: knaster_core::Block<Sample = Self::Sample> + ?Sized,
     {
         let bufnum = self.bufnum.get();
         let prev_buffer = 1 - bufnum;

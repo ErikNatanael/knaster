@@ -1,6 +1,8 @@
 use knaster_core::{Frame, numeric_array::NumericArray};
 
-use knaster_core::{AudioCtx, ParameterHint, ParameterValue, UGen, UGenFlags, rt_log};
+use knaster_core::{
+    AudioCtx, ParameterHint, ParameterValue, PartialBlock, UGen, UGenFlags, rt_log,
+};
 
 /// Enables sample accurate parameter changes within a block. Changes must be
 /// scheduled in the order they are to be applied.
@@ -67,8 +69,8 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_core::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample> + ?Sized,
+        OutBlock: knaster_core::Block<Sample = Self::Sample> + ?Sized,
     {
         let mut block_i = 0;
         let mut change_i = 0;
@@ -96,7 +98,8 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
             if local_frames_to_process == ctx.frames_to_process() {
                 self.ugen.process_block(ctx, flags, input, output);
             } else {
-                let input = input.partial(block_i, local_frames_to_process);
+                // let input = input.partial(block_i, local_frames_to_process);
+                let input = PartialBlock::from_block(input, block_i, local_frames_to_process);
                 let mut output = output.partial_mut(block_i, local_frames_to_process);
                 let partial_block = org_block.make_partial(block_i, local_frames_to_process);
                 ctx.block = partial_block;

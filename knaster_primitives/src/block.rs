@@ -200,7 +200,7 @@ pub struct BlockIterMut<'a, T: ?Sized> {
     block: &'a mut T,
     channels_returned: usize,
 }
-impl<'a, T: Block> Iterator for BlockIterMut<'a, T>
+impl<'a, T: Block + ?Sized> Iterator for BlockIterMut<'a, T>
 where
     T::Sample: Float,
     T::Sample: Copy,
@@ -241,15 +241,6 @@ pub trait BlockRead {
     fn channels(&self) -> usize;
     /// The block size of each channel in the block
     fn block_size(&self) -> usize;
-
-    /// Returns a new immutable block which starts at an offset and with virtual block size
-    fn partial(&self, start_offset: usize, length: usize) -> PartialBlock<Self::Sample, Self> {
-        PartialBlock {
-            block: self,
-            start_offset,
-            length,
-        }
-    }
 }
 impl<T: Block> BlockRead for T {
     type Sample = T::Sample;
@@ -280,7 +271,17 @@ pub struct PartialBlock<'a, F, T: 'a + BlockRead<Sample = F> + ?Sized> {
     start_offset: usize,
     length: usize,
 }
-impl<'a, F: Float, T: 'a + BlockRead<Sample = F>> BlockRead for PartialBlock<'a, F, T> {
+impl<'a, F: Float, T: 'a + BlockRead<Sample = F> + ?Sized> PartialBlock<'a, F, T> {
+    /// Returns a new immutable block which starts at an offset and with virtual block size
+    pub fn from_block(block: &'a T, start_offset: usize, length: usize) -> Self {
+        Self {
+            block,
+            start_offset,
+            length,
+        }
+    }
+}
+impl<'a, F: Float, T: 'a + BlockRead<Sample = F> + ?Sized> BlockRead for PartialBlock<'a, F, T> {
     type Sample = F;
 
     fn channel_as_slice(&self, channel: usize) -> &[Self::Sample] {
@@ -308,7 +309,7 @@ pub struct PartialBlockMut<'a, T: Block + ?Sized> {
     start_offset: usize,
     length: usize,
 }
-impl<T: Block> Block for PartialBlockMut<'_, T> {
+impl<T: Block + ?Sized> Block for PartialBlockMut<'_, T> {
     type Sample = T::Sample;
 
     fn channel_as_slice(&self, channel: usize) -> &[Self::Sample] {
