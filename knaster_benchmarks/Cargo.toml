@@ -19,13 +19,13 @@ color-eyre = "0.6.5"
 knaster = { path = "../knaster", features = ["std"] }
 
 [dev-dependencies]
-criterion = "0.6"
+criterion = "0.8.1"
 iai = { git = "https://github.com/sigaloid/iai", rev = "6c83e942" }
 
 
-# [[bench]]
-# name = "graph_dsp_performance"
-# harness = false
+[[bench]]
+name = "graph_dsp_performance"
+harness = false
 # [[bench]]
 # name = "lai_graph_dsp_performance"
 # harness = false
