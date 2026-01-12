@@ -1,4 +1,4 @@
-use crate::block::AggregateBlockRead;
+use crate::block::RawAggregateBlockRead;
 use crate::core::sync::Arc;
 use crate::core::sync::atomic::AtomicBool;
 use crate::core::sync::atomic::Ordering;
@@ -10,7 +10,7 @@ use knaster_core::AudioCtx;
 use knaster_core::Float;
 use knaster_core::UGenFlags;
 
-use crate::block::RawBlock;
+use crate::block::RawContiguousBlock;
 use crate::dynugen::DynUGen;
 use crate::graph::{NodeKey, OwnedRawBuffer};
 
@@ -23,9 +23,10 @@ pub struct Task<F: Float> {
 }
 impl<F: Float> Task<F> {
     pub fn run(&mut self, ctx: &mut AudioCtx, flags: &mut UGenFlags) {
-        let input = unsafe { AggregateBlockRead::new(&self.in_buffers, ctx.block_size()) };
-        let mut output =
-            unsafe { RawBlock::new(self.out_buffer, self.output_channels, ctx.block_size()) };
+        let input = unsafe { RawAggregateBlockRead::new(&self.in_buffers, ctx.block_size()) };
+        let mut output = unsafe {
+            RawContiguousBlock::new(self.out_buffer, self.output_channels, ctx.block_size())
+        };
         self.ugen.process_block(ctx, flags, &input, &mut output);
     }
 }

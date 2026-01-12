@@ -13,7 +13,7 @@ use crate::SharedFrameClock;
 use crate::dynugen::DynUGen;
 use crate::graph::NodeId;
 use crate::{
-    block::{AggregateBlockRead, RawBlock},
+    block::{RawAggregateBlockRead, RawContiguousBlock},
     graph::{Graph, GraphOptions, OwnedRawBuffer},
     node::Node,
 };
@@ -51,7 +51,7 @@ pub struct AudioProcessor<F: Float> {
     sample_rate: u32,
     block_size: usize,
     _output_buffer: OwnedRawBuffer<F>,
-    output_block: RawBlock<F>,
+    output_block: RawContiguousBlock<F>,
     frame_clock: u64,
     // The frame clock available on other threads
     shared_frame_clock: SharedFrameClock,
@@ -91,7 +91,7 @@ impl<F: Float> AudioProcessor<F> {
         let audio_processor = AudioProcessor {
             graph_node: node,
             output_block: unsafe {
-                RawBlock::new(
+                RawContiguousBlock::new(
                     output_buffer.add(0).expect("This is infallible"),
                     Outputs::USIZE,
                     block_size,
@@ -125,7 +125,7 @@ impl<F: Float> AudioProcessor<F> {
             .graph_node
             .ugen()
             .expect("The top level graph should be guaranteed to be local to its node");
-        let input = unsafe { AggregateBlockRead::new(input_pointers, self.block_size) };
+        let input = unsafe { RawAggregateBlockRead::new(input_pointers, self.block_size) };
         ugen.process_block(&mut self.ctx, &mut flags, &input, &mut self.output_block);
         self.frame_clock += self.block_size as u64;
         self.shared_frame_clock
@@ -136,7 +136,7 @@ impl<F: Float> AudioProcessor<F> {
     }
     /// Get a mutable reference to the output block. This block holds the output of the last
     /// processed block.
-    pub fn output_block(&mut self) -> &mut RawBlock<F> {
+    pub fn output_block(&mut self) -> &mut RawContiguousBlock<F> {
         &mut self.output_block
     }
     /// Get the block size, i.e. how many frames are produced each time [`Self::run`] is called.
