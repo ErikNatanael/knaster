@@ -19,7 +19,7 @@ fn graph_empty_graph_zero_output() {
             ring_buffer_size: 2,
             ..Default::default()
         });
-    unsafe { audio_processor.run(&[]) };
+    audio_processor.run_without_inputs();
     let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 0.0);
 }
@@ -34,7 +34,7 @@ fn graph_empty_graph_zero_output_many_channels() {
             ring_buffer_size: 2,
             ..Default::default()
         });
-    unsafe { audio_processor.run(&[]) };
+    audio_processor.run_without_inputs();
     let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 0.0);
     assert_eq!(output.read(1, 0), 0.0);
@@ -69,7 +69,7 @@ fn graph_inputs_to_outputs() {
         unsafe { input_allocation.as_ptr().add(block_size) },
         unsafe { input_allocation.as_ptr().add(block_size * 2) },
     ];
-    unsafe { audio_processor.run(&input_pointers) };
+    unsafe { audio_processor.run_raw_ptr_inputs(&input_pointers) };
     let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 1.0);
     assert_eq!(output.read(1, 0), 1.0);
@@ -115,7 +115,7 @@ fn graph_inputs_to_nodes_to_outputs() {
         unsafe { input_allocation.as_ptr().add(block_size) },
         unsafe { input_allocation.as_ptr().add(block_size * 2) },
     ];
-    unsafe { audio_processor.run(&input_pointers) };
+    unsafe { audio_processor.run_raw_ptr_inputs(&input_pointers) };
     let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 2.5);
     assert_eq!(output.read(1, 0), 2.0);
@@ -150,7 +150,7 @@ fn multichannel_nodes() {
         unsafe { input_allocation.as_ptr().add(block_size) },
         unsafe { input_allocation.as_ptr().add(block_size * 2) },
     ];
-    unsafe { audio_processor.run(&input_pointers) };
+    unsafe { audio_processor.run_raw_ptr_inputs(&input_pointers) };
     let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 0.625);
     assert_eq!(output.read(1, 0), 5.125);
@@ -176,7 +176,7 @@ fn multichannel_nodes() {
         // graph.connect_replace(&m2, 0, 0, graph.internal()).unwrap();
         // graph.connect_replace(&m3, 0, 1, graph.internal()).unwrap();
     });
-    unsafe { audio_processor.run(&input_pointers) };
+    unsafe { audio_processor.run_raw_ptr_inputs(&input_pointers) };
     let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 0.625 * 0.5);
     assert_eq!(output.read(1, 0), 5.125 * 0.125);
@@ -205,21 +205,15 @@ fn feedback_nodes() {
     });
 
     // Block 1
-    unsafe {
-        audio_processor.run(&[]);
-    }
+    audio_processor.run_without_inputs();
     let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 1.375);
     // Block 2
-    unsafe {
-        audio_processor.run(&[]);
-    }
+    audio_processor.run_without_inputs();
     let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 1.375 * 2.);
     // Block 3
-    unsafe {
-        audio_processor.run(&[]);
-    }
+    audio_processor.run_without_inputs();
     let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 1.375 * 3.);
 }
@@ -246,21 +240,15 @@ fn feedback_nodes2() {
     });
 
     // Block 1
-    unsafe {
-        audio_processor.run(&[]);
-    }
+    audio_processor.run_without_inputs();
     let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 0.125);
     // Block 2
-    unsafe {
-        audio_processor.run(&[]);
-    }
+    audio_processor.run_without_inputs();
     let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 0.125 + 1.25);
     // Block 3
-    unsafe {
-        audio_processor.run(&[]);
-    }
+    audio_processor.run_without_inputs();
     let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 0.125 + 1.25);
 }
@@ -288,9 +276,7 @@ fn disconnect() {
     g.commit_changes().unwrap();
 
     // Block 1
-    unsafe {
-        audio_processor.run(&[]);
-    }
+    audio_processor.run_without_inputs();
     let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 0.5 + 1.25 + 0.125);
 
@@ -298,18 +284,14 @@ fn disconnect() {
     g.commit_changes().unwrap();
 
     // Block 2
-    unsafe {
-        audio_processor.run(&[]);
-    }
+    audio_processor.run_without_inputs();
     let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 1.25 + 0.125);
 
     g.disconnect_input_to_sink(0, &n3).unwrap();
     g.commit_changes().unwrap();
     // Block 3
-    unsafe {
-        audio_processor.run(&[]);
-    }
+    audio_processor.run_without_inputs();
     let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 0.125);
 }

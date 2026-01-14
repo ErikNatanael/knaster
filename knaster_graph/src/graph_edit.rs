@@ -2097,9 +2097,7 @@ mod tests {
         });
 
         // Block 1
-        unsafe {
-            audio_processor.run(&[]);
-        }
+        audio_processor.run_without_inputs();
         let output = audio_processor.output_block();
         assert_eq!(output.read(0, 0), 0.5 + 1.25 + 0.125);
 
@@ -2109,9 +2107,7 @@ mod tests {
         });
 
         // Block 2
-        unsafe {
-            audio_processor.run(&[]);
-        }
+        audio_processor.run_without_inputs();
         let output = audio_processor.output_block();
         assert_eq!(output.read(0, 0), 1.25 + 0.125);
 
@@ -2120,9 +2116,7 @@ mod tests {
             n3.disconnect_input(0);
         });
         // Block 3
-        unsafe {
-            audio_processor.run(&[]);
-        }
+        audio_processor.run_without_inputs();
         let output = audio_processor.output_block();
         assert_eq!(output.read(0, 0), 0.125);
     }

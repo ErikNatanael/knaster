@@ -2498,18 +2498,14 @@ mod tests {
         graph.commit_changes().unwrap();
         assert_eq!(graph.inspection().nodes.len(), 1);
         for _ in 0..10 {
-            unsafe {
-                audio_processor.run(&[]);
-            }
+            audio_processor.run_without_inputs();
         }
         // Run the code to free old nodes
         graph.commit_changes().unwrap();
         assert_eq!(graph.inspection().nodes.len(), 0);
         assert_eq!(graph.num_nodes_pending_removal(), 1);
         // Apply the new TaskData on the audio thread so that the node can be removed
-        unsafe {
-            audio_processor.run(&[]);
-        }
+        audio_processor.run_without_inputs();
         // Now the node is removed
         graph.commit_changes().unwrap();
         assert_eq!(graph.num_nodes_pending_removal(), 0);

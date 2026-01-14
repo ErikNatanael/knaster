@@ -20,7 +20,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     });
     c.bench_function("wr_mul block: 32", |b| {
         b.iter(|| {
-            unsafe { audio_processor.run(&[]) };
+            audio_processor.run_without_inputs();
             black_box(audio_processor.output_block().channel_as_slice_mut(0));
             assert_eq!(
                 audio_processor.output_block().channel_as_slice_mut(0)[block_size - 1],
@@ -46,7 +46,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     });
     c.bench_function("MathGen Mul block: 32", |b| {
         b.iter(|| {
-            unsafe { audio_processor.run(&[]) };
+            audio_processor.run_without_inputs();
             black_box(audio_processor.output_block().channel_as_slice_mut(0));
             assert_eq!(
                 audio_processor.output_block().channel_as_slice_mut(0)[block_size - 1],
@@ -74,7 +74,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     // graph.commit_changes().unwrap();
     c.bench_function("100 wr_mul block: 32", |b| {
         b.iter(|| {
-            unsafe { audio_processor.run(&[]) };
+            audio_processor.run_without_inputs();
             black_box(audio_processor.output_block().channel_as_slice_mut(0));
             assert_eq!(
                 audio_processor.output_block().channel_as_slice_mut(0)[block_size - 1],
@@ -103,7 +103,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     });
     c.bench_function("100 MathGen Mul block: 32", |b| {
         b.iter(|| {
-            unsafe { audio_processor.run(&[]) };
+            audio_processor.run_without_inputs();
             black_box(audio_processor.output_block().channel_as_slice_mut(0));
             assert_eq!(
                 audio_processor.output_block().channel_as_slice_mut(0)[block_size - 1],

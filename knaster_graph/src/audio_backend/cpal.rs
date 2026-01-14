@@ -63,7 +63,7 @@ impl<F> CpalBackend<F> {
 
         let config = device.default_output_config().unwrap();
         if options.verbose {
-            log::info!("Default output config: {:?}", config);
+            log::info!("Default output config: {config:?}");
         }
         Ok(Self {
             stream: None,
@@ -156,7 +156,7 @@ where
     let channels = config.channels as usize;
 
     // TODO: Send error via ArLogSender instead.
-    let err_fn = |err| log::error!("CPAL error: an error occurred on stream: {}", err);
+    let err_fn = |err| log::error!("CPAL error: an error occurred on stream: {err}");
 
     let graph_block_size = audio_processor.block_size();
     let mut sample_counter = graph_block_size; // Immediately process a block
@@ -170,7 +170,7 @@ where
                     for frame in output.chunks_mut(channels) {
                         if sample_counter >= graph_block_size {
                             // CPAL currently does not support duplex streams
-                            unsafe { audio_processor.run(&[]) };
+                            audio_processor.run_without_inputs();
                             sample_counter = 0;
                         }
                         let out_block = audio_processor.output_block();
@@ -188,7 +188,7 @@ where
                 for frame in output.chunks_mut(channels) {
                     if sample_counter >= graph_block_size {
                         // CPAL currently does not support duplex streams
-                        unsafe { audio_processor.run(&[]) };
+                        audio_processor.run_without_inputs();
                         sample_counter = 0;
                     }
                     let out_block = audio_processor.output_block();
