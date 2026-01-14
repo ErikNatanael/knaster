@@ -93,8 +93,8 @@ impl<F: Float> UGen for Galactic<F> {
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: knaster_core::BlockRead<Sample = Self::Sample>,
-        OutBlock: knaster_core::Block<Sample = Self::Sample>,
+        InBlock: knaster_core::BlockRead<Sample = Self::Sample> + ?Sized,
+        OutBlock: knaster_core::Block<Sample = Self::Sample> + ?Sized,
     {
         let mut outs = output.iter_mut();
         let o0 = outs.next().unwrap();
