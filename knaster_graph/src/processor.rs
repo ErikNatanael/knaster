@@ -128,7 +128,7 @@ impl<F: Float> AudioProcessor<F> {
             .ugen()
             .expect("The top level graph should be guaranteed to be local to its node");
         // SAFETY: The input pointers were just created from shared references
-        let input = unsafe { AggregateBlockRead::new(&self.input_pointers, self.block_size) };
+        let input = unsafe { RawAggregateBlockRead::new(&self.input_pointers, self.block_size) };
         ugen.process_block(&mut self.ctx, &mut flags, &input, &mut self.output_block);
         self.frame_clock += self.block_size as u64;
         self.shared_frame_clock
