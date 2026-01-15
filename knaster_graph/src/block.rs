@@ -4,19 +4,24 @@ use crate::core::slice;
 
 use knaster_core::{Block, BlockRead, Float};
 
-/// Wrapper around a raw pointer to use it as a [`Block`]
+/// Wrapper around a raw pointer to a contiguous allocation of the size specified in
+/// [`RawContiguousBlock::new`] to use it as a [`Block`].
+///
+/// Since the allocation is stored as a raw pointer, Rust's aliasing rules for references don't
+/// apply. Several [`RawContiguousBlock`]s to the same allocation can exist at the same time, as
+/// long as they are not used at the same time.
 ///
 /// # Safety
 ///
 /// The caller guarantees that the `buffer` pointer points to an allocation
 /// at least the size of `channels * block_size` with no other mutable
 /// reference to it created for the lifetime of this `RawBlock`
-pub struct RawBlock<F> {
+pub struct RawContiguousBlock<F> {
     buffer: *mut F,
     channels: usize,
     block_size: usize,
 }
-impl<F: Float> RawBlock<F> {
+impl<F: Float> RawContiguousBlock<F> {
     /// Wrapper around a raw pointer to use it as a [`Block`]
     ///
     /// # Safety
@@ -32,7 +37,7 @@ impl<F: Float> RawBlock<F> {
         }
     }
 }
-impl<F: Float> Block for RawBlock<F> {
+impl<F: Float> Block for RawContiguousBlock<F> {
     type Sample = F;
 
     fn channel_as_slice(&self, channel: usize) -> &[Self::Sample] {
@@ -72,7 +77,12 @@ impl<F: Float> Block for RawBlock<F> {
     }
 }
 
-/// Wrapper around raw pointers to use them as a [`Block`]. Each pointer is one channel.
+/// Wrapper around raw pointers to use them as a [`Block`]. Each pointer is one channel which must
+/// point to an allocation of at least size `block_size`.
+///
+/// Since the allocations are stored as raw pointers, Rust's aliasing rules for references don't
+/// apply. Several [`RawAggregateBlock`]s to the same allocation can exist at the same time, as
+/// long as they are not used at the same time.
 ///
 /// # Safety
 ///
@@ -80,11 +90,11 @@ impl<F: Float> Block for RawBlock<F> {
 /// size of `block_size` with no other mutable reference to them created for the
 /// lifetime of this `AggregateBlock`. The allocations pointed to also may not
 /// overlap.
-pub struct AggregateBlock<'a, F> {
+pub struct RawAggregateBlock<'a, F> {
     buffers: &'a [*mut F],
     block_size: usize,
 }
-impl<'a, F> AggregateBlock<'a, F> {
+impl<'a, F> RawAggregateBlock<'a, F> {
     /// Wrapper around raw pointers to use them as a [`Block`]. Each pointer is one channel.
     ///
     /// # Safety
@@ -100,7 +110,7 @@ impl<'a, F> AggregateBlock<'a, F> {
         }
     }
 }
-impl<F: Float> Block for AggregateBlock<'_, F> {
+impl<F: Float> Block for RawAggregateBlock<'_, F> {
     type Sample = F;
 
     fn channel_as_slice(&self, channel: usize) -> &[Self::Sample] {
@@ -134,18 +144,22 @@ impl<F: Float> Block for AggregateBlock<'_, F> {
     }
 }
 
-/// Wrapper around raw pointers to use them as a [`Block`]. Each pointer is one channel.
+/// Wrapper around const raw pointers to use them as a [`Block`]. Each pointer is one channel which
+/// must point to an allocation of at least size `block_size`.
 ///
+/// Since the allocations are stored as raw pointers, Rust's aliasing rules for references don't
+/// apply. Several [`RawAggregateBlockRead`]s to the same allocation can exist at the same time, as
+/// long as they are not used at the same time.
 /// # Safety
 ///
 /// The caller guarantees that each pointer points to an allocation
 /// at least the size of `block_size` with no other mutable
 /// reference to them created for the lifetime of this `AggregateBlock`.
-pub struct AggregateBlockRead<'a, F> {
+pub struct RawAggregateBlockRead<'a, F> {
     buffers: &'a [*const F],
     block_size: usize,
 }
-impl<'a, F> AggregateBlockRead<'a, F> {
+impl<'a, F> RawAggregateBlockRead<'a, F> {
     /// Wrapper around raw pointers to use them as a [`Block`]. Each pointer is one channel.
     ///
     /// # Safety
@@ -160,7 +174,7 @@ impl<'a, F> AggregateBlockRead<'a, F> {
         }
     }
 }
-impl<F: Float> BlockRead for AggregateBlockRead<'_, F> {
+impl<F: Float> BlockRead for RawAggregateBlockRead<'_, F> {
     type Sample = F;
 
     fn channel_as_slice(&self, channel: usize) -> &[Self::Sample] {

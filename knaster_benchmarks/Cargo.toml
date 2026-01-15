@@ -24,11 +24,8 @@ iai = { git = "https://github.com/sigaloid/iai", rev = "6c83e942" }
 
 
 [[bench]]
-name = "audio_processor_inputs"
+name = "graph_dsp_performance"
 harness = false
-# [[bench]]
-# name = "graph_dsp_performance"
-# harness = false
 # [[bench]]
 # name = "lai_graph_dsp_performance"
 # harness = false

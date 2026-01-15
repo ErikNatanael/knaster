@@ -1,6 +1,6 @@
 use knaster_core::{
     AudioCtx, Block, BlockRead, Frame, PFloat, ParameterHint, ParameterSmoothing, ParameterValue,
-    Rate, UGen, UGenFlags, numeric_array::NumericArray, typenum::*,
+    PartialBlock, Rate, UGen, UGenFlags, numeric_array::NumericArray, typenum::*,
 };
 
 /// Wrapper that enables input parameter smoothing for a [`UGen`]. Smoothing only
@@ -134,8 +134,8 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: BlockRead<Sample = Self::Sample>,
-        OutBlock: Block<Sample = Self::Sample>,
+        InBlock: BlockRead<Sample = Self::Sample> + ?Sized,
+        OutBlock: Block<Sample = Self::Sample> + ?Sized,
     {
         let mut there_is_an_ar_parameter = false;
         let org_block = ctx.block;
@@ -160,7 +160,7 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
                                 .param_apply(ctx, j, ParameterValue::Float(new_value))
                         }
                     }
-                    let input = input.partial(i, 1);
+                    let input = PartialBlock::from_block(input, i, 1);
                     let mut output = output.partial_mut(i, 1);
                     let partial_ctx = org_block.make_partial(i, 1);
                     ctx.block = partial_ctx;
@@ -168,7 +168,7 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
                     i += 1;
                 } else {
                     // Process the full block
-                    let input = input.partial(i, input.block_size() - i);
+                    let input = PartialBlock::from_block(input, i, input.block_size() - i);
                     let mut output = output.partial_mut(i, output.block_size() - i);
                     let partial_ctx = org_block.make_partial(i, ctx.block_size() - i);
                     ctx.block = partial_ctx;

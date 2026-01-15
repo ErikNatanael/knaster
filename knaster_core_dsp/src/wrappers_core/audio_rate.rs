@@ -140,8 +140,8 @@ where
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: BlockRead<Sample = Self::Sample>,
-        OutBlock: Block<Sample = Self::Sample>,
+        InBlock: BlockRead<Sample = Self::Sample> + ?Sized,
+        OutBlock: Block<Sample = Self::Sample> + ?Sized,
     {
         for frame in 0..ctx.frames_to_process() {
             // This is potentially a tiny bit inefficient because it initialises the memory before overwriting it.

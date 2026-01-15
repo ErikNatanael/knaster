@@ -6,7 +6,7 @@
 /// no_std_compat prelude import, supporting both std and no_std
 use std::prelude::v1::*;
 
-use crate::block::{AggregateBlockRead, RawBlock};
+use crate::block::{RawAggregateBlockRead, RawContiguousBlock};
 #[allow(unused)]
 use crate::graph::Graph;
 use knaster_core::{AudioCtx, Float, ParameterValue, UGen, UGenFlags};
@@ -29,8 +29,8 @@ pub trait DynUGen<F: Float> {
         &mut self,
         ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
-        input: &AggregateBlockRead<F>,
-        output: &mut RawBlock<F>,
+        input: &RawAggregateBlockRead<F>,
+        output: &mut RawContiguousBlock<F>,
     ) where
         F: Float;
     /// Returns the number of inputs to the UGen
@@ -70,8 +70,8 @@ impl<F: Float, T: UGen<Sample = F> + 'static> DynUGen<F> for T {
         &mut self,
         ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
-        input: &AggregateBlockRead<F>,
-        output: &mut RawBlock<F>,
+        input: &RawAggregateBlockRead<F>,
+        output: &mut RawContiguousBlock<F>,
     ) where
         F: Float,
     {
@@ -197,8 +197,8 @@ impl<F: Float> DynUGen<F> for UGenEnum<F> {
         &mut self,
         ctx: &mut AudioCtx,
         flags: &mut UGenFlags,
-        input: &AggregateBlockRead<F>,
-        output: &mut RawBlock<F>,
+        input: &RawAggregateBlockRead<F>,
+        output: &mut RawContiguousBlock<F>,
     ) where
         F: Float,
     {

@@ -81,8 +81,8 @@ where
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: BlockRead<Sample = Self::Sample>,
-        OutBlock: Block<Sample = Self::Sample>,
+        InBlock: BlockRead<Sample = Self::Sample> + ?Sized,
+        OutBlock: Block<Sample = Self::Sample> + ?Sized,
     {
         flags.clear_node_flags();
         flags.mark_remove_self_supported();

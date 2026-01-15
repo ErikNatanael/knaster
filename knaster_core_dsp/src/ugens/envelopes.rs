@@ -293,8 +293,8 @@ impl<F: Float> EnvAr<F> {
         _input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: BlockRead<Sample = Self::Sample>,
-        OutBlock: Block<Sample = Self::Sample>,
+        InBlock: BlockRead<Sample = Self::Sample> + ?Sized,
+        OutBlock: Block<Sample = Self::Sample> + ?Sized,
     {
         for (i, out) in output.channel_as_slice_mut(0).iter_mut().enumerate() {
             *out = self.next_sample(flags, i as u32);
