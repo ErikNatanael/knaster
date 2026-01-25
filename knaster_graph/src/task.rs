@@ -68,11 +68,11 @@ unsafe impl<F: Float> Send for OutputTask<F> {}
 /// pointer to the TaskData. If there is a problem, the Boxes in TaskData may
 /// need to be raw pointers.
 pub(crate) struct TaskData<F: Float> {
-    // `applied` must be set to true when the running GraphGen receives it. This
-    // signals that the changes in this TaskData have been applied and certain
-    // Nodes may be dropped.
+    /// `applied` must be set to true when the running GraphGen receives it. This
+    /// signals that the changes in this TaskData have been applied and certain
+    /// Nodes may be dropped.
     pub(crate) applied: Arc<AtomicBool>,
-    // Tasks run Gens
+    /// Tasks run UGens in the order they are in this array.
     pub(crate) tasks: Box<[Task<F>]>,
     pub(crate) output_task: OutputTask<F>,
     // if the buffer allocation has been replaced, replace the Arc to them in
@@ -86,11 +86,6 @@ pub(crate) struct TaskData<F: Float> {
     /// The order in which the nodes are executed and the tasks are stored in the `tasks` field.
     /// Used to apply parameter changes directly by function calls before any tasks are run.
     pub(crate) node_task_order: Vec<NodeKey>,
-    // /// Direct pointers to all the gens used in `tasks` in node execution order,
-    // /// and to the NodeKey that points to them in the Graph. This is used to
-    // /// apply parameter changes directly by function calls before any tasks are
-    // /// applied.
-    // pub(crate) gens: Vec<(NodeKey, *mut dyn DynUGen<F>)>,
     /// (node_index_in_order, Vec<(graph_input_channel, node_input_channel))
     pub(crate) graph_input_channels_to_nodes: Vec<(usize, Vec<(usize, usize)>)>,
 }
@@ -139,7 +134,7 @@ unsafe impl<F: Float> Send for ArParameterChange<F> {}
 
 #[derive(Clone, Copy)]
 pub(crate) struct ArParameterChange<F> {
-    /// Node index already converted to the index into `gens` in TaskData
+    /// Node index already converted to the index into `tasks` in TaskData
     pub(crate) node: usize,
     pub(crate) parameter_index: usize,
     pub(crate) buffer: *const F,

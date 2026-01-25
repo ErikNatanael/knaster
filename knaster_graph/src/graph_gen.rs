@@ -28,11 +28,7 @@ use crate::{
 /// run. The Graph communicates with the GraphGen in a thread safe way.
 ///
 /// # Safety
-/// Using this struct is safe only if used in conjunction with the
-/// Graph. The Graph owns nodes and gives its corresponding GraphGen raw
-/// pointers to them through Tasks, but it never accesses or deallocates a node
-/// while it can be accessed by the [`GraphGen`] through a Task. The [`GraphGen`]
-/// mustn't use the _arc_nodes field; it is only there to make sure the nodes
+/// The [`GraphGen`] mustn't use the _arc_nodes field; it is only there to make sure the nodes
 /// don't get dropped.
 pub struct GraphGen<F: Float, Inputs: Size, Outputs: Size> {
     // block_size with oversampling applied
@@ -53,6 +49,7 @@ pub struct GraphGen<F: Float, Inputs: Size, Outputs: Size> {
     // dropped, the GraphGen can continue on without segfaulting. Pointers to
     // the Gens inside Nodes also exist in TaskData where they are called. The
     // Node may not be accessed from within GraphGen at all.
+    // TODO: Can _arc_nodes be removed? We don't store raw pointers to UGens anymore.
     pub(super) _arc_nodes: Arc<UnsafeCell<SlotMap<NodeKey, Node<F>>>>,
     // This Arc makes sure the buffer allocation is valid for as long as it needs to be
     pub(super) _arc_buffer_allocation_ptr: Arc<OwnedRawBuffer<F>>,
@@ -62,6 +59,8 @@ pub struct GraphGen<F: Float, Inputs: Size, Outputs: Size> {
     pub(super) new_task_data_consumer: rtrb::Consumer<TaskData<F>>,
     pub(super) remove_me_flag: Arc<AtomicBool>,
     pub(super) _channels: PhantomData<(NumericArray<(), Inputs>, NumericArray<(), Outputs>)>,
+    /// The number of blocks until scheduled changes are removed form the queue. This is necessary
+    /// because in some situations changes to removed nodes are queued.
     pub(super) blocks_to_keep_scheduled_changes: u32,
 }
 
