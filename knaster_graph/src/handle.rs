@@ -4,10 +4,9 @@
 //! - Typesafe Handle types
 
 use crate::{
-    SchedulingEvent, SchedulingToken, SharedFrameClock, Time,
+    ParameterChangeSender, SchedulingEvent, SchedulingToken, SharedFrameClock, Time,
     core::marker::PhantomData,
-    graph::NodeOrGraph,
-    graph::{GraphError, NodeId},
+    graph::{GraphError, NodeId, NodeOrGraph},
 };
 use knaster_core::{
     Param, ParameterError, ParameterHint, ParameterSmoothing, ParameterValue, Seconds, UGen,
@@ -130,6 +129,11 @@ impl RawHandle {
         self.shared_frame_clock.get()
     }
 }
+impl ParameterChangeSender for RawHandle {
+    fn schedule_change(&self, event: SchedulingEvent) -> Result<(), GraphError> {
+        self.send(event)
+    }
+}
 
 /// Handle with type data intact, without owning a T. Enables interacting with a
 /// live node in a Graph, e.g. freeing and parameter changes. Allows local error
@@ -183,12 +187,38 @@ impl<T: HandleTrait> From<&T> for NodeId {
         value.node_id()
     }
 }
+impl<T: UGen> ParameterChangeSender for Handle<T> {
+    fn schedule_change(&self, event: SchedulingEvent) -> Result<(), GraphError> {
+        self.raw_handle.send(event)
+    }
+}
 /// Trait for handles to nodes.
 pub trait HandleTrait: Sized {
-    /// Set a parameter value on this node.
-    fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), GraphError>;
-    /// Send a [`SchedulingEvent`] to the audio thread.
-    fn schedule_event(&self, event: SchedulingEvent) -> Result<(), GraphError>;
+    /// Create a parameter change.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a parameter description is given that doesn't exist on this node.
+    fn param(&self, param: impl Into<Param>) -> ParameterChange2 {
+        self.try_param(param).unwrap()
+    }
+    /// Create a parameter change. Returns an error if a parameter descriptioni is given that
+    /// doesn't match any parameter on this node.
+    fn try_param(&self, param: impl Into<Param>) -> Result<ParameterChange2, ParameterError>;
+    /// Get the index of a parameter given a [`Param`], if the parameter exists.
+    fn parameter_index(&self, param: impl Into<Param>) -> Result<usize, ParameterError> {
+        let param = param.into();
+        match param {
+            Param::Index(param_i) => Ok(param_i),
+            Param::Desc(desc) => {
+                if let Some(index) = self.parameters().iter().position(|d| *d == desc) {
+                    Ok(index)
+                } else {
+                    Err(ParameterError::DescriptionNotFound(desc))
+                }
+            }
+        }
+    }
     /// Get the [`NodeId`] of this node.
     fn node_id(&self) -> NodeId;
     /// Get the number of inputs of this node.
@@ -218,34 +248,34 @@ pub trait HandleTrait: Sized {
     fn can_send(&self) -> bool;
 }
 impl<T: UGen> HandleTrait for Handle<T> {
-    fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), GraphError> {
-        let c = change.into();
-        let param_index = match c.param {
-            knaster_core::Param::Index(param_i) => param_i,
-            knaster_core::Param::Desc(desc) => {
-                match T::param_descriptions().iter().position(|d| *d == desc) {
-                    Some(param_i) => param_i,
-                    _ => {
-                        // Fail
-                        return Err(ParameterError::DescriptionNotFound(desc).into());
-                    }
-                }
-            }
-        };
-        let event = SchedulingEvent {
-            node_key: self.raw_handle.node.key(),
-            parameter: param_index,
-            value: c.value,
-            smoothing: c.smoothing,
-            token: c.token,
-            time: c.time,
-        };
-        self.raw_handle.send(event)
-    }
-
-    fn schedule_event(&self, event: SchedulingEvent) -> Result<(), GraphError> {
-        self.raw_handle.send(event)
-    }
+    // fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), GraphError> {
+    //     let c = change.into();
+    //     let param_index = match c.param {
+    //         knaster_core::Param::Index(param_i) => param_i,
+    //         knaster_core::Param::Desc(desc) => {
+    //             match T::param_descriptions().iter().position(|d| *d == desc) {
+    //                 Some(param_i) => param_i,
+    //                 _ => {
+    //                     // Fail
+    //                     return Err(ParameterError::DescriptionNotFound(desc).into());
+    //                 }
+    //             }
+    //         }
+    //     };
+    //     let event = SchedulingEvent {
+    //         node_key: self.raw_handle.node.key(),
+    //         parameter: param_index,
+    //         value: c.value,
+    //         smoothing: c.smoothing,
+    //         token: c.token,
+    //         time: c.time,
+    //     };
+    //     self.raw_handle.send(event)
+    // }
+    //
+    // fn schedule_event(&self, event: SchedulingEvent) -> Result<(), GraphError> {
+    //     self.raw_handle.send(event)
+    // }
 
     fn node_id(&self) -> NodeId {
         self.raw_handle.node_id()
@@ -274,35 +304,43 @@ impl<T: UGen> HandleTrait for Handle<T> {
     fn hints(&self) -> Vec<ParameterHint> {
         T::param_hints().to_vec()
     }
+
+    fn try_param(&self, param: impl Into<Param>) -> Result<ParameterChange2, ParameterError> {
+        Ok(ParameterChange2::new(
+            self,
+            self.node_id(),
+            self.parameter_index(param)?,
+        ))
+    }
 }
 impl HandleTrait for AnyHandle {
-    fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), GraphError> {
-        let c = change.into();
-        let param_index = match c.param {
-            knaster_core::Param::Index(param_i) => param_i,
-            knaster_core::Param::Desc(desc) => {
-                if let Some(param_i) = self.parameters.iter().position(|d| *d == desc) {
-                    param_i
-                } else {
-                    // Fail
-                    return Err(ParameterError::DescriptionNotFound(desc).into());
-                }
-            }
-        };
-        let event = SchedulingEvent {
-            node_key: self.raw_handle.node.key(),
-            parameter: param_index,
-            value: c.value,
-            smoothing: c.smoothing,
-            token: c.token,
-            time: c.time,
-        };
-        self.raw_handle.send(event)
-    }
-
-    fn schedule_event(&self, event: SchedulingEvent) -> Result<(), GraphError> {
-        self.raw_handle.send(event)
-    }
+    // fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), GraphError> {
+    //     let c = change.into();
+    //     let param_index = match c.param {
+    //         knaster_core::Param::Index(param_i) => param_i,
+    //         knaster_core::Param::Desc(desc) => {
+    //             if let Some(param_i) = self.parameters.iter().position(|d| *d == desc) {
+    //                 param_i
+    //             } else {
+    //                 // Fail
+    //                 return Err(ParameterError::DescriptionNotFound(desc).into());
+    //             }
+    //         }
+    //     };
+    //     let event = SchedulingEvent {
+    //         node_key: self.raw_handle.node.key(),
+    //         parameter: param_index,
+    //         value: c.value,
+    //         smoothing: c.smoothing,
+    //         token: c.token,
+    //         time: c.time,
+    //     };
+    //     self.raw_handle.send(event)
+    // }
+    //
+    // fn schedule_event(&self, event: SchedulingEvent) -> Result<(), GraphError> {
+    //     self.raw_handle.send(event)
+    // }
 
     fn node_id(&self) -> NodeId {
         self.raw_handle.node_id()
@@ -331,11 +369,24 @@ impl HandleTrait for AnyHandle {
     fn hints(&self) -> Vec<ParameterHint> {
         self.parameter_hints.clone()
     }
+
+    fn try_param(&self, param: impl Into<Param>) -> Result<ParameterChange2, ParameterError> {
+        Ok(ParameterChange2::new(
+            self,
+            self.node_id(),
+            self.parameter_index(param)?,
+        ))
+    }
+}
+impl ParameterChangeSender for AnyHandle {
+    fn schedule_change(&self, event: SchedulingEvent) -> Result<(), GraphError> {
+        self.raw_handle.send(event)
+    }
 }
 /// A parameter change API for the [`HandleTrait`] (deprecated).
-#[derive(Debug)]
-pub struct ParameterChange2<'a, H: HandleTrait> {
-    handle: &'a H,
+pub struct ParameterChange2<'a> {
+    sender: &'a dyn ParameterChangeSender,
+    node_id: NodeId,
     param: usize,
     value: Option<ParameterValue>,
     smoothing: Option<ParameterSmoothing>,
@@ -343,7 +394,19 @@ pub struct ParameterChange2<'a, H: HandleTrait> {
     time: Option<Time>,
     was_sent: bool,
 }
-impl<H: HandleTrait> ParameterChange2<'_, H> {
+impl<'a> ParameterChange2<'a> {
+    fn new(sender: &'a dyn ParameterChangeSender, node_id: NodeId, param: usize) -> Self {
+        Self {
+            sender,
+            param,
+            value: None,
+            smoothing: None,
+            token: None,
+            time: None,
+            was_sent: false,
+            node_id,
+        }
+    }
     /// Send a trigger parameter change.
     pub fn trig(mut self) -> Self {
         self.value = Some(ParameterValue::Trigger);
@@ -379,8 +442,8 @@ impl<H: HandleTrait> ParameterChange2<'_, H> {
     pub fn send(mut self) -> Result<(), GraphError> {
         self.was_sent = true;
 
-        self.handle.schedule_event(SchedulingEvent {
-            node_key: self.handle.node_id().key(),
+        self.sender.schedule_change(SchedulingEvent {
+            node_key: self.node_id.key(),
             parameter: self.param,
             value: self.value,
             smoothing: self.smoothing,
@@ -389,11 +452,11 @@ impl<H: HandleTrait> ParameterChange2<'_, H> {
         })
     }
 }
-impl<H: HandleTrait> Drop for ParameterChange2<'_, H> {
+impl Drop for ParameterChange2<'_> {
     fn drop(&mut self) {
         if !self.was_sent {
-            if let Err(e) = self.handle.schedule_event(SchedulingEvent {
-                node_key: self.handle.node_id().key(),
+            if let Err(e) = self.sender.schedule_change(SchedulingEvent {
+                node_key: self.node_id.key(),
                 parameter: self.param,
                 value: self.value,
                 smoothing: self.smoothing,
@@ -405,90 +468,3 @@ impl<H: HandleTrait> Drop for ParameterChange2<'_, H> {
         }
     }
 }
-/// Parameter change API (deprecated).
-#[derive(Clone, Debug)]
-pub struct ParameterChange {
-    param: Param,
-    value: Option<ParameterValue>,
-    smoothing: Option<ParameterSmoothing>,
-    token: Option<SchedulingToken>,
-    time: Option<Time>,
-}
-impl<P: Into<Param>, V: Into<ParameterValue>> From<(P, V)> for ParameterChange {
-    fn from((param, value): (P, V)) -> Self {
-        ParameterChange {
-            param: param.into(),
-            value: Some(value.into()),
-            smoothing: None,
-            token: None,
-            time: None,
-        }
-    }
-}
-impl<P: Into<Param>, V: Into<ParameterValue>> From<(P, V, SchedulingToken)> for ParameterChange {
-    fn from((param, value, token): (P, V, SchedulingToken)) -> Self {
-        ParameterChange {
-            param: param.into(),
-            value: Some(value.into()),
-            smoothing: None,
-            token: Some(token),
-            time: None,
-        }
-    }
-}
-impl<P: Into<Param>, V: Into<ParameterValue>, S: Into<ParameterSmoothing>>
-    From<(P, V, S, SchedulingToken)> for ParameterChange
-{
-    fn from((param, value, smoothing, token): (P, V, S, SchedulingToken)) -> Self {
-        ParameterChange {
-            param: param.into(),
-            value: Some(value.into()),
-            smoothing: Some(smoothing.into()),
-            token: Some(token),
-            time: None,
-        }
-    }
-}
-impl<P: Into<Param>, V: Into<ParameterValue>, S: Into<ParameterSmoothing>> From<(P, V, S)>
-    for ParameterChange
-{
-    fn from((param, value, smoothing): (P, V, S)) -> Self {
-        ParameterChange {
-            param: param.into(),
-            value: Some(value.into()),
-            smoothing: Some(smoothing.into()),
-            token: None,
-            time: None,
-        }
-    }
-}
-
-// impl<Sample, T: Gen<Sample = Sample>> Handleable for T {
-//     type HandleType = Handle<Self>;
-
-//     fn get_handle(untyped_handle: UntypedHandle) -> Self::HandleType {
-//         Handle::<Self>::new(untyped_handle)
-//     }
-// }
-
-// We might do per Gen handle types in the future. Leaving this here for then:
-// pub struct OscHandle<F>(Handle<Self>);
-// impl<F: Float> OscHandle<F> {
-//     pub fn freq(&mut self) {
-//         todo!()
-//     }
-// }
-// impl<F: Float> HandleTrait for OscHandle<F> {
-//     fn set(&mut self) {
-//         todo!()
-//     }
-//     fn from_untyped(untyped_handle: UntypedHandle) -> Self {
-//         OscHandle::<F>(Handle::new(untyped_handle))
-//     }
-// }
-// impl<F: Float> Handleable for Osc<F> {
-//     type HandleType = OscHandle<F>;
-// }
-// impl<F: Float> Handleable for crate::test_reverb::Reverb<F> {
-//     type HandleType = Handle<Self>;
-// }

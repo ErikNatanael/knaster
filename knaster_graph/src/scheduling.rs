@@ -15,6 +15,7 @@
 
 use crate::core::sync::Arc;
 
+use crate::graph::GraphError;
 use crate::{
     core::sync::atomic::{AtomicBool, AtomicU64},
     graph::NodeKey,
@@ -24,7 +25,16 @@ use knaster_core::log::ArLogSender;
 #[allow(unused)]
 use knaster_core::{ParameterError, ParameterSmoothing, ParameterValue, Seconds, rt_log};
 
+/// A trait for sending parameter changes to a GraphGen i.e. the running Graph.
+pub trait ParameterChangeSender {
+    /// Send a [`SchedulingEvent`] to the audio thread.
+    fn schedule_change(&self, event: SchedulingEvent) -> Result<(), GraphError>;
+}
+
 /// An event, i.e. a parameter change or a smoothing change, to be scheduled to be applied on the audio thread.
+///
+/// This struct is the actual event being sent to the GraphGen for scheduling. See
+/// [`ParameterChange`] for a more ergonomic API.
 #[derive(Debug, Clone)]
 pub struct SchedulingEvent {
     pub(crate) node_key: NodeKey,
@@ -33,6 +43,62 @@ pub struct SchedulingEvent {
     pub(crate) smoothing: Option<ParameterSmoothing>,
     pub(crate) token: Option<SchedulingToken>,
     pub(crate) time: Option<Time>,
+}
+impl SchedulingEvent {
+    /// Create a new parameter change.
+    pub fn new(node_key: NodeKey, parameter: usize) -> Self {
+        Self {
+            node_key,
+            parameter,
+            value: None,
+            smoothing: None,
+            token: None,
+            time: None,
+        }
+    }
+    /// Set the value of the parameter change.
+    pub fn value(mut self, v: impl Into<ParameterValue>) -> Self {
+        self.value = Some(v.into());
+        self
+    }
+    /// Set the parameter value to trigger.
+    pub fn trig(mut self) -> Self {
+        self.value = Some(ParameterValue::Trigger);
+        self
+    }
+    /// Set the smoothing setting for the parameter change.
+    pub fn smoothing(mut self, s: impl Into<ParameterSmoothing>) -> Self {
+        self.smoothing = Some(s.into());
+        self
+    }
+    /// Attach a scheduling token to the parameter change. The token will be activated at the start
+    /// of a block ang guarantees that all changes with the same token are applied in the same
+    /// block.
+    pub fn token(mut self, t: impl Into<SchedulingToken>) -> Self {
+        self.token = Some(t.into());
+        self
+    }
+    /// Apply the parameter change after the given time.
+    pub fn after(mut self, t: impl Into<Seconds>) -> Self {
+        self.time = Some(Time::after(t.into()));
+        self
+    }
+    /// Apply the parameter change at the given time, counted in audio samples produced.
+    pub fn at(mut self, t: impl Into<Time>) -> Self {
+        let t = t.into().to_absolute();
+        self.time = Some(t);
+        self
+    }
+    /// Resets value, smoothing, token and time. Node and parameter are preserved.
+    pub fn reset(&mut self) {
+        self.value = None;
+        self.smoothing = None;
+        self.token = None;
+        self.time = None;
+    }
+    pub fn send(self, sender: impl ParameterChangeSender) -> Result<(), GraphError> {
+        sender.schedule_change(self)
+    }
 }
 pub(crate) type SchedulingChannelProducer = rtrb::Producer<SchedulingEvent>;
 // Every GraphGen has one of these for receiving parameter changes.

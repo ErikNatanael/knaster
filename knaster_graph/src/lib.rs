@@ -56,6 +56,7 @@ pub mod audio_backend;
 pub mod block;
 #[cfg(any(feature = "std", feature = "alloc"))]
 mod buffer_allocator;
+pub mod connection;
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub mod dynugen;
 #[cfg(any(feature = "std", feature = "alloc"))]

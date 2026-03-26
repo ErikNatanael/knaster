@@ -1,11 +1,14 @@
 use crate::Time;
+use crate::connection::{ConnectionOptions, Sink, Source};
 use crate::graph::NodeOrGraph;
+use crate::handle::{HandleTrait, ParameterChange2};
 use crate::processor::AudioProcessorOptions;
 use crate::tests::utils::TestNumUGen;
 use crate::{processor::AudioProcessor, tests::utils::TestInPlusParamUGen};
 use knaster_core::typenum::{U0, U1, U2, U4};
 use knaster_core::{Block, typenum::U3};
 use knaster_core_dsp::math::{Add, MathUGen, Mul};
+use knaster_core_dsp::wrappers_core::UGenWrapperCoreExt;
 /// no_std_compat prelude import, supporting both std and no_std
 use std::prelude::v1::*;
 
@@ -57,6 +60,46 @@ fn graph_inputs_to_outputs() {
             ..Default::default()
         });
 
+    graph
+        .connect(
+            Source::graph(1),
+            Sink::graph(0),
+            ConnectionOptions::default(),
+        )
+        .unwrap();
+    graph
+        .connect(
+            Source::graph(2),
+            Sink::graph(1),
+            ConnectionOptions::default(),
+        )
+        .unwrap();
+    graph.commit_changes().unwrap();
+
+    let input_allocation = vec![1.0; 16 * 3];
+    let input_pointers = [
+        input_allocation.as_ptr(),
+        unsafe { input_allocation.as_ptr().add(block_size) },
+        unsafe { input_allocation.as_ptr().add(block_size * 2) },
+    ];
+    unsafe { audio_processor.run_raw_ptr_inputs(&input_pointers) };
+    let output = audio_processor.output_block();
+    assert_eq!(output.read(0, 0), 1.0);
+    assert_eq!(output.read(1, 0), 1.0);
+    assert_eq!(output.read(2, 0), 0.0);
+}
+
+#[test]
+fn graph_inputs_to_outputs_graph_edit() {
+    let block_size = 16;
+    let (mut graph, mut audio_processor, _log_receiver) =
+        AudioProcessor::new::<U3, U3>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+            ..Default::default()
+        });
+
     graph.edit(|graph| {
         // Connect input 1 to 0, 2, to 1
         graph.from_inputs(1).unwrap().to_graph_out_channels(0);
@@ -77,7 +120,136 @@ fn graph_inputs_to_outputs() {
 }
 
 #[test]
+fn graph_inputs_to_parameters() {
+    let block_size = 16;
+    let (mut graph, mut audio_processor, _log_receiver) =
+        AudioProcessor::new::<U3, U3>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+            ..Default::default()
+        });
+
+    let n0 = graph.push(TestInPlusParamUGen::new().ar_params());
+    let n1 = graph.push(TestInPlusParamUGen::new().ar_params());
+    graph
+        .connect(
+            Source::graph(1),
+            Sink::param(n0.node_id(), 0),
+            ConnectionOptions::default(),
+        )
+        .unwrap();
+    graph
+        .connect(
+            Source::node(n0.node_id(), 0),
+            Sink::graph(1),
+            ConnectionOptions::default(),
+        )
+        .unwrap();
+    graph
+        .connect(
+            Source::graph(2),
+            Sink::param(n1.node_id(), 0),
+            ConnectionOptions::default(),
+        )
+        .unwrap();
+    graph
+        .connect(
+            Source::node(n1.node_id(), 0),
+            Sink::graph(2),
+            ConnectionOptions::default(),
+        )
+        .unwrap();
+    graph.commit_changes().unwrap();
+
+    let mut input_allocation = vec![1.0; 16 * 3];
+    input_allocation[block_size..block_size * 2].fill(2.);
+    input_allocation[block_size * 2..block_size * 3].fill(3.);
+    let input_pointers = [
+        input_allocation.as_ptr(),
+        unsafe { input_allocation.as_ptr().add(block_size) },
+        unsafe { input_allocation.as_ptr().add(block_size * 2) },
+    ];
+    unsafe { audio_processor.run_raw_ptr_inputs(&input_pointers) };
+    let output = audio_processor.output_block();
+    assert_eq!(output.read(0, 0), 0.0);
+    assert_eq!(output.read(1, 0), 2.0);
+    assert_eq!(output.read(2, 0), 3.0);
+}
+
+#[test]
 fn graph_inputs_to_nodes_to_outputs() {
+    let block_size = 16;
+    let (mut graph, mut audio_processor, _log_receiver) =
+        AudioProcessor::new::<U3, U3>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+            ..Default::default()
+        });
+    graph
+        .connect(
+            Source::graph(0),
+            Sink::graph(1),
+            ConnectionOptions::default(),
+        )
+        .unwrap();
+    graph
+        .connect(
+            Source::graph(0),
+            Sink::graph(2),
+            ConnectionOptions::default(),
+        )
+        .unwrap();
+    let g0 = graph.push(TestInPlusParamUGen::new());
+    let g1 = graph.push(TestInPlusParamUGen::new());
+    g0.param("number").value(0.75).send().unwrap();
+    g1.param("number").value(0.5).send().unwrap();
+
+    graph
+        .connect(
+            Source::node(g0.node_id(), 0),
+            Sink::graph(2),
+            ConnectionOptions::default(),
+        )
+        .unwrap();
+    graph
+        .connect(
+            Source::graph(0),
+            Sink::node(g1.node_id(), 0),
+            ConnectionOptions::default(),
+        )
+        .unwrap();
+    graph
+        .connect(
+            Source::node(g1.node_id(), 0),
+            Sink::graph(0),
+            ConnectionOptions::default(),
+        )
+        .unwrap();
+    graph.commit_changes().unwrap();
+
+    // Connect input 1 to 0, 2, to 1
+    // graph.connect(&g0, 0, 2, graph.internal()).unwrap();
+    // graph.connect(graph.internal(), 2, 0, &g1).unwrap();
+    // graph.connect(&g1, 0, 0, graph.internal()).unwrap();
+    // graph.commit_changes().unwrap();
+
+    let input_allocation = vec![2.0; 16 * 3];
+    let input_pointers = [
+        input_allocation.as_ptr(),
+        unsafe { input_allocation.as_ptr().add(block_size) },
+        unsafe { input_allocation.as_ptr().add(block_size * 2) },
+    ];
+    unsafe { audio_processor.run_raw_ptr_inputs(&input_pointers) };
+    let output = audio_processor.output_block();
+    assert_eq!(output.read(0, 0), 2.5);
+    assert_eq!(output.read(1, 0), 2.0);
+    assert_eq!(output.read(2, 0), 2.75);
+}
+
+#[test]
+fn graph_inputs_to_nodes_to_outputs_graph_edit() {
     let block_size = 16;
     let (mut graph, mut audio_processor, _log_receiver) =
         AudioProcessor::new::<U3, U3>(AudioProcessorOptions {
@@ -193,6 +365,57 @@ fn feedback_nodes() {
             ..Default::default()
         });
 
+    // These are connected in the most common case where a feedback edge is required
+    let n0 = g.push(TestInPlusParamUGen::new());
+    n0.param(0).value(1.25).send().unwrap();
+    let n1 = g.push(TestInPlusParamUGen::new());
+    n1.param(0).value(0.125).send().unwrap();
+
+    g.connect(
+        Source::node(&n0, 0),
+        Sink::node(&n1, 0),
+        ConnectionOptions::default(),
+    )
+    .unwrap();
+    g.connect(
+        Source::node(&n1, 0),
+        Sink::node(&n0, 0),
+        ConnectionOptions::default().feedback(),
+    )
+    .unwrap();
+    g.connect(
+        Source::node(&n1, 0),
+        Sink::graph(0),
+        ConnectionOptions::default().feedback(),
+    )
+    .unwrap();
+    g.commit_changes().unwrap();
+
+    // Block 1
+    audio_processor.run_without_inputs();
+    let output = audio_processor.output_block();
+    assert_eq!(output.read(0, 0), 1.375);
+    // Block 2
+    audio_processor.run_without_inputs();
+    let output = audio_processor.output_block();
+    assert_eq!(output.read(0, 0), 1.375 * 2.);
+    // Block 3
+    audio_processor.run_without_inputs();
+    let output = audio_processor.output_block();
+    assert_eq!(output.read(0, 0), 1.375 * 3.);
+}
+
+#[test]
+fn feedback_nodes_graph_edit() {
+    let block_size = 16;
+    let (mut g, mut audio_processor, _log_receiver) =
+        AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+            ..Default::default()
+        });
+
     g.edit(|g| {
         // These are connected in the most common case where a feedback edge is required
         let n0 = g.push(TestInPlusParamUGen::new());
@@ -280,7 +503,8 @@ fn disconnect() {
     let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 0.5 + 1.25 + 0.125);
 
-    g.disconnect_output_from_source(&n1, 0).unwrap();
+    g.disconnect_output_from_source(Source::node(&n1, 0))
+        .unwrap();
     g.commit_changes().unwrap();
 
     // Block 2
@@ -288,7 +512,7 @@ fn disconnect() {
     let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 1.25 + 0.125);
 
-    g.disconnect_input_to_sink(0, &n3).unwrap();
+    g.disconnect_input_to_sink(Sink::node(&n3, 0)).unwrap();
     g.commit_changes().unwrap();
     // Block 3
     audio_processor.run_without_inputs();

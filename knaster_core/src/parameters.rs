@@ -86,7 +86,7 @@ pub enum ParameterError {
 /// [`Param`] selects a parameter of a [`UGen`] based on an index or a description `&str`.
 ///
 /// It is used to receive either index or description to a function via `impl Into<Param>`
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Param {
     #[allow(missing_docs)]
     Index(usize),

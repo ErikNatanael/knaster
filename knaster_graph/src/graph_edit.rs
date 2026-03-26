@@ -15,6 +15,7 @@
 //! - [X] Implement remaining arithmetics
 //! - [ ] API for scheduling parameter changes
 
+use crate::connection::{Sink, Source};
 use crate::core::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use core::mem::MaybeUninit;
 use core::ops::{BitOr, Div, Shr, Sub};
@@ -411,7 +412,11 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
             .iter_outputs()
             .nth(source_channel as usize)
             .expect("Output channel to disconnect from does not exist.");
-        g.disconnect_output_from_source(source.0, source.1)
+        let source = match source.0 {
+            NodeOrGraph::Graph => Source::graph(source.1),
+            NodeOrGraph::Node(id) => Source::node(id, source.1),
+        };
+        g.disconnect_output_from_source(source)
             .expect("Error disconnecting from output channel.");
     }
     /// Disconnect any input from the specified channel.
@@ -422,7 +427,11 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
             .iter_inputs()
             .nth(sink_channel as usize)
             .expect("Input channel to disconnect does not exist.");
-        g.disconnect_input_to_sink(sink.1, sink.0)
+        let sink = match sink.0 {
+            NodeOrGraph::Graph => Sink::graph(sink.1),
+            NodeOrGraph::Node(id) => Sink::node(id, sink.1),
+        };
+        g.disconnect_input_to_sink(sink)
             .expect("Error disconnecting input channel.");
     }
     /// Connect this handle to another handle, returning a [`Stack`] which can be used to connect
@@ -619,7 +628,11 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
             .iter_outputs()
             .nth(source_channel as usize)
             .expect("Output channel to disconnect from does not exist.");
-        g.disconnect_output_from_source(source.0, source.1)
+        let source = match source.0 {
+            NodeOrGraph::Graph => Source::graph(source.1),
+            NodeOrGraph::Node(id) => Source::node(id, source.1),
+        };
+        g.disconnect_output_from_source(source)
             .expect("Error disconnecting from output channel.");
     }
     /// Disconnect any input from the specified channel.
@@ -630,7 +643,11 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
             .iter_inputs()
             .nth(sink_channel as usize)
             .expect("Input channel to disconnect does not exist.");
-        g.disconnect_input_to_sink(sink.1, sink.0)
+        let sink = match sink.0 {
+            NodeOrGraph::Graph => Sink::graph(sink.1),
+            NodeOrGraph::Node(id) => Sink::node(id, sink.1),
+        };
+        g.disconnect_input_to_sink(sink)
             .expect("Error disconnecting input channel.");
     }
     /// Connect this handle to another handle, returning a [`Stack`] which can be used to connect

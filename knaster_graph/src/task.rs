@@ -88,6 +88,8 @@ pub(crate) struct TaskData<F: Float> {
     pub(crate) node_task_order: Vec<NodeKey>,
     /// (node_index_in_order, Vec<(graph_input_channel, node_input_channel))
     pub(crate) graph_input_channels_to_nodes: Vec<(usize, Vec<(usize, usize)>)>,
+    /// (node_index_in_order, graph_input_channel, node_parameter_index)
+    pub(crate) graph_input_channels_to_node_parameters: Vec<(usize, u16, u16)>,
 }
 
 impl<F: Float> TaskData<F> {

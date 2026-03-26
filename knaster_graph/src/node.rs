@@ -5,7 +5,7 @@ use crate::dynugen::UGenEnum;
 use std::prelude::v1::*;
 
 use ecow::EcoString;
-use knaster_core::{Float, ParameterHint};
+use knaster_core::{Float, ParameterHint, UGen, typenum::*};
 
 use crate::graph::{GraphId, NodeKey};
 use crate::{buffer_allocator::BufferAllocator, dynugen::DynUGen, task::Task};
@@ -34,6 +34,15 @@ impl NodeData {
             i += 1;
             s
         })
+    }
+    pub fn from_ugen<T: UGen>() -> Self {
+        Self {
+            parameter_descriptions_fn: |index: usize| T::param_descriptions().get(index).copied(),
+            parameter_hints_fn: |index: usize| T::param_hints().get(index).copied(),
+            inputs: T::Inputs::U16,
+            outputs: T::Outputs::U16,
+            parameters: T::Parameters::U16,
+        }
     }
 }
 
