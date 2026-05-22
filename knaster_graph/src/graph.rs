@@ -2028,6 +2028,20 @@ impl<F: Float> Graph<F> {
                     });
                 }
             }
+            let mut input_parameter_edges = Vec::new();
+            if let Some(edges) = self.node_parameter_edges.get(node_key) {
+                for edge in edges {
+                    input_parameter_edges.push(EdgeInspection {
+                        source: match edge.source {
+                            NodeKeyOrGraph::Node(key) => EdgeSource::Node(key),
+                            NodeKeyOrGraph::Graph => EdgeSource::Graph,
+                        },
+                        from_index: edge.channel_in_source,
+                        to_index: edge.parameter_index as u16,
+                        is_feedback: false,
+                    });
+                }
+            }
 
             nodes.push(NodeInspection {
                 name: node.name.to_string(),
@@ -2035,6 +2049,7 @@ impl<F: Float> Graph<F> {
                 inputs: node.data.inputs,
                 outputs: node.data.outputs,
                 input_edges,
+                input_parameter_edges,
                 parameter_descriptions: node.parameter_descriptions().collect(),
                 parameter_hints: node.parameter_hints().collect(),
                 unconnected: self.disconnected_nodes.contains(&node_key),

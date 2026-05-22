@@ -70,6 +70,9 @@ impl GraphInspection {
     pub fn to_dot_string(&self) -> String {
         let mut s = String::new();
         s.push_str("digraph D {\n");
+        // Options to fix rendering
+        s.push_str("graph [splines=curved];"); // Or splines=true, or splines=ortho
+        s.push_str("newrank=true;"); // Use the new rank solver
         if self.num_outputs > 0 {
             // Create the nodes for graph inputs and outputs
             s.push_str(
@@ -117,16 +120,20 @@ impl GraphInspection {
                 for j in 0..node.inputs {
                     s.push_str(&format!("<td port='i{j}'>{j}</td>\n"));
                 }
+                for (j, param) in node.parameter_descriptions.iter().enumerate() {
+                    s.push_str(&format!("<td port='p{j}'>{param}</td>\n"));
+                }
                 s.push_str("</tr>\n");
             }
             s.push_str(&format!(
                 "<tr><td bgcolor='{color}' colspan='{}'><font color='white'>\n",
-                node.inputs.max(node.outputs)
+                (node.inputs + node.parameter_descriptions.len() as u16).max(node.outputs)
             ));
             // Can't use < or > inside label names so we replace them with their HTML codes
             let name = node.name.clone();
             let name = name.replace("<", "&#60;");
             let name = name.replace(">", "&#62;");
+            let name = format!("{name} {:?}", node.key);
             s.push_str(&format!("{i}: {name}\n"));
             s.push_str("</font></td></tr>\n");
             if node.outputs > 0 {
@@ -168,6 +175,31 @@ impl GraphInspection {
 
                 s.push_str(&format!(
                     "{source_name}:o{from_index} -> \"{j}_{node_name}\":i{to_index}\n"
+                ));
+            }
+            for edge in &node.input_parameter_edges {
+                let EdgeInspection {
+                    source,
+                    from_index,
+                    to_index,
+                    is_feedback: _,
+                } = edge;
+
+                let source_name = match source {
+                    EdgeSource::Node(node_key) => {
+                        if let Some(i) = self.nodes.iter().position(|n| n.key == *node_key) {
+                            format!("\"{i}_{}\"", self.nodes[i].name)
+                        } else {
+                            log::error!("Node in edge not found: {node_key:?}");
+                            continue;
+                        }
+                    }
+                    EdgeSource::Graph => "graph_in".to_string(),
+                };
+                let node_name = &node.name;
+
+                s.push_str(&format!(
+                    "{source_name}:o{from_index} -> \"{j}_{node_name}\":p{to_index} \n"
                 ));
             }
         }
@@ -216,6 +248,11 @@ impl GraphInspection {
         std::fs::write("graph.svg", output.stdout).unwrap();
         open::that("graph.svg").unwrap();
     }
+    /// Get a node inspection by its key. Returns None if the node is not found.
+    pub fn get_node(&self, key: impl Into<NodeKey>) -> Option<&NodeInspection> {
+        let key = key.into();
+        self.nodes.iter().find(|ni| ni.key == key)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -231,6 +268,8 @@ pub struct NodeInspection {
     pub outputs: u16,
     /// Edges going into this node
     pub input_edges: Vec<EdgeInspection>,
+    /// Parameter edges going into this node
+    pub input_parameter_edges: Vec<EdgeInspection>,
     /// Parameter descriptions for the node
     pub parameter_descriptions: Vec<&'static str>,
     /// Parameter hints for the node
