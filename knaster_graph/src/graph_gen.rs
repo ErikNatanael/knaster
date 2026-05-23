@@ -173,7 +173,7 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
             output_task,
             current_buffer_allocation: new_buffer_allocation,
             graph_input_channels_to_nodes,
-            graph_input_channels_to_node_parameters,
+            graph_input_to_ar_parameter_edges,
             applied: _,
             ar_parameter_changes: _,
             node_task_order: _,
@@ -195,13 +195,13 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
         }
         // Since there is no guarantee that the graph input pointer will remain the same, this
         // needs to be set every block.
-        for (node_index, graph_input_index, parameter_index) in
-            graph_input_channels_to_node_parameters
-        {
-            let ugen = &mut tasks[*node_index].ugen;
-            let channel = input.channel_as_slice(*graph_input_index as usize);
+        for edge in graph_input_to_ar_parameter_edges {
+            let ugen = &mut tasks[edge.node].ugen;
+            let channel = input.channel_as_slice(edge.graph_input_index as usize);
             let graph_input_ptr = channel.as_ptr();
-            unsafe { ugen.set_ar_param_buffer(ctx, *parameter_index as usize, graph_input_ptr) };
+            unsafe {
+                ugen.set_ar_param_buffer(ctx, edge.parameter_index as usize, graph_input_ptr)
+            };
         }
 
         let mut new_flags = UGenFlags::default();

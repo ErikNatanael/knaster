@@ -416,7 +416,7 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
             NodeOrGraph::Graph => Source::graph(source.1),
             NodeOrGraph::Node(id) => Source::node(id, source.1),
         };
-        g.disconnect_output_from_source(source)
+        g.disconnect_outputs_from_source(source)
             .expect("Error disconnecting from output channel.");
     }
     /// Disconnect any input from the specified channel.
@@ -431,7 +431,7 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
             NodeOrGraph::Graph => Sink::graph(sink.1),
             NodeOrGraph::Node(id) => Sink::node(id, sink.1),
         };
-        g.disconnect_input_to_sink(sink)
+        g.disconnect_inputs_to_sink(sink)
             .expect("Error disconnecting input channel.");
     }
     /// Connect this handle to another handle, returning a [`Stack`] which can be used to connect
@@ -632,7 +632,7 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
             NodeOrGraph::Graph => Source::graph(source.1),
             NodeOrGraph::Node(id) => Source::node(id, source.1),
         };
-        g.disconnect_output_from_source(source)
+        g.disconnect_outputs_from_source(source)
             .expect("Error disconnecting from output channel.");
     }
     /// Disconnect any input from the specified channel.
@@ -647,7 +647,7 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
             NodeOrGraph::Graph => Sink::graph(sink.1),
             NodeOrGraph::Node(id) => Sink::node(id, sink.1),
         };
-        g.disconnect_input_to_sink(sink)
+        g.disconnect_inputs_to_sink(sink)
             .expect("Error disconnecting input channel.");
     }
     /// Connect this handle to another handle, returning a [`Stack`] which can be used to connect

@@ -47,8 +47,6 @@ pub use knaster_core_dsp::*;
 // Deprecated
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub mod handle;
-// pub mod connectable;
-// pub mod connectable2;
 
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub mod audio_backend;

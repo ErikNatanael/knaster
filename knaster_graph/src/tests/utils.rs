@@ -1,4 +1,9 @@
-use knaster_core::{AudioCtx, Float, ParameterHint, UGen, UGenFlags, impl_ugen, typenum::U1};
+use anyhow::anyhow;
+use knaster_core::{
+    AudioCtx, BlockRead, Float, ParameterHint, UGen, UGenFlags, impl_ugen, typenum::U1,
+};
+
+use crate::processor::AudioProcessor;
 
 /// Outputs a static number every frame
 pub(crate) struct TestNumUGen<F> {
@@ -63,5 +68,21 @@ impl<F: Float> UGen for TestInPlusParamUGen<F> {
         if index == 0 {
             self.set_number(F::new(value.float().unwrap()));
         }
+    }
+}
+
+pub(super) fn assert_next_frame_eq_0_0<F: Float>(
+    audio_processor: &mut AudioProcessor<F>,
+    expected: F,
+) -> Result<(), anyhow::Error> {
+    audio_processor.run_without_inputs();
+    let output = audio_processor.output_block();
+    let frame = output.read(0, 0);
+    if frame == expected {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "Expected first sample in block {expected:?}, got {frame:?}"
+        ))
     }
 }

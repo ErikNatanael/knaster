@@ -1,6 +1,10 @@
+//! Connection primitives to express any supported connection, see [`Graph::connect`]
+
 use knaster_core::Param;
 
-use crate::graph::NodeId;
+#[expect(unused)]
+use crate::graph::Graph;
+use crate::graph::{NodeId, NodeOrGraph};
 
 /// Source, i.e. where the signal is coming from, for a connection.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -12,6 +16,7 @@ pub enum Source {
     #[allow(missing_docs)]
     GraphInput { channel: u16 },
 }
+
 impl Source {
     /// The output from a node channel
     pub fn node(node: impl Into<NodeId>, output_channel: u16) -> Self {
@@ -24,6 +29,13 @@ impl Source {
     pub fn graph(input_channel: u16) -> Self {
         Self::GraphInput {
             channel: input_channel,
+        }
+    }
+    /// Extract the key/graph and channel number
+    pub fn into_parts(self) -> (NodeOrGraph, u16) {
+        match self {
+            Source::Node { id, channel } => (NodeOrGraph::Node(id), channel),
+            Source::GraphInput { channel } => (NodeOrGraph::Graph, channel),
         }
     }
 }
@@ -41,6 +53,7 @@ pub enum Sink {
     #[allow(missing_docs)]
     Parameter { id: NodeId, param: Param },
 }
+
 impl Sink {
     /// The input to a node channel
     pub fn node(node: impl Into<NodeId>, input_channel: u16) -> Self {
@@ -56,9 +69,9 @@ impl Sink {
         }
     }
     /// Connecting a graph source to a node parameter
-    pub fn param(node: NodeId, param: impl Into<Param>) -> Self {
+    pub fn param(node: impl Into<NodeId>, param: impl Into<Param>) -> Self {
         Self::Parameter {
-            id: node,
+            id: node.into(),
             param: param.into(),
         }
     }
@@ -72,6 +85,7 @@ pub struct ConnectionOptions {
     #[allow(missing_docs)]
     pub feedback: bool,
 }
+
 impl ConnectionOptions {
     /// Set replace to true. Any existing connections to the sink will be replaced.
     pub fn replace(mut self) -> Self {

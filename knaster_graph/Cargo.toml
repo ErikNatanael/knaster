@@ -53,6 +53,8 @@ ecow = { version = "0.2.3", default-features = false }
 [dev-dependencies]
 anyhow = "1"
 env_logger = "0.11.8"
+# Print log prints in tests
+test-log = {version = "0.2"}
 rand = "0.9"
 # Enabling the `std` feature for `critical-section` provides a critical section implementation
 # that is can be used when running the no_std tests
