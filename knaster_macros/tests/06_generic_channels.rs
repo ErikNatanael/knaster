@@ -84,8 +84,8 @@ impl<F: Float, InputChannels: Size, OutputChannels: Size>
         input: &InBlock,
         output: &mut OutBlock,
     ) where
-        InBlock: BlockRead<Sample = Self::Sample>,
-        OutBlock: Block<Sample = Self::Sample>,
+        InBlock: BlockRead<Sample = Self::Sample> + ?Sized,
+        OutBlock: Block<Sample = Self::Sample> + ?Sized,
     {
         for chan in 0..Self::Inputs::USIZE.min(Self::Outputs::USIZE) {
             for (inp, outp) in input
