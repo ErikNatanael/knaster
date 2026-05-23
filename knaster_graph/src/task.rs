@@ -107,6 +107,10 @@ impl<F: Float> TaskData<F> {
             if let UGenEnum::TakeFromTask(j) = task.ugen {
                 task.ugen = old_task_data.tasks[j].ugen.take();
             }
+            // Disable all ar parameter changes, since an edge may have been removed
+            for i in 0..task.ugen.parameters() as usize {
+                unsafe { task.ugen.set_ar_param_buffer(ctx, i, std::ptr::null()) }
+            }
         }
         // Apply ar parameter changes
         for apc in &self.ar_parameter_changes {
