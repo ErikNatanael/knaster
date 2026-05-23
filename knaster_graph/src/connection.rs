@@ -38,6 +38,13 @@ impl Source {
             Source::GraphInput { channel } => (NodeOrGraph::Graph, channel),
         }
     }
+    /// Create a source from a [`NodeOrGraph`] and a channel number
+    pub fn from_node_or_graph(source: impl Into<NodeOrGraph>, source_channel: u16) -> Self {
+        match source.into() {
+            NodeOrGraph::Node(id) => Self::node(id, source_channel),
+            NodeOrGraph::Graph => Self::graph(source_channel),
+        }
+    }
 }
 
 /// Sink, i.e. where the signal is going to, for a connection.
@@ -73,6 +80,13 @@ impl Sink {
         Self::Parameter {
             id: node.into(),
             param: param.into(),
+        }
+    }
+    /// Create a sink from a [`NodeOrGraph`] and a channel number
+    pub fn from_node_or_graph(sink: impl Into<NodeOrGraph>, sink_channel: u16) -> Self {
+        match sink.into() {
+            NodeOrGraph::Node(id) => Self::node(id, sink_channel),
+            NodeOrGraph::Graph => Self::graph(sink_channel),
         }
     }
 }

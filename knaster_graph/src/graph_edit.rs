@@ -15,7 +15,7 @@
 //! - [X] Implement remaining arithmetics
 //! - [ ] API for scheduling parameter changes
 
-use crate::connection::{Sink, Source};
+use crate::connection::{ConnectionOptions, Sink, Source};
 use crate::core::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use core::mem::MaybeUninit;
 use core::ops::{BitOr, Div, Shr, Sub};
@@ -301,7 +301,11 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
         for ((source, source_channel), (sink, sink_channel)) in
             Static::iter_outputs(&self.nodes).zip(Static::iter_inputs(&n.nodes))
         {
-            if let Err(e) = g.connect2(source, source_channel, sink_channel, sink) {
+            if let Err(e) = g.connect(
+                Source::from_node_or_graph(source, source_channel),
+                Sink::from_node_or_graph(sink, sink_channel),
+                ConnectionOptions::default(),
+            ) {
                 log::error!(
                     "Failed to connect {source:?}:{source_channel} to {sink:?}:{sink_channel}: {e}"
                 );
@@ -319,7 +323,11 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
         for ((source, source_channel), (sink, sink_channel)) in
             Static::iter_outputs(&self.nodes).zip(Static::iter_inputs(&n.nodes))
         {
-            if let Err(e) = g.connect2_feedback(source, source_channel, sink_channel, sink) {
+            if let Err(e) = g.connect(
+                Source::from_node_or_graph(source, source_channel),
+                Sink::from_node_or_graph(sink, sink_channel),
+                ConnectionOptions::default().feedback(),
+            ) {
                 log::error!(
                     "Failed to connect {source:?}:{source_channel} to {sink:?}:{sink_channel}: {e}"
                 );
@@ -338,8 +346,12 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
         for ((source, source_channel), (sink, sink_channel)) in
             Static::iter_outputs(&self.nodes).zip(Static::iter_inputs(&n.nodes))
         {
-            g.connect2_replace(source, source_channel, sink_channel, sink)
-                .expect("type safe interface should eliminate graph connection errors");
+            g.connect(
+                Source::from_node_or_graph(source, source_channel),
+                Sink::from_node_or_graph(sink, sink_channel),
+                ConnectionOptions::default().replace(),
+            )
+            .expect("type safe interface should eliminate graph connection errors");
         }
         n
     }
@@ -354,8 +366,12 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
         for ((source, source_channel), (sink, sink_channel)) in
             Static::iter_outputs(&self.nodes).zip(Static::iter_inputs(&n.nodes))
         {
-            g.connect2_feedback_replace(source, source_channel, sink_channel, sink)
-                .expect("type safe interface should eliminate graph connection errors");
+            g.connect(
+                Source::from_node_or_graph(source, source_channel),
+                Sink::from_node_or_graph(sink, sink_channel),
+                ConnectionOptions::default().feedback().replace(),
+            )
+            .expect("type safe interface should eliminate graph connection errors");
         }
         n
     }
@@ -364,8 +380,12 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
     pub fn to_graph_out(self) {
         let mut g = self.graph.write();
         for (i, (source, source_channel)) in Static::iter_outputs(&self.nodes).enumerate() {
-            g.connect2(source, source_channel, i as u16, NodeOrGraph::Graph)
-                .expect("Error connecting to graph output channel");
+            g.connect(
+                Source::from_node_or_graph(source, source_channel),
+                Sink::graph(i as u16),
+                ConnectionOptions::default(),
+            )
+            .expect("Error connecting to graph output channel");
         }
     }
     /// Connect the output(s) of self to the graph output(s), replacing any existing connections at
@@ -373,8 +393,12 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
     pub fn to_graph_out_replace(self) {
         let mut g = self.graph.write();
         for (i, (source, source_channel)) in Static::iter_outputs(&self.nodes).enumerate() {
-            g.connect2_replace(source, source_channel, i as u16, NodeOrGraph::Graph)
-                .expect("Error connecting to graph output channel");
+            g.connect(
+                Source::from_node_or_graph(source, source_channel),
+                Sink::graph(i as u16),
+                ConnectionOptions::default().replace(),
+            )
+            .expect("Error connecting to graph output channel");
         }
     }
 
@@ -387,8 +411,12 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
         for ((source, source_channel), sink_channel) in
             Static::iter_outputs(&self.nodes).zip(sink_channels.into())
         {
-            g.connect2(source, source_channel, sink_channel, NodeOrGraph::Graph)
-                .expect("Error connecting to graph output channel.");
+            g.connect(
+                Source::from_node_or_graph(source, source_channel),
+                Sink::graph(sink_channel),
+                ConnectionOptions::default(),
+            )
+            .expect("Error connecting to graph output channel.");
         }
     }
     /// Connect the output(s) of self to the graph output(s), selecting graph output channels from the channels provided, and replacing any existing connections at those graph output channels.
@@ -400,8 +428,15 @@ impl<'a, 'b, F: Float, S0: Static> SH<'a, 'b, F, S0> {
         for ((source, source_channel), sink_channel) in
             Static::iter_outputs(&self.nodes).zip(sink_channels.into())
         {
-            g.connect2_replace(source, source_channel, sink_channel, NodeOrGraph::Graph)
-                .expect("Error connecting to graph output channel.");
+            g.connect(
+                match source {
+                    NodeOrGraph::Graph => Source::graph(source_channel),
+                    NodeOrGraph::Node(id) => Source::node(id, source_channel),
+                },
+                Sink::graph(sink_channel),
+                ConnectionOptions::default().replace(),
+            )
+            .expect("Error connecting to graph output channel.");
         }
     }
     /// Disconnect all outputs from the specified channel.
@@ -499,7 +534,11 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
         for ((source, source_channel), (sink, sink_channel)) in
             self.nodes.iter_outputs().zip(n.nodes.iter_inputs())
         {
-            if let Err(e) = g.connect2(source, source_channel, sink_channel, sink) {
+            if let Err(e) = g.connect(
+                Source::from_node_or_graph(source, source_channel),
+                Sink::from_node_or_graph(sink, sink_channel),
+                ConnectionOptions::default(),
+            ) {
                 log::error!("Failed to connect nodes: {e}");
             }
         }
@@ -515,7 +554,11 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
         for ((source, source_channel), (sink, sink_channel)) in
             self.nodes.iter_outputs().zip(n.nodes.iter_inputs())
         {
-            if let Err(e) = g.connect2_feedback(source, source_channel, sink_channel, sink) {
+            if let Err(e) = g.connect(
+                Source::from_node_or_graph(source, source_channel),
+                Sink::from_node_or_graph(sink, sink_channel),
+                ConnectionOptions::default().feedback(),
+            ) {
                 log::error!("Failed to connect nodes: {e}");
             }
         }
@@ -531,7 +574,11 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
         for ((source, source_channel), (sink, sink_channel)) in
             self.nodes.iter_outputs().zip(n.nodes.iter_inputs())
         {
-            if let Err(e) = g.connect2_replace(source, source_channel, sink_channel, sink) {
+            if let Err(e) = g.connect(
+                Source::from_node_or_graph(source, source_channel),
+                Sink::from_node_or_graph(sink, sink_channel),
+                ConnectionOptions::default().replace(),
+            ) {
                 log::error!("Failed to connect nodes: {e}");
             }
         }
@@ -547,8 +594,11 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
         for ((source, source_channel), (sink, sink_channel)) in
             self.nodes.iter_outputs().zip(n.nodes.iter_inputs())
         {
-            if let Err(e) = g.connect2_feedback_replace(source, source_channel, sink_channel, sink)
-            {
+            if let Err(e) = g.connect(
+                Source::from_node_or_graph(source, source_channel),
+                Sink::from_node_or_graph(sink, sink_channel),
+                ConnectionOptions::default().feedback().replace(),
+            ) {
                 log::error!("Failed to connect nodes: {e}");
             }
         }
@@ -563,7 +613,7 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
         for ((source, source_channel), (sink, sink_channel)) in
             self.nodes.iter_outputs().zip(n.nodes.iter_inputs())
         {
-            g.connect2(source, source_channel, sink_channel, sink)?;
+            g.connect(Source::from_node_or_graph(source, source_channel), Sink::from_node_or_graph(sink, sink_channel), ConnectionOptions::default())?;
         }
         Ok(n)
     }
@@ -573,7 +623,14 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
     pub fn to_graph_out(self) {
         let mut g = self.graph.write();
         for (i, (source, source_channel)) in self.nodes.iter_outputs().enumerate() {
-            if let Err(e) = g.connect2(source, source_channel, i as u16, NodeOrGraph::Graph) {
+            if let Err(e) = g.connect(
+                match source {
+                    NodeOrGraph::Graph => Source::graph(source_channel),
+                    NodeOrGraph::Node(id) => Source::node(id, source_channel),
+                },
+                Sink::graph(i as u16),
+                ConnectionOptions::default(),
+            ) {
                 log::error!("Failed to connect node to graph output: {e}");
             }
         }
@@ -584,8 +641,14 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
     pub fn to_graph_out_replace(self) {
         let mut g = self.graph.write();
         for (i, (source, source_channel)) in self.nodes.iter_outputs().enumerate() {
-            if let Err(e) = g.connect2_replace(source, source_channel, i as u16, NodeOrGraph::Graph)
-            {
+            if let Err(e) = g.connect(
+                match source {
+                    NodeOrGraph::Graph => Source::graph(source_channel),
+                    NodeOrGraph::Node(id) => Source::node(id, source_channel),
+                },
+                Sink::graph(i as u16),
+                ConnectionOptions::default().replace(),
+            ) {
                 log::error!("Failed to connect node to graph output: {e}");
             }
         }
@@ -599,7 +662,11 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
         for ((source, source_channel), sink_channel) in
             self.nodes.iter_outputs().zip(sink_channels.into())
         {
-            if let Err(e) = g.connect2(source, source_channel, sink_channel, NodeOrGraph::Graph) {
+            if let Err(e) = g.connect(
+                Source::from_node_or_graph(source, source_channel),
+                Sink::graph(sink_channel),
+                ConnectionOptions::default(),
+            ) {
                 log::error!("Failed to connect node to graph output: {e}");
             }
         }
@@ -613,9 +680,14 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
         for ((source, source_channel), sink_channel) in
             self.nodes.iter_outputs().zip(sink_channels.into())
         {
-            if let Err(e) =
-                g.connect2_replace(source, source_channel, sink_channel, NodeOrGraph::Graph)
-            {
+            if let Err(e) = g.connect(
+                match source {
+                    NodeOrGraph::Graph => Source::graph(source_channel),
+                    NodeOrGraph::Node(id) => Source::node(id, source_channel),
+                },
+                Sink::graph(sink_channel),
+                ConnectionOptions::default().replace(),
+            ) {
                 log::error!("Failed to connect node to graph output: {e}");
             }
         }
@@ -757,9 +829,11 @@ impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, Handle3<U>> {
         let input = source.nodes.iter_outputs().next().unwrap();
         let mut g = self.graph.write();
         if let NodeOrGraph::Node(source_node) = input.0 {
-            if let Err(e) =
-                g.connect_replace_to_parameter(source_node, input.1, p, self.nodes.node_id)
-            {
+            if let Err(e) = g.connect(
+                Source::node(source_node, input.1),
+                Sink::param(self.nodes.node_id, p),
+                ConnectionOptions::default().replace(),
+            ) {
                 log::error!("Failed to connect signal to parameter: {e}");
             }
         } else {
@@ -851,9 +925,11 @@ impl<'a, 'b, F: Float> DH<'a, 'b, F, DynamicHandle3> {
         let input = source.nodes.iter_outputs().next().unwrap();
         let mut g = self.graph.write();
         if let NodeOrGraph::Node(source_node) = input.0 {
-            if let Err(e) =
-                g.connect_replace_to_parameter(source_node, input.1, p, self.nodes.node_id)
-            {
+            if let Err(e) = g.connect(
+                Source::node(source_node, input.1),
+                Sink::param(self.nodes.node_id, p),
+                ConnectionOptions::default().replace(),
+            ) {
                 log::error!("Failed to connect signal to parameter: {e}");
             }
         } else {
@@ -964,10 +1040,18 @@ macro_rules! math_gen_fn_static {
             let mut g = graph.write();
             for (s0, s1) in Static::iter_outputs(&s0).zip(s1.iter_outputs()) {
                 let mul = g.push_internal(MathUGen::<_, U1, $op>::new());
-                if let Err(e) = g.connect2(s0.0, s0.1, 0, NodeOrGraph::Node(mul.node_id())) {
+                if let Err(e) = g.connect(
+                    Source::from_node_or_graph(s0.0, s0.1),
+                    Sink::node(mul.node_id(), 0),
+                    ConnectionOptions::default(),
+                ) {
                     log::error!("Failed to connect node to arithmetics node: {e}");
                 }
-                if let Err(e) = g.connect2(s1.0, s1.1, 1, NodeOrGraph::Node(mul.node_id())) {
+                if let Err(e) = g.connect(
+                    Source::from_node_or_graph(s1.0, s1.1),
+                    Sink::node(mul.node_id(), 1),
+                    ConnectionOptions::default(),
+                ) {
                     log::error!("Failed to connect node to arithmetics node: {e}");
                 }
                 out_channels.push(NodeOrGraph::Node(mul.node_id()), 0);
@@ -1064,10 +1148,18 @@ macro_rules! math_gen_fn_static_constant {
             let c = g.push_internal(Constant::new(c));
             for s0 in Static::iter_outputs(&s0) {
                 let mul = g.push_internal(MathUGen::<_, U1, $op>::new());
-                if let Err(e) = g.connect2(s0.0, s0.1, 0, NodeOrGraph::Node(mul.node_id())) {
+                if let Err(e) = g.connect(
+                    Source::from_node_or_graph(s0.0, s0.1),
+                    Sink::node(mul.node_id(), 0),
+                    ConnectionOptions::default(),
+                ) {
                     log::error!("Failed to connect node to arithmetics node: {e}");
                 }
-                if let Err(e) = g.connect2(c.node_id(), 0, 1, NodeOrGraph::Node(mul.node_id())) {
+                if let Err(e) = g.connect(
+                    Source::from_node_or_graph(c.node_id(), 0),
+                    Sink::node(mul.node_id(), 1),
+                    ConnectionOptions::default(),
+                ) {
                     log::error!("Failed to connect node to arithmetics node: {e}");
                 }
                 out_channels.push(NodeOrGraph::Node(mul.node_id()), 0);
@@ -1102,10 +1194,18 @@ macro_rules! math_gen_fn_dynamic {
             let mut g = graph.write();
             for (s0, s1) in Dynamic::iter_outputs(&s0).zip(s1.iter_outputs()) {
                 let mul = g.push_internal(MathUGen::<_, U1, $op>::new());
-                if let Err(e) = g.connect2(s0.0, s0.1, 0, NodeOrGraph::Node(mul.node_id())) {
+                if let Err(e) = g.connect(
+                    Source::from_node_or_graph(s0.0, s0.1),
+                    Sink::node(mul.node_id(), 0),
+                    ConnectionOptions::default(),
+                ) {
                     log::error!("Failed to connect node to arithmetics node: {e}");
                 }
-                if let Err(e) = g.connect2(s1.0, s1.1, 1, NodeOrGraph::Node(mul.node_id())) {
+                if let Err(e) = g.connect(
+                    Source::from_node_or_graph(s1.0, s1.1),
+                    Sink::node(mul.node_id(), 1),
+                    ConnectionOptions::default(),
+                ) {
                     log::error!("Failed to connect node to arithmetics node: {e}");
                 }
                 out_channels.push((NodeOrGraph::Node(mul.node_id()), 0));
@@ -1137,10 +1237,18 @@ macro_rules! math_gen_fn_dynamic_constant {
             let c = g.push_internal(Constant::new(c));
             for s0 in Dynamic::iter_outputs(&s0) {
                 let mul = g.push_internal(MathUGen::<_, U1, $op>::new());
-                if let Err(e) = g.connect2(s0.0, s0.1, 0, NodeOrGraph::Node(mul.node_id())) {
+                if let Err(e) = g.connect(
+                    Source::from_node_or_graph(s0.0, s0.1),
+                    Sink::node(mul.node_id(), 0),
+                    ConnectionOptions::default(),
+                ) {
                     log::error!("Failed to connect node to arithmetics node: {e}");
                 }
-                if let Err(e) = g.connect2(c.node_id(), 0, 1, NodeOrGraph::Node(mul.node_id())) {
+                if let Err(e) = g.connect(
+                    Source::from_node_or_graph(c.node_id(), 0),
+                    Sink::node(mul.node_id(), 1),
+                    ConnectionOptions::default(),
+                ) {
                     log::error!("Failed to connect node to arithmetics node: {e}");
                 }
                 out_channels.push((NodeOrGraph::Node(mul.node_id()), 0));
