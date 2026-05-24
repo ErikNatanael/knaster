@@ -1240,7 +1240,7 @@ impl<F: Float> Graph<F> {
                     channel: sink_channel,
                 },
             ) => {
-                self.connect_input_to_node(id, source_channel, sink_channel, true)?;
+                self.connect_input_to_node(id, source_channel, sink_channel, !opt.replace)?;
             }
             (
                 Source::Node {
@@ -1270,7 +1270,7 @@ impl<F: Float> Graph<F> {
                     channel: sink_channel,
                 },
             ) => {
-                self.connect_node_to_output(source_id, source_channel, sink_channel, true)?;
+                self.connect_node_to_output(source_id, source_channel, sink_channel, !opt.replace)?;
             }
             (
                 Source::GraphInput {
@@ -1280,7 +1280,7 @@ impl<F: Float> Graph<F> {
                     channel: sink_channel,
                 },
             ) => {
-                self.connect_input_to_output(source_channel, sink_channel, true)?;
+                self.connect_input_to_output(source_channel, sink_channel, !opt.replace)?;
             }
             (
                 Source::Node {
@@ -2689,7 +2689,7 @@ impl<F: Float> UGen for FeedbackSource<F> {
 #[cfg(test)]
 mod tests {
     use knaster_core::{
-        Done, PTrigger,
+        Done,
         typenum::{U0, U2},
     };
     use knaster_core_dsp::envelopes::EnvAsr;

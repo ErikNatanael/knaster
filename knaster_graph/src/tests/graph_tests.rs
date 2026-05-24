@@ -772,3 +772,133 @@ fn graph_inputs_to_nodes() {
     let output = audio_processor.output_block();
     assert_eq!(output.read(0, 0), 0.0);
 }
+#[test]
+fn connection_replace_to_node_sink() {
+    let block_size = 16;
+    let (mut g, mut audio_processor, _log_receiver) =
+        AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+            ..Default::default()
+        });
+
+    let source1 = g.push(TestInPlusParamUGen::new());
+    g.set(&source1, 0, 1.0, Time::asap()).unwrap();
+    let source2 = g.push(TestInPlusParamUGen::new());
+    g.set(&source2, 0, 2.0, Time::asap()).unwrap();
+    let sink = g.push(TestInPlusParamUGen::new());
+
+    // Initial connection: source1 -> sink
+    g.connect(
+        Source::node(&source1, 0),
+        Sink::node(&sink, 0),
+        ConnectionOptions::default(),
+    )
+    .unwrap();
+    g.connect(
+        Source::node(&sink, 0),
+        Sink::graph(0),
+        ConnectionOptions::default(),
+    )
+    .unwrap();
+    g.commit_changes().unwrap();
+
+    assert_next_frame_eq_0_0(&mut audio_processor, 1.0).unwrap();
+
+    // Replace connection with source2 -> sink
+    g.connect(
+        Source::node(&source2, 0),
+        Sink::node(&sink, 0),
+        ConnectionOptions::default().replace(),
+    )
+    .unwrap();
+    g.commit_changes().unwrap();
+
+    assert_next_frame_eq_0_0(&mut audio_processor, 2.0).unwrap();
+}
+
+#[test]
+fn connection_replace_to_graph_sink() {
+    let block_size = 16;
+    let (mut g, mut audio_processor, _log_receiver) =
+        AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+            ..Default::default()
+        });
+
+    let source1 = g.push(TestInPlusParamUGen::new());
+    g.set(&source1, 0, 1.5, Time::asap()).unwrap();
+    let source2 = g.push(TestInPlusParamUGen::new());
+    g.set(&source2, 0, 3.5, Time::asap()).unwrap();
+
+    // Initial connection: source1 -> graph output 0
+    g.connect(
+        Source::node(&source1, 0),
+        Sink::graph(0),
+        ConnectionOptions::default(),
+    )
+    .unwrap();
+    g.commit_changes().unwrap();
+
+    assert_next_frame_eq_0_0(&mut audio_processor, 1.5).unwrap();
+
+    // Replace connection with source2 -> graph output 0
+    g.connect(
+        Source::node(&source2, 0),
+        Sink::graph(0),
+        ConnectionOptions::default().replace(),
+    )
+    .unwrap();
+    g.commit_changes().unwrap();
+
+    assert_next_frame_eq_0_0(&mut audio_processor, 3.5).unwrap();
+}
+
+#[test]
+fn connection_replace_to_param_sink() {
+    let block_size = 16;
+    let (mut g, mut audio_processor, _log_receiver) =
+        AudioProcessor::<f32>::new::<U0, U1>(AudioProcessorOptions {
+            block_size,
+            sample_rate: 48000,
+            ring_buffer_size: 50,
+            ..Default::default()
+        });
+
+    let source1 = g.push(TestInPlusParamUGen::new());
+    g.set(&source1, 0, 0.25, Time::asap()).unwrap();
+    let source2 = g.push(TestInPlusParamUGen::new());
+    g.set(&source2, 0, 0.75, Time::asap()).unwrap();
+    let param_target = g.push(TestInPlusParamUGen::new().ar_params());
+
+    // Initial connection: source1 -> param_target's parameter 0
+    g.connect(
+        Source::node(&source1, 0),
+        Sink::param(&param_target, 0),
+        ConnectionOptions::default(),
+    )
+    .unwrap();
+    g.connect(
+        Source::node(&param_target, 0),
+        Sink::graph(0),
+        ConnectionOptions::default(),
+    )
+    .unwrap();
+    g.commit_changes().unwrap();
+
+    assert_next_frame_eq_0_0(&mut audio_processor, 0.25).unwrap();
+
+    // Replace connection with source2 -> param_target's parameter 0
+    g.connect(
+        Source::node(&source2, 0),
+        Sink::param(&param_target, 0),
+        ConnectionOptions::default().replace(),
+    )
+    .unwrap();
+    g.commit_changes().unwrap();
+
+    assert_next_frame_eq_0_0(&mut audio_processor, 0.75).unwrap();
+}
