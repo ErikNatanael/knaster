@@ -5,7 +5,7 @@ use crate::dynugen::UGenEnum;
 use std::prelude::v1::*;
 
 use ecow::EcoString;
-use knaster_core::{Float, ParameterHint};
+use knaster_core::{Float, Param, ParameterError, ParameterHint, UGen, typenum::*};
 
 use crate::graph::{GraphId, NodeKey};
 use crate::{buffer_allocator::BufferAllocator, dynugen::DynUGen, task::Task};
@@ -34,6 +34,15 @@ impl NodeData {
             i += 1;
             s
         })
+    }
+    pub fn from_ugen<T: UGen>() -> Self {
+        Self {
+            parameter_descriptions_fn: |index: usize| T::param_descriptions().get(index).copied(),
+            parameter_hints_fn: |index: usize| T::param_hints().get(index).copied(),
+            inputs: T::Inputs::U16,
+            outputs: T::Outputs::U16,
+            parameters: T::Parameters::U16,
+        }
     }
 }
 
@@ -172,11 +181,32 @@ impl<F: Float> Node<F> {
             log::error!("Error: Tried to convert node offset to ptr, but the node had no offset!");
         }
     }
+    pub fn parameter_count(&self) -> u16 {
+        self.data.parameters
+    }
     pub fn parameter_descriptions(&self) -> impl Iterator<Item = &'static str> {
         self.data.parameter_descriptions()
     }
     pub fn parameter_hints(&self) -> impl Iterator<Item = ParameterHint> {
         self.data.parameter_hints()
+    }
+    pub fn get_parameter_index(&self, param: impl Into<Param>) -> Result<usize, ParameterError> {
+        let param = param.into();
+        match param {
+            Param::Index(param_i) => {
+                if (param_i as usize) >= self.parameter_count() as usize {
+                    Err(ParameterError::ParameterIndexOutOfBounds)
+                } else {
+                    Ok(param_i as usize)
+                }
+            }
+            Param::Desc(desc) => self
+                .parameter_descriptions()
+                .enumerate()
+                .find(|(_, d)| *d == desc)
+                .map(|(i, _)| i)
+                .ok_or(ParameterError::DescriptionNotFound(desc)),
+        }
     }
 }
 

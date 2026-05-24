@@ -47,8 +47,9 @@ impl From<NodeOrGraph> for NodeKeyOrGraph {
 //     // },
 // }
 
+#[derive(Clone, Debug, Copy)]
 pub(crate) struct ParameterEdge {
-    pub(crate) source: NodeKey,
+    pub(crate) source: NodeKeyOrGraph,
     /// what the first channel to pipe is in the source
     pub(crate) channel_in_source: u16,
     pub(crate) parameter_index: u16,

@@ -79,8 +79,13 @@ impl<T: UGen> UGen for WrArParams<T> {
         index: usize,
         buffer: *const T::Sample,
     ) {
-        debug_assert!(index < T::Parameters::USIZE);
-        self.buffers[index] = Some(buffer);
+        if buffer.is_null() {
+            self.buffers[index] = None;
+            return;
+        } else {
+            debug_assert!(index < T::Parameters::USIZE);
+            self.buffers[index] = Some(buffer);
+        }
     }
 }
 

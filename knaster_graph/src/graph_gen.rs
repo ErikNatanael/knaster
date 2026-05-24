@@ -173,11 +173,13 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
             output_task,
             current_buffer_allocation: new_buffer_allocation,
             graph_input_channels_to_nodes,
+            graph_input_to_ar_parameter_edges,
             applied: _,
             ar_parameter_changes: _,
             node_task_order: _,
         } = task_data;
 
+        // TODO: Why? Try commenting this out and run Miri
         if let Some(buffer_allocation) = new_buffer_allocation.take() {
             // The old buffers will be kept alive until the Arc has been dropped in the GraphGen
             self._arc_buffer_allocation_ptr = buffer_allocation;
@@ -190,6 +192,16 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
                 let graph_input_ptr = channel.as_ptr();
                 node_in_buffers[*node_input] = graph_input_ptr;
             }
+        }
+        // Since there is no guarantee that the graph input pointer will remain the same, this
+        // needs to be set every block.
+        for edge in graph_input_to_ar_parameter_edges {
+            let ugen = &mut tasks[edge.node].ugen;
+            let channel = input.channel_as_slice(edge.graph_input_index as usize);
+            let graph_input_ptr = channel.as_ptr();
+            unsafe {
+                ugen.set_ar_param_buffer(ctx, edge.parameter_index as usize, graph_input_ptr)
+            };
         }
 
         let mut new_flags = UGenFlags::default();

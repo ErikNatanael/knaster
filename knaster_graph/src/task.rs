@@ -83,6 +83,10 @@ pub(crate) struct TaskData<F: Float> {
     /// audio passing through the graph. Changes get applied from this list at
     /// the point where the new schedule is received.
     pub(crate) ar_parameter_changes: Vec<ArParameterChange<F>>,
+    /// If a parameter input is fetched from a graph input, that graph input may
+    /// be a different buffer every block. Therefore, the input needs to be
+    /// passed in every block.
+    pub(crate) graph_input_to_ar_parameter_edges: Vec<GraphInToArParameterEdge>,
     /// The order in which the nodes are executed and the tasks are stored in the `tasks` field.
     /// Used to apply parameter changes directly by function calls before any tasks are run.
     pub(crate) node_task_order: Vec<NodeKey>,
@@ -102,6 +106,10 @@ impl<F: Float> TaskData<F> {
         for task in self.tasks.iter_mut() {
             if let UGenEnum::TakeFromTask(j) = task.ugen {
                 task.ugen = old_task_data.tasks[j].ugen.take();
+            }
+            // Disable all ar parameter changes, since an edge may have been removed
+            for i in 0..task.ugen.parameters() as usize {
+                unsafe { task.ugen.set_ar_param_buffer(ctx, i, std::ptr::null()) }
             }
         }
         // Apply ar parameter changes
@@ -138,4 +146,12 @@ pub(crate) struct ArParameterChange<F> {
     pub(crate) node: usize,
     pub(crate) parameter_index: usize,
     pub(crate) buffer: *const F,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct GraphInToArParameterEdge {
+    /// Node index already converted to the index into `tasks` in TaskData
+    pub(crate) node: usize,
+    pub(crate) parameter_index: usize,
+    pub(crate) graph_input_index: usize,
 }

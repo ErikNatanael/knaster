@@ -1,6 +1,7 @@
 //! # Graph
 //!
 //! This module contains the [`Graph`] struct, which is a dynamically editable audio graph.
+use crate::connection::{ConnectionOptions, Sink, Source};
 use crate::core::collections::VecDeque;
 use crate::core::{
     cell::UnsafeCell,
@@ -12,6 +13,7 @@ use crate::core::{
     sync::{Arc, Mutex},
 };
 
+use crate::task::GraphInToArParameterEdge;
 use crate::{
     SharedFrameClock, Time,
     buffer_allocator::BufferAllocator,
@@ -26,6 +28,7 @@ use crate::{
 use core::cell::Cell;
 use ecow::EcoString;
 use knaster_core::numeric_array::NumericArray;
+use log::{error, trace};
 /// no_std_compat prelude import, supporting both std and no_std
 use std::prelude::v1::*;
 
@@ -264,50 +267,6 @@ impl<F: Float> Graph<F> {
         // graph_gen
         let task_data = graph.generate_task_data(Arc::new(AtomicBool::new(false)), Vec::new());
 
-        //         use paste::paste;
-        //         macro_rules! graph_gen_channels {
-        //     (
-        //         // Start a repetition:
-        //         $(
-        //             // Each repeat must contain an expression...
-        //             $input_usize:expr,
-        //             $output_usize:expr
-        //         )
-        //         // ...separated by commas...
-        //         ;
-        //         // ...zero or more times.
-        //         *
-        //     ) => {
-        //         // Enclose the expansion in a block so that we can use
-        //         // multiple statements.
-        //         {
-        //             match (graph.num_inputs, graph.num_outputs) {
-        //             // Start a repetition:
-        //             $(
-        //                 ($input_usize, $output_usize) => Node::new(String::from("GraphGen"), GraphGen::<F, paste! {[<U $input_usize>]}, paste! {[<U $output_usize>]}> {
-        //                     sample_rate: graph.sample_rate,
-        //                     current_task_data: task_data,
-        //                     block_size: graph.block_size,
-        //                     scheduling_event_receiver,
-        //                     task_data_to_be_dropped_producer,
-        //                     new_task_data_consumer,
-        //                     freed: false,
-        //                     _arc_nodes: graph.nodes.clone(),
-        //                     _arc_buffer_allocation_ptr: graph.buffer_allocator.buffer(),
-        //                     _channels: core::marker::PhantomData,
-        //                     remove_me_flag: remove_me.clone(),
-        //             }),
-        //             )*
-        //                 _ => panic!("Unsupported graph input/output channel configuration. Configuration cannot be generated for GraphGen.")
-        //         }
-
-        //         }
-        //     };
-        // }
-        //         // TODO: Create a beutiful Cartesian product macro instead and do many more channel combinations
-        //         let mut graph_gen: Node<F> =
-        //             graph_gen_channels!(0,1;1,1;0,2;1,2;2,2;0,3;1,3;2,3;3,3;0,4;1,4;2,4;3,4;4,4);
-
         let mut graph_gen = Node::new(
             graph.name.clone(),
             GraphGen::<F, Inputs, Outputs> {
@@ -366,7 +325,6 @@ impl<F: Float> Graph<F> {
     }
 
     /// Push something implementing [`UGen`] to the graph.
-    #[deprecated(note = "use `edit` instead")]
     pub fn push<T: UGen<Sample = F> + 'static>(&mut self, ugen: T) -> Handle<T> {
         self.push_internal(ugen)
     }
@@ -474,25 +432,6 @@ impl<F: Float> Graph<F> {
         key
     }
 
-    // #[deprecated(since = "0.1.0", note = "Will become private")]
-    // pub fn connect_nodes(
-    //     &mut self,
-    //     source: impl Into<NodeId>,
-    //     sink: impl Into<NodeId>,
-    //     source_channel: u16,
-    //     sink_channel: u16,
-    //     additive: bool,
-    //     feedback: bool,
-    // ) -> Result<(), GraphError> {
-    //     self.connect_nodes_internal(
-    //         source,
-    //         sink,
-    //         source_channel,
-    //         sink_channel,
-    //         additive,
-    //         feedback,
-    //     )
-    // }
     fn connect_nodes_internal(
         &mut self,
         source: impl Into<NodeId>,
@@ -596,6 +535,7 @@ impl<F: Float> Graph<F> {
         );
         Ok(())
     }
+    #[deprecated(note = "Deprecated in favour of connect")]
     /// Connecting a node output to a parameter input at audio rate, adding the source to any
     /// existing node input(s) to the parameter.
     ///
@@ -604,13 +544,14 @@ impl<F: Float> Graph<F> {
     /// node to the parameter.
     pub fn connect_to_parameter(
         &mut self,
-        source: impl Into<NodeId>,
+        source: impl Into<NodeOrGraph>,
         source_channel: u16,
         parameter: impl Into<Param>,
         sink: impl Into<NodeId>,
     ) -> Result<(), GraphError> {
-        self.connect_node_to_parameter(source, source_channel, parameter, sink, true)
+        self.connect_to_parameter_internal(source.into(), source_channel, parameter, sink, true)
     }
+    #[deprecated(note = "Deprecated in favour of connect")]
     /// Connecting a node output to a parameter input at audio rate, replacing any
     /// existing node input(s) to the parameter.
     ///
@@ -619,28 +560,46 @@ impl<F: Float> Graph<F> {
     /// node to the parameter.
     pub fn connect_replace_to_parameter(
         &mut self,
-        source: impl Into<NodeId>,
+        source: impl Into<NodeOrGraph>,
         source_channel: u16,
         parameter: impl Into<Param>,
         sink: impl Into<NodeId>,
     ) -> Result<(), GraphError> {
-        self.connect_node_to_parameter(source, source_channel, parameter, sink, false)
+        self.connect_to_parameter_internal(source.into(), source_channel, parameter, sink, false)
     }
-    fn connect_node_to_parameter(
+    fn connect_to_parameter_internal(
         &mut self,
-        source: impl Into<NodeId>,
+        source: NodeOrGraph,
+        // source: impl Into<NodeId>,
         source_channel: u16,
         parameter: impl Into<Param>,
         sink: impl Into<NodeId>,
         additive: bool,
     ) -> Result<(), GraphError> {
-        let source = source.into();
-        if !source.graph == self.graph_id {
-            return Err(GraphError::WrongSourceNodeGraph {
-                expected_graph: self.graph_id,
-                found_graph: source.graph,
-            });
-        }
+        let source = match source {
+            NodeOrGraph::Graph => {
+                if source_channel > self.inputs() {
+                    return Err(GraphError::GraphInputOutOfBounds(source_channel));
+                }
+                NodeKeyOrGraph::Graph
+            }
+            NodeOrGraph::Node(node_id) => {
+                if !node_id.graph == self.graph_id {
+                    return Err(GraphError::WrongSourceNodeGraph {
+                        expected_graph: self.graph_id,
+                        found_graph: node_id.graph,
+                    });
+                }
+                let nodes = self.get_nodes();
+                if !nodes.contains_key(node_id.key()) {
+                    return Err(GraphError::NodeNotFound);
+                }
+                if source_channel >= nodes[node_id.key()].data.outputs {
+                    return Err(GraphError::OutputOutOfBounds(source_channel));
+                }
+                NodeKeyOrGraph::Node(node_id.key())
+            }
+        };
         let sink = sink.into();
         if !sink.graph == self.graph_id {
             return Err(GraphError::WrongSinkNodeGraph {
@@ -651,6 +610,7 @@ impl<F: Float> Graph<F> {
         let nodes = self.get_nodes();
         let sink_node = &nodes[sink.key()];
         let param = parameter.into();
+        trace!("Connecting source {source:?} to parameter {param:?} of {sink:?}");
         let param_index = match param {
             Param::Index(param_index) => param_index as u16,
             Param::Desc(desc) => {
@@ -668,13 +628,6 @@ impl<F: Float> Graph<F> {
                 }
             }
         };
-        let nodes = self.get_nodes();
-        if !nodes.contains_key(source.key()) {
-            return Err(GraphError::NodeNotFound);
-        }
-        if source_channel >= nodes[source.key()].data.outputs {
-            return Err(GraphError::OutputOutOfBounds(source_channel));
-        }
 
         let edges = self
             .node_parameter_edges
@@ -693,23 +646,27 @@ impl<F: Float> Graph<F> {
                     is_feedback: false,
                 });
                 self.node_input_edges[add_node][1] = Some(Edge {
-                    source: source.key().into(),
+                    source,
                     channel_in_source: source_channel,
                     is_feedback: false,
                 });
+                trace!(
+                    "Parameter already has an input, summing with node {:?}",
+                    existing_edge.source
+                );
                 // Need to fetch again not to borrow self twice
                 let edges = self
                     .node_parameter_edges
                     .get_mut(sink.key())
                     .expect("All nodes should have parameter edges");
                 edges.push(ParameterEdge {
-                    source: add_node,
+                    source: NodeKeyOrGraph::Node(add_node),
                     channel_in_source: 0,
                     parameter_index: param_index,
                 });
             } else {
                 edges.push(ParameterEdge {
-                    source: source.key(),
+                    source,
                     channel_in_source: source_channel,
                     parameter_index: param_index,
                 });
@@ -717,7 +674,7 @@ impl<F: Float> Graph<F> {
         } else {
             edges.retain(|pe| pe.parameter_index != param_index);
             edges.push(ParameterEdge {
-                source: source.key(),
+                source,
                 channel_in_source: source_channel,
                 parameter_index: param_index,
             });
@@ -908,100 +865,13 @@ impl<F: Float> Graph<F> {
         (source_node, sink_node)
     }
 
-    // /// Connect a source to a sink with the designated channels replacing any existing connections to the sink at those channels. If you want to add to any
-    // /// existing inputs to the sink, use [`Graph::connect`]
-    // ///
-    // /// # Example
-    // /// ```rust,ignore
-    // /// // Connect `sine` to `lpf`, channel 0 to 0
-    // /// graph.connect_replace(&sine, 0, 0, &lpf)?;
-    // /// // Connect `multi_oscillator` to the graph outputs, channels 1 to 0, 2, 1
-    // /// // and 0 to 3.
-    // /// graph.connect_replace(&multi_oscillator, [1, 2, 0], [0, 1, 2], Sink::Graph)?;
-    // /// ```
-    // #[deprecated(since = "0.1.0", note = "Deprecated in favour of the GraphEdit API")]
-    // fn connect_replace<N: Size>(
-    //     &mut self,
-    //     source: impl Into<Connectable>,
-    //     source_channels: impl Into<Channels<N>>,
-    //     sink_channels: impl Into<Channels<N>>,
-    //     sink: impl Into<Connectable>,
-    // ) -> Result<(), GraphError> {
-    //     let source = source.into();
-    //     let sink = sink.into();
-    //     for (so_chan, si_chan) in source_channels
-    //         .into()
-    //         .into_iter()
-    //         .zip(sink_channels.into().into_iter())
-    //     {
-    //         if let Some((source, so_chan)) = source.for_output_channel(so_chan) {
-    //             if let Some((sink, si_chan)) = sink.for_input_channel(si_chan) {
-    //                 match (source, sink) {
-    //                     (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
-    //                         self.connect_input_to_node(sink, so_chan, si_chan, false)?;
-    //                     }
-    //                     (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
-    //                         self.connect_nodes(source, sink, so_chan, si_chan, false, false)?;
-    //                     }
-    //                     (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
-    //                         self.connect_node_to_output(source, so_chan, si_chan, false)?;
-    //                     }
-    //                     (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
-    //                         self.connect_input_to_output(so_chan, si_chan, false)?;
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     }
-    //     Ok(())
-    // }
-    // /// Connect a source to a sink with the designated channels, addin it to any existing connections to the sink at those channels. If you want to replace
-    // /// existing inputs to the sink, use [`Graph::connect_replace`]
-    // #[deprecated(since = "0.1.0", note = "Deprecated in favour of the GraphEdit API")]
-    // fn connect<N: Size>(
-    //     &mut self,
-    //     source: impl Into<Connectable>,
-    //     source_channels: impl Into<Channels<N>>,
-    //     sink_channels: impl Into<Channels<N>>,
-    //     sink: impl Into<Connectable>,
-    // ) -> Result<(), GraphError> {
-    //     let source = source.into();
-    //     let sink = sink.into();
-    //     for (so_chan, si_chan) in source_channels
-    //         .into()
-    //         .into_iter()
-    //         .zip(sink_channels.into().into_iter())
-    //     {
-    //         if let Some((source, so_chan)) = source.for_output_channel(so_chan) {
-    //             if let Some((sink, si_chan)) = sink.for_input_channel(si_chan) {
-    //                 match (source, sink) {
-    //                     (NodeOrGraph::Graph, NodeOrGraph::Node(sink)) => {
-    //                         self.connect_input_to_node(sink, so_chan, si_chan, true)?;
-    //                     }
-    //                     (NodeOrGraph::Node(source), NodeOrGraph::Node(sink)) => {
-    //                         self.connect_nodes(source, sink, so_chan, si_chan, true, false)?;
-    //                     }
-    //                     (NodeOrGraph::Node(source), NodeOrGraph::Graph) => {
-    //                         self.connect_node_to_output(source, so_chan, si_chan, true)?;
-    //                     }
-    //                     (NodeOrGraph::Graph, NodeOrGraph::Graph) => {
-    //                         self.connect_input_to_output(so_chan, si_chan, true)?;
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     }
-    //     Ok(())
-    // }
-    /// Disconnect all edges from a specific output channel of a node or a graph input.
-    pub fn disconnect_output_from_source(
-        &mut self,
-        source: impl Into<NodeOrGraph>,
-        source_channel: u16,
-    ) -> Result<(), GraphError> {
-        let source = source.into();
+    /// Does the error checking for if a source is valid in the Graph. If so, returns the key/graph
+    /// and the channel.
+    fn validate_source(&self, source: Source) -> Result<(NodeKeyOrGraph, u16), GraphError> {
         match source {
-            NodeOrGraph::Node(source_node) => {
+            Source::Node { id, channel } => {
+                let source_node = id;
+                let source_channel = channel;
                 if source_node.graph != self.graph_id {
                     return Err(GraphError::WrongSinkNodeGraph {
                         expected_graph: source_node.graph,
@@ -1017,23 +887,189 @@ impl<F: Float> Graph<F> {
                 if source_channel >= node.data.outputs {
                     return Err(GraphError::OutputOutOfBounds(source_channel));
                 }
+                Ok((NodeKeyOrGraph::Node(id.key()), channel))
             }
-            NodeOrGraph::Graph => {
+            Source::GraphInput { channel } => {
+                let source_channel = channel;
                 if source_channel >= self.num_inputs {
                     return Err(GraphError::GraphInputOutOfBounds(source_channel));
                 }
-                if let Some(edge) = self.output_edges[source_channel as usize].take() {
-                    if let NodeKeyOrGraph::Node(source_node) = edge.source {
-                        self.evaluate_if_node_should_be_removed(source_node);
+                Ok((NodeKeyOrGraph::Graph, channel))
+            }
+        }
+    }
+    fn node_is_valid(&self, node: NodeId) -> Result<(), GraphError> {
+        if !node.graph == self.graph_id {
+            return Err(GraphError::WrongSinkNodeGraph {
+                expected_graph: self.graph_id,
+                found_graph: node.graph,
+            });
+        }
+        let nodes = self.get_nodes();
+        if !nodes.contains_key(node.key()) {
+            return Err(GraphError::NodeNotFound);
+        }
+        Ok(())
+    }
+    fn validate_sink(&self, sink: Sink) -> Result<(), GraphError> {
+        match sink {
+            Sink::Node { id, channel } => {
+                self.node_is_valid(id)?;
+                let nodes = self.get_nodes();
+                if channel >= nodes[id.key()].data.inputs {
+                    return Err(GraphError::InputOutOfBounds(channel));
+                }
+            }
+            Sink::GraphOutput { channel } => {
+                if channel >= self.num_outputs {
+                    return Err(GraphError::GraphOutputOutOfBounds(channel));
+                }
+            }
+            Sink::Parameter { id, param } => {
+                self.node_is_valid(id)?;
+                let _ = self.get_nodes()[id.key()].get_parameter_index(param)?;
+            }
+        }
+        Ok(())
+    }
+    fn disconnect_if_math_node(
+        &mut self,
+        source_nog: NodeKeyOrGraph,
+        source_channel: u16,
+        edge_source: NodeKeyOrGraph,
+    ) -> Result<(), GraphError> {
+        trace!("disconnect_if_math_node");
+        let is_math_node = |nodes: &SlotMap<_, Node<F>>, source| match source {
+            NodeKeyOrGraph::Node(node_key) => nodes
+                .get(node_key)
+                .and_then(|node| node.auto_math_node.then(|| node_key)),
+            NodeKeyOrGraph::Graph => None,
+        };
+        let mut next_math_nodes = vec![];
+        if let Some(math_node_key) = is_math_node(self.get_nodes(), edge_source) {
+            next_math_nodes.push(math_node_key);
+        }
+        // SAFETY: See self.get_nodes()
+        let nodes = unsafe { &*self.nodes.get() };
+        while let Some(edge_source) = next_math_nodes.pop() {
+            trace!("Trying to disconnect {source_nog:?} from math node {edge_source:?}");
+            // Try disconnecting from the math node instead
+            let input_edges = &mut self.node_input_edges[edge_source];
+            for input_edge in input_edges {
+                // Is the node either the source we're looking for
+                if let Some(edge) = input_edge {
+                    if edge.source == source_nog && edge.channel_in_source == source_channel {
+                        // Disconnect from the math node
+                        *input_edge = None;
+                        self.evaluate_if_node_should_be_removed(edge_source);
+                        return Ok(());
+                    } else if let Some(math_node) = is_math_node(nodes, edge.source) {
+                        // Add the math node to the list of nodes to disconnect from
+                        next_math_nodes.push(math_node);
                     }
                 }
             }
         }
-        let source: NodeKeyOrGraph = source.into();
-        // We have to go through all edges
+        return Err(GraphError::EdgeNotFound);
+    }
+    /// Disconnect source from sink if that connection exists.
+    pub fn disconnect(&mut self, source: Source, sink: Sink) -> Result<(), GraphError> {
+        trace!("Disconnecting {source:?} from {sink:?}");
+        self.validate_source(source)?;
+        self.validate_sink(sink)?;
+        match sink {
+            Sink::Node {
+                id: sink_id,
+                channel: sink_channel,
+            } => {
+                let (source_nog, source_channel) = source.into_parts();
+                // Nodes are validated, check if the edge exists and remove it if so
+                let edges = &mut self.node_input_edges[sink_id.key()];
+                let input_edge = edges
+                    .get_mut(sink_channel as usize)
+                    .ok_or(GraphError::InputOutOfBounds(sink_channel))?;
+                let edge = input_edge.expect("sink edge channel should be validated");
+                if edge.source == source_nog.into() && edge.channel_in_source == source_channel {
+                    *input_edge = None;
+                } else {
+                    self.disconnect_if_math_node(source_nog.into(), source_channel, edge.source)
+                        .map_err(|_| GraphError::EdgeNotFound)?;
+                }
+            }
+            Sink::GraphOutput {
+                channel: sink_channel,
+            } => {
+                let (source_nog, source_channel) = source.into_parts();
+                if sink_channel >= self.num_outputs {
+                    return Err(GraphError::GraphOutputOutOfBounds(sink_channel));
+                }
+                let input_edge = &mut self.output_edges[sink_channel as usize];
+                if let Some(edge) = *input_edge {
+                    if edge.source == source_nog.into() && edge.channel_in_source == source_channel
+                    {
+                        // Found the edge, fall through and remove it
+                    } else {
+                        return self
+                            .disconnect_if_math_node(source_nog.into(), source_channel, edge.source)
+                            .map_err(|_| GraphError::EdgeNotFound);
+                    }
+                } else {
+                    return Err(GraphError::EdgeNotFound);
+                }
+                *input_edge = None;
+            }
+            Sink::Parameter { id, param } => {
+                let (source_nog, source_channel) = source.into_parts();
+                let node_id = id;
+                let node = &self.get_nodes()[node_id.key()];
+                let parameter_index = node.get_parameter_index(param)? as u16;
+                if let Some(edge_i) = self.node_parameter_edges[node_id.key()]
+                    .iter_mut()
+                    .position(|pe| {
+                        pe.parameter_index == parameter_index
+                            && pe.source == source_nog.into()
+                            && pe.channel_in_source == source_channel
+                    })
+                {
+                    self.node_parameter_edges[node_id.key()].remove(edge_i);
+                } else {
+                    // Try to disconnect from any math node input to the same parameter
+                    let mut found = false;
+
+                    for i in 0..self.node_parameter_edges[node_id.key()].len() {
+                        let pe = self.node_parameter_edges[node_id.key()][i];
+                        if pe.parameter_index == parameter_index {
+                            if self
+                                .disconnect_if_math_node(
+                                    source_nog.into(),
+                                    source_channel,
+                                    pe.source,
+                                )
+                                .is_ok()
+                            {
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                    if !found {
+                        return Err(GraphError::EdgeNotFound);
+                    }
+                }
+            }
+        }
+        self.recalculation_required = true;
+        Ok(())
+    }
+    /// Disconnect all edges from a specific output channel of a node or a graph input.
+    pub fn disconnect_outputs_from_source(&mut self, source: Source) -> Result<(), GraphError> {
+        let (source, source_channel) = self.validate_source(source)?;
+        // We have to go through all edges since edges are stored by sink, not source.
         for (_k, input_edges) in &mut self.node_input_edges {
             for edge in input_edges.iter_mut().filter(|e| e.is_some()) {
-                let edge_unwraped = edge.as_mut().unwrap();
+                let edge_unwraped = edge
+                    .as_mut()
+                    .expect("None edges should have been filtered out");
                 if edge_unwraped.channel_in_source == source_channel
                     && source == edge_unwraped.source
                 {
@@ -1041,8 +1077,14 @@ impl<F: Float> Graph<F> {
                 }
             }
         }
+        for (_k, parameter_edges) in &mut self.node_parameter_edges {
+            parameter_edges
+                .retain(|pe| !(pe.channel_in_source == source_channel && source == pe.source));
+        }
         for edge in self.output_edges.iter_mut().filter(|e| e.is_some()) {
-            let edge_unwraped = edge.as_mut().unwrap();
+            let edge_unwraped = edge
+                .as_mut()
+                .expect("None edges should have been filtered out");
             if edge_unwraped.channel_in_source == source_channel && source == edge_unwraped.source {
                 *edge = None;
             }
@@ -1052,13 +1094,11 @@ impl<F: Float> Graph<F> {
         Ok(())
     }
     /// Disconnect any input from a specific channel on a node or an internal graph output.
-    pub fn disconnect_input_to_sink(
-        &mut self,
-        sink_channel: u16,
-        sink: impl Into<NodeOrGraph>,
-    ) -> Result<(), GraphError> {
-        match sink.into() {
-            NodeOrGraph::Node(sink_node) => {
+    pub fn disconnect_inputs_to_sink(&mut self, sink: Sink) -> Result<(), GraphError> {
+        match sink {
+            Sink::Node { id, channel } => {
+                let sink_node = id;
+                let sink_channel = channel;
                 if sink_node.graph != self.graph_id {
                     return Err(GraphError::WrongSinkNodeGraph {
                         expected_graph: sink_node.graph,
@@ -1079,9 +1119,9 @@ impl<F: Float> Graph<F> {
                         self.evaluate_if_node_should_be_removed(source_node);
                     }
                 }
-                self.recalculation_required = true;
             }
-            NodeOrGraph::Graph => {
+            Sink::GraphOutput { channel } => {
+                let sink_channel = channel;
                 if sink_channel >= self.num_outputs {
                     return Err(GraphError::GraphOutputOutOfBounds(sink_channel));
                 }
@@ -1091,11 +1131,22 @@ impl<F: Float> Graph<F> {
                     }
                 }
             }
+            Sink::Parameter { id, param } => {
+                let node_id = id;
+                let node = &self.get_nodes()[node_id.key()];
+                let parameter_index = node.get_parameter_index(param)? as u16;
+                dbg!(&self.node_parameter_edges[node_id.key()]);
+                self.node_parameter_edges[node_id.key()]
+                    .retain(|pe| pe.parameter_index != parameter_index);
+                dbg!(&self.node_parameter_edges[node_id.key()]);
+            }
         }
+        self.recalculation_required = true;
         Ok(())
     }
     /// If the node should be automatically removed, this removes it.
     fn evaluate_if_node_should_be_removed(&mut self, key: NodeKey) {
+        trace!("Evaluating if node should be removed: {key:?}");
         let node = &mut self.get_nodes_mut()[key];
         if node.auto_math_node {
             // We assume math nodes have two inputs and one output
@@ -1112,6 +1163,19 @@ impl<F: Float> Graph<F> {
                                 if let NodeKeyOrGraph::Node(source) = &edge.source {
                                     if *source == key {
                                         *edge = input_edge;
+                                    }
+                                }
+                            }
+                        }
+                        for (_k, input_edges) in &mut self.node_parameter_edges {
+                            for edge in input_edges.iter_mut() {
+                                if let NodeKeyOrGraph::Node(source) = &edge.source {
+                                    if *source == key {
+                                        *edge = ParameterEdge {
+                                            source: input_edge.source,
+                                            channel_in_source: input_edge.channel_in_source,
+                                            parameter_index: edge.parameter_index,
+                                        };
                                     }
                                 }
                             }
@@ -1159,6 +1223,95 @@ impl<F: Float> Graph<F> {
             }
         }
     }
+    /// Connect a single channel source to a single channel sink.
+    pub fn connect(
+        &mut self,
+        source: impl Into<Source>,
+        sink: impl Into<Sink>,
+        opt: ConnectionOptions,
+    ) -> Result<(), GraphError> {
+        match (source.into(), sink.into()) {
+            (
+                Source::GraphInput {
+                    channel: source_channel,
+                },
+                Sink::Node {
+                    id,
+                    channel: sink_channel,
+                },
+            ) => {
+                self.connect_input_to_node(id, source_channel, sink_channel, !opt.replace)?;
+            }
+            (
+                Source::Node {
+                    id: source_id,
+                    channel: source_channel,
+                },
+                Sink::Node {
+                    id: sink_id,
+                    channel: sink_channel,
+                },
+            ) => {
+                self.connect_nodes_internal(
+                    source_id,
+                    sink_id,
+                    source_channel,
+                    sink_channel,
+                    !opt.replace,
+                    opt.feedback,
+                )?;
+            }
+            (
+                Source::Node {
+                    id: source_id,
+                    channel: source_channel,
+                },
+                Sink::GraphOutput {
+                    channel: sink_channel,
+                },
+            ) => {
+                self.connect_node_to_output(source_id, source_channel, sink_channel, !opt.replace)?;
+            }
+            (
+                Source::GraphInput {
+                    channel: source_channel,
+                },
+                Sink::GraphOutput {
+                    channel: sink_channel,
+                },
+            ) => {
+                self.connect_input_to_output(source_channel, sink_channel, !opt.replace)?;
+            }
+            (
+                Source::Node {
+                    id: source_id,
+                    channel: source_channel,
+                },
+                Sink::Parameter { id: sink_id, param },
+            ) => self.connect_to_parameter_internal(
+                NodeOrGraph::Node(source_id),
+                source_channel,
+                param,
+                sink_id,
+                !opt.replace,
+            )?,
+            (
+                Source::GraphInput {
+                    channel: source_channel,
+                },
+                Sink::Parameter { id, param },
+            ) => self.connect_to_parameter_internal(
+                NodeOrGraph::Graph,
+                source_channel,
+                param,
+                id,
+                !opt.replace,
+            )?,
+        }
+        self.recalculation_required = true;
+        Ok(())
+    }
+    #[deprecated(note = "Use connect instead")]
     /// Connect a source to a sink with the designated channels, addin it to any existing connections to the sink at those channels. If you want to replace
     /// existing inputs to the sink, use [`Graph::connect2_replace`]
     pub fn connect2(
@@ -1191,6 +1344,7 @@ impl<F: Float> Graph<F> {
         }
         Ok(())
     }
+    #[deprecated(note = "Use connect instead")]
     /// Connect a source to a sink with the designated channels, replacing any existing connections to the sink at those channels.
     pub fn connect2_replace(
         &mut self,
@@ -1217,6 +1371,7 @@ impl<F: Float> Graph<F> {
         }
         Ok(())
     }
+    #[deprecated(note = "Use connect instead")]
     /// Connect a source to a sink with the designated channels with feedback, adding to any existing connections to the sink at those channels. Feedback means that the signal data will be delayed by one block, breaking potential cycles in the graph.
     pub fn connect2_feedback(
         &mut self,
@@ -1252,6 +1407,7 @@ impl<F: Float> Graph<F> {
         }
         Ok(())
     }
+    #[deprecated(note = "Use connect instead")]
     /// Connect a source to a sink with the designated channels with feedback, adding to any existing connections to the sink at those channels. Feedback means that the signal data will be delayed by one block, breaking potential cycles in the graph.
     pub fn connect2_feedback_replace(
         &mut self,
@@ -1339,6 +1495,8 @@ impl<F: Float> Graph<F> {
     //     }
     //     Ok(())
     // }
+
+    // TODO: Remove this and create a ParameterChange2 instead for a more unified API
 
     /// Set a parameter value on a node.
     ///
@@ -1529,8 +1687,11 @@ impl<F: Float> Graph<F> {
     /// list of all the buffer to parameter mappings for the current Graph.
     /// Since buffers may reallocate, we set all of the parameter buffers every
     /// time the schedule is updated.
-    fn generate_ar_parameter_changes(&mut self) -> Vec<ArParameterChange<F>> {
+    fn generate_ar_parameter_changes(
+        &mut self,
+    ) -> (Vec<ArParameterChange<F>>, Vec<GraphInToArParameterEdge>) {
         let mut apc = Vec::new();
+        let mut graph_input_to_node_parameters = Vec::new();
         for (node_key, edges) in &self.node_parameter_edges {
             for edge in edges {
                 let ParameterEdge {
@@ -1538,27 +1699,37 @@ impl<F: Float> Graph<F> {
                     channel_in_source,
                     parameter_index,
                 } = *edge;
-                {
-                    if let Some(node_index) = self.node_order.iter().position(|k| *k == node_key) {
-                        let source_node = &self.get_nodes()[source];
-                        let buffer = source_node
-                            .node_output_ptr()
-                            .expect("Node output ptr should be available when generating tasks");
-                        assert!(channel_in_source < source_node.data.outputs);
-                        // Safety: The buffer has at least `source_node.outputs`
-                        // channels of data of size `self.block_size`.
-                        let buffer =
-                            unsafe { buffer.add(channel_in_source as usize * self.block_size) };
-                        apc.push(ArParameterChange {
-                            node: node_index,
-                            parameter_index: parameter_index as usize,
-                            buffer,
-                        })
+
+                if let Some(node_index) = self.node_order.iter().position(|k| *k == node_key) {
+                    match source {
+                        NodeKeyOrGraph::Node(source) => {
+                            let source_node = &self.get_nodes()[source];
+                            let buffer = source_node.node_output_ptr().expect(
+                                "Node output ptr should be available when generating tasks",
+                            );
+                            assert!(channel_in_source < source_node.data.outputs);
+                            // Safety: The buffer has at least `source_node.outputs`
+                            // channels of data of size `self.block_size`.
+                            let buffer =
+                                unsafe { buffer.add(channel_in_source as usize * self.block_size) };
+                            apc.push(ArParameterChange {
+                                node: node_index,
+                                parameter_index: parameter_index as usize,
+                                buffer,
+                            });
+                        }
+                        NodeKeyOrGraph::Graph => {
+                            graph_input_to_node_parameters.push(GraphInToArParameterEdge {
+                                node: node_index,
+                                parameter_index: parameter_index as usize,
+                                graph_input_index: channel_in_source as usize,
+                            })
+                        }
                     }
                 }
             }
         }
-        apc
+        (apc, graph_input_to_node_parameters)
     }
 
     /// `graph_inputs_to_nodes`: (node_index_in_order, Vec<(graph_input_channel, node_input_channel))
@@ -1569,7 +1740,8 @@ impl<F: Float> Graph<F> {
     ) -> TaskData<F> {
         let tasks = self.generate_tasks().into_boxed_slice();
         let output_task = self.generate_output_tasks();
-        let ar_parameter_changes = self.generate_ar_parameter_changes();
+        let (ar_parameter_changes, graph_input_to_ar_parameter_edges) =
+            self.generate_ar_parameter_changes();
         TaskData {
             applied: applied_flag,
             tasks,
@@ -1578,6 +1750,7 @@ impl<F: Float> Graph<F> {
             ar_parameter_changes,
             graph_input_channels_to_nodes,
             node_task_order: self.node_order.clone(),
+            graph_input_to_ar_parameter_edges,
         }
     }
     /// Assign buffers to nodes maximizing buffer reuse and cache locality
@@ -1609,7 +1782,9 @@ impl<F: Float> Graph<F> {
         // Add parameter edges as dependents
         for (_key, edges) in &self.node_parameter_edges {
             for edge in edges {
-                (unsafe { &mut *self.nodes.get() })[edge.source].num_output_dependents += 1;
+                if let NodeKeyOrGraph::Node(source_key) = edge.source {
+                    (unsafe { &mut *self.nodes.get() })[source_key].num_output_dependents += 1;
+                }
             }
         }
 
@@ -1653,9 +1828,11 @@ impl<F: Float> Graph<F> {
             // Also parameter inputs
             let param_edges = &self.node_parameter_edges[key];
             for edge in param_edges {
-                let block = self.get_nodes()[edge.source].node_output;
-                if let crate::node::NodeOutput::Offset(block) = block {
-                    self.buffer_allocator.return_block(block);
+                if let NodeKeyOrGraph::Node(source_key) = edge.source {
+                    let block = self.get_nodes()[source_key].node_output;
+                    if let crate::node::NodeOutput::Offset(block) = block {
+                        self.buffer_allocator.return_block(block);
+                    }
                 }
             }
             if let Some(graph_inputs_to_node) = input_pointers_to_node {
@@ -1730,6 +1907,7 @@ impl<F: Float> Graph<F> {
     }
 
     pub(crate) fn free_node_from_key(&mut self, node_key: NodeKey) -> Result<(), FreeError> {
+        trace!("Freeing node: {node_key:?}");
         // Does the Node exist?
         if !self.get_nodes_mut().contains_key(node_key) {
             return Err(FreeError::NodeNotFound);
@@ -1750,8 +1928,17 @@ impl<F: Float> Graph<F> {
         // Remove all edges leading to the node
         if let Some(_edges) = self.node_input_edges.remove(node_key) {}
         self.node_parameter_edges.remove(node_key);
-        // Remove all edges leading from the node to other nodes
+        // Remove all output edges leading from the node
         for (_k, input_edges) in &mut self.node_input_edges {
+            for edge_opt in input_edges.iter_mut() {
+                if let Some(edge) = edge_opt {
+                    if let NodeKeyOrGraph::Node(source) = edge.source {
+                        if source == node_key {
+                            *edge_opt = None;
+                        }
+                    }
+                }
+            }
             let mut i = 0;
             while i < input_edges.len() {
                 if let Some(edge) = input_edges[i] {
@@ -1761,6 +1948,22 @@ impl<F: Float> Graph<F> {
                         } else {
                             i += 1;
                         }
+                    } else {
+                        i += 1;
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+        }
+        // Remove all parameter edge outputs from the node
+        for (_k, input_edges) in &mut self.node_parameter_edges {
+            let mut i = 0;
+            while i < input_edges.len() {
+                let edge = input_edges[i];
+                if let NodeKeyOrGraph::Node(source) = edge.source {
+                    if source == node_key {
+                        input_edges.remove(i);
                     } else {
                         i += 1;
                     }
@@ -1825,6 +2028,20 @@ impl<F: Float> Graph<F> {
                     });
                 }
             }
+            let mut input_parameter_edges = Vec::new();
+            if let Some(edges) = self.node_parameter_edges.get(node_key) {
+                for edge in edges {
+                    input_parameter_edges.push(EdgeInspection {
+                        source: match edge.source {
+                            NodeKeyOrGraph::Node(key) => EdgeSource::Node(key),
+                            NodeKeyOrGraph::Graph => EdgeSource::Graph,
+                        },
+                        from_index: edge.channel_in_source,
+                        to_index: edge.parameter_index as u16,
+                        is_feedback: false,
+                    });
+                }
+            }
 
             nodes.push(NodeInspection {
                 name: node.name.to_string(),
@@ -1832,6 +2049,7 @@ impl<F: Float> Graph<F> {
                 inputs: node.data.inputs,
                 outputs: node.data.outputs,
                 input_edges,
+                input_parameter_edges,
                 parameter_descriptions: node.parameter_descriptions().collect(),
                 parameter_hints: node.parameter_hints().collect(),
                 unconnected: self.disconnected_nodes.contains(&node_key),
@@ -1941,39 +2159,50 @@ impl<F: Float> Graph<F> {
         nodes_to_process: &mut Vec<NodeKey>,
     ) -> Vec<NodeKey> {
         let mut node_order = Vec::with_capacity(self.get_nodes().capacity());
-        while !nodes_to_process.is_empty() {
-            let node_key = *nodes_to_process.last().unwrap();
-
-            let input_edges = &self.node_input_edges[node_key];
-            let mut found_unvisited = false;
-            // There is probably room for optimisation here by managing to
-            // not iterate the edges multiple times.
-            for edge in input_edges.iter().filter_map(|e| *e) {
-                if !edge.is_feedback {
-                    if let NodeKeyOrGraph::Node(source) = edge.source {
-                        if !visited.contains(&source) {
-                            nodes_to_process.push(source);
-                            visited.insert(source);
-                            found_unvisited = true;
-                            break;
+        let mut stack = Vec::new();
+        enum DfsState {
+            ToProcess,
+            Processed,
+        }
+        for &mut node_key in nodes_to_process {
+            stack.push((node_key, DfsState::ToProcess));
+        }
+        while let Some((node_key, state)) = stack.pop() {
+            if visited.contains(&node_key) {
+                continue;
+            }
+            match state {
+                DfsState::ToProcess => {
+                    stack.push((node_key, DfsState::Processed));
+                    if let Some(input_edges) = &self.node_input_edges.get(node_key) {
+                        for edge in input_edges.iter().filter_map(|e| *e) {
+                            if !edge.is_feedback {
+                                if let NodeKeyOrGraph::Node(source) = edge.source {
+                                    if !visited.contains(&source) {
+                                        stack.push((source, DfsState::ToProcess));
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        error!(
+                            "Node {node_key:?} has no input edges. This should not be possible since all nodes except graph inputs should have at least one input edge. This may indicate a bug in the graph construction or node order calculation."
+                        );
+                    }
+                    let param_input_edges = &self.node_parameter_edges[node_key];
+                    for edge in param_input_edges.iter() {
+                        if let NodeKeyOrGraph::Node(source) = edge.source {
+                            if !visited.contains(&source) {
+                                stack.push((source, DfsState::ToProcess));
+                            }
                         }
                     }
                 }
-            }
-            if !found_unvisited {
-                let param_input_edges = &self.node_parameter_edges[node_key];
-                for edge in param_input_edges.iter() {
-                    let source = edge.source;
-                    if !visited.contains(&source) {
-                        nodes_to_process.push(source);
-                        visited.insert(source);
-                        found_unvisited = true;
-                        break;
-                    }
+                DfsState::Processed => {
+                    // All the dependencies of this node have been processed, so we can add it to the order.
+                    visited.insert(node_key);
+                    node_order.push(node_key);
                 }
-            }
-            if !found_unvisited {
-                node_order.push(nodes_to_process.pop().unwrap());
             }
         }
         node_order
@@ -1989,6 +2218,26 @@ impl<F: Float> Graph<F> {
             for (key, input_edges) in &self.node_input_edges {
                 for input_edge in input_edges.iter().filter_map(|e| *e) {
                     if let NodeKeyOrGraph::Node(source) = input_edge.source {
+                        if source == last_connected_node_index && !visited.contains(&source) {
+                            last_connected_node_index = key;
+                            found_later_node = true;
+
+                            // check if it's an output node
+                            for edge in self.output_edges.iter().filter_map(|e| *e) {
+                                if let NodeKeyOrGraph::Node(source) = edge.source {
+                                    if last_connected_node_index == source {
+                                        last_connected_output_node_index =
+                                            last_connected_node_index;
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+                // TODO: When float parameters are split from other parameters, chain the iterators above instead
+                for parameter_edge in &self.node_parameter_edges[key] {
+                    if let NodeKeyOrGraph::Node(source) = parameter_edge.source {
                         if source == last_connected_node_index && !visited.contains(&source) {
                             last_connected_node_index = key;
                             found_later_node = true;
@@ -2034,7 +2283,7 @@ impl<F: Float> Graph<F> {
                 let deepest_node = self.get_deepest_output_node(source, &visited);
                 if !visited.contains(&deepest_node) {
                     nodes_to_process.push(deepest_node);
-                    visited.insert(deepest_node);
+                    // visited.insert(deepest_node);
                 }
             }
         }
@@ -2112,39 +2361,6 @@ impl<F: Float> Graph<F> {
     pub fn id(&self) -> NodeId {
         self.self_node_id
     }
-    // /// Connectable for connecting the Graph to other nodes within its parent graph.
-    // #[deprecated]
-    // pub fn as_node(&self) -> Connectable {
-    //     Connectable::from_node(
-    //         NodeSubset {
-    //             node: NodeOrGraph::Node(self.self_node_id),
-    //             channels: self.inputs(),
-    //             start_channel: 0,
-    //         },
-    //         NodeSubset {
-    //             node: NodeOrGraph::Node(self.self_node_id),
-    //             channels: self.outputs(),
-    //             start_channel: 0,
-    //         },
-    //     )
-    // }
-    // /// Connectable for connecting inside the graph. Note that inside the graph, the graph outputs
-    // /// are sinks/inputs and the graph outputs are sources/outputs.
-    // #[deprecated]
-    // pub fn internal(&self) -> Connectable {
-    //     Connectable::from_node(
-    //         NodeSubset {
-    //             node: NodeOrGraph::Graph,
-    //             channels: self.outputs(),
-    //             start_channel: 0,
-    //         },
-    //         NodeSubset {
-    //             node: NodeOrGraph::Graph,
-    //             channels: self.inputs(),
-    //             start_channel: 0,
-    //         },
-    //     )
-    // }
 }
 
 fn shorten_name(name: &str) -> EcoString {
@@ -2232,6 +2448,9 @@ pub enum GraphError {
     #[allow(missing_docs)]
     #[error("Node cannot be found in current Graph.")]
     NodeNotFound,
+    #[allow(missing_docs)]
+    #[error("The specified edge does not exist.")]
+    EdgeNotFound,
     #[allow(missing_docs)]
     #[error("Source node is in a different Graph `{found_graph}`, expecting `{expected_graph}`")]
     WrongSourceNodeGraph {
@@ -2470,7 +2689,7 @@ impl<F: Float> UGen for FeedbackSource<F> {
 #[cfg(test)]
 mod tests {
     use knaster_core::{
-        Done, PTrigger,
+        Done,
         typenum::{U0, U2},
     };
     use knaster_core_dsp::envelopes::EnvAsr;
@@ -2491,10 +2710,10 @@ mod tests {
                 ..Default::default()
             });
         let asr = graph.push_with_done_action(EnvAsr::new(0.0, 0.0), Done::FreeSelf);
-        asr.set(("attack_time", 0.0)).unwrap();
-        asr.set(("release_time", 0.0)).unwrap();
-        asr.set(("t_restart", PTrigger)).unwrap();
-        asr.set(("t_release", PTrigger)).unwrap();
+        asr.param("attack_time").value(0.0);
+        asr.param("release_time").value(0.0);
+        asr.param("t_restart").trig();
+        asr.param("t_release").trig();
         graph.commit_changes().unwrap();
         assert_eq!(graph.inspection().nodes.len(), 1);
         for _ in 0..10 {
