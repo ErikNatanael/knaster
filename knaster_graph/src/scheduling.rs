@@ -96,9 +96,6 @@ impl SchedulingEvent {
         self.token = None;
         self.time = None;
     }
-    pub fn send(self, sender: impl ParameterChangeSender) -> Result<(), GraphError> {
-        sender.schedule_change(self)
-    }
 }
 pub(crate) type SchedulingChannelProducer = rtrb::Producer<SchedulingEvent>;
 // Every GraphGen has one of these for receiving parameter changes.
