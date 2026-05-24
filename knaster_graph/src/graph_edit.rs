@@ -613,7 +613,11 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
         for ((source, source_channel), (sink, sink_channel)) in
             self.nodes.iter_outputs().zip(n.nodes.iter_inputs())
         {
-            g.connect(Source::from_node_or_graph(source, source_channel), Sink::from_node_or_graph(sink, sink_channel), ConnectionOptions::default())?;
+            g.connect(
+                Source::from_node_or_graph(source, source_channel),
+                Sink::from_node_or_graph(sink, sink_channel),
+                ConnectionOptions::default(),
+            )?;
         }
         Ok(n)
     }
