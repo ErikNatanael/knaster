@@ -2,6 +2,7 @@ use crate::core::{marker::PhantomData, ops::Add};
 use knaster_core::{
     AudioCtx, Block, BlockRead, Float, Frame, PFloat, ParameterHint, ParameterValue, Size, UGen,
     UGenFlags,
+    controls::ControlMetadata,
     numeric_array::NumericArray,
     typenum::{Add1, B1, Cmp, Less, Unsigned},
 };
@@ -17,6 +18,7 @@ pub struct WrArParams<T: UGen> {
 
 unsafe impl<T: UGen> Send for WrArParams<T> {}
 
+//TODO: Rename to WrArControls
 impl<T: UGen> WrArParams<T> {
     #[allow(missing_docs)]
     pub fn new(ugen: T) -> Self {
@@ -68,9 +70,7 @@ impl<T: UGen> UGen for WrArParams<T> {
     }
 
     fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
-        if self.buffers[index].is_none() {
-            self.ugen.param_apply(ctx, index, value);
-        }
+        self.ugen.param_apply(ctx, index, value);
     }
 
     unsafe fn set_ar_param_buffer(
@@ -79,7 +79,11 @@ impl<T: UGen> UGen for WrArParams<T> {
         index: usize,
         buffer: *const T::Sample,
     ) {
+        if index >= T::Parameters::USIZE {
+            return;
+        }
         if buffer.is_null() {
+            debug_assert!(index < T::Parameters::USIZE);
             self.buffers[index] = None;
             return;
         } else {
@@ -87,8 +91,19 @@ impl<T: UGen> UGen for WrArParams<T> {
             self.buffers[index] = Some(buffer);
         }
     }
+
+    type Controls = T::Controls;
+    fn control_metadata(&self) -> NumericArray<ControlMetadata<Self::Sample>, Self::Controls> {
+        T::control_metadata(&self.ugen)
+    }
+    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: Self::Sample) {
+        if self.buffers[index].is_none() {
+            self.ugen.control(ctx, index, value);
+        }
+    }
 }
 
+//TODO: Rename to WrArControlToInput
 /// Adds an audio input channel and uses that channel to set a parameter every
 /// sample. This disables block based processing and any optimisations related
 /// to that for the inner [`UGen`]
@@ -126,11 +141,8 @@ where
     ) -> Frame<Self::Sample, Self::Outputs> {
         // The index T::Inputs is one more than the previous number of audio
         // inputs, i.e. the one we added with the wrapper.
-        self.ugen.param_apply(
-            ctx,
-            ParamIndex::USIZE,
-            ParameterValue::Float(input[<T as UGen>::Inputs::USIZE].to_f64() as PFloat),
-        );
+        self.ugen
+            .control(ctx, ParamIndex::USIZE, input[<T as UGen>::Inputs::USIZE]);
         let mut new_input = NumericArray::default();
         for i in 0..T::Inputs::USIZE {
             new_input[i] = input[i];
@@ -172,5 +184,13 @@ where
 
     fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         self.ugen.param_apply(ctx, index, value);
+    }
+
+    type Controls = T::Controls;
+    fn control_metadata(&self) -> NumericArray<ControlMetadata<Self::Sample>, Self::Controls> {
+        T::control_metadata(&self.ugen)
+    }
+    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: Self::Sample) {
+        self.ugen.control(ctx, index, value);
     }
 }

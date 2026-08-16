@@ -1,6 +1,7 @@
 //! # Graph
 //!
 //! This module contains the [`Graph`] struct, which is a dynamically editable audio graph.
+use crate::SchedulingEventKind;
 use crate::connection::{ConnectionOptions, Sink, Source};
 use crate::core::collections::VecDeque;
 use crate::core::{
@@ -305,7 +306,9 @@ impl<F: Float> Graph<F> {
         if node_id.graph != self.graph_id {
             return None;
         }
-        self.get_nodes().get(node_id.key()).map(|node| node.data)
+        self.get_nodes()
+            .get(node_id.key())
+            .map(|node| node.data.clone())
     }
     /// Get a metadata for a node with the given [`NodeId`] if it exists.
     pub fn node_data_from_name(&self, name: impl Into<EcoString>) -> Option<(NodeId, NodeData)> {
@@ -319,7 +322,7 @@ impl<F: Float> Graph<F> {
                         key: node.0,
                         graph: self.graph_id,
                     },
-                    node.1.data,
+                    node.1.data.clone(),
                 )
             })
     }
@@ -1544,9 +1547,10 @@ impl<F: Float> Graph<F> {
             .scheduling_event_producer
             .send(crate::SchedulingEvent {
                 node_key: node_id.key(),
-                parameter: param_index,
-                value: Some(value),
-                smoothing: None,
+                kind: SchedulingEventKind::Parameter {
+                    index: param_index as usize,
+                    value,
+                },
                 token: None,
                 time: Some(t.into()),
             })?;
@@ -1559,6 +1563,61 @@ impl<F: Float> Graph<F> {
                 log::error!("Error setting parameter {param:?} on node {node:?}: {e:?}",);
             }
         }
+    }
+    /// Set a parameter value on a node.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node is not found in the graph or the `param` is not a valid parameter for the node.
+    pub fn set_control(
+        &self,
+        node: impl Into<NodeId>,
+        control: impl Into<Param>,
+        value: impl Into<ParameterValue>,
+        t: impl Into<Time>,
+    ) -> Result<(), GraphError> {
+        let node_id = node.into();
+        if !node_id.graph == self.graph_id {
+            return Err(GraphError::WrongSinkNodeGraph {
+                expected_graph: self.graph_id,
+                found_graph: node_id.graph,
+            });
+        }
+        let nodes = self.get_nodes();
+        let Some(node) = nodes.get(node_id.key()) else {
+            return Err(GraphError::NodeNotFound);
+        };
+        let param_index = match control.into() {
+            knaster_core::Param::Index(param_i) => {
+                if param_i as u16 >= node.data.parameters {
+                    return Err(ParameterError::ParameterIndexOutOfBounds.into());
+                } else {
+                    param_i
+                }
+            }
+            knaster_core::Param::Desc(desc) => {
+                match node.parameter_descriptions().position(|d| d == desc) {
+                    Some(param_i) => param_i,
+                    _ => {
+                        // Fail
+                        return Err(ParameterError::DescriptionNotFound(desc).into());
+                    }
+                }
+            }
+        };
+        let value = value.into();
+        self.graph_gen_communicator
+            .scheduling_event_producer
+            .send(crate::SchedulingEvent {
+                node_key: node_id.key(),
+                kind: SchedulingEventKind::Parameter {
+                    index: param_index as usize,
+                    value,
+                },
+                token: None,
+                time: Some(t.into()),
+            })?;
+        Ok(())
     }
     /// Perform edits on the graph structure, such as adding nodes, removing nodes, connecting nodes.
     /// The edits are committed in a single step when the [`GraphEdit`] is dropped.
@@ -1881,7 +1940,7 @@ impl<F: Float> Graph<F> {
     }
 
     /// Applies the latest changes to connections and added nodes in the graph on the audio thread and updates the scheduler.
-    pub(crate) fn commit_changes(&mut self) -> Result<(), GraphError> {
+    pub fn commit_changes(&mut self) -> Result<(), GraphError> {
         // We need to run free_old to know if there are nodes to free and hence a recalculation required.
         self.free_old();
         self.graph_gen_communicator.free_old_task_data();
@@ -2591,6 +2650,7 @@ impl<F: Float> UGen for FeedbackSink<F> {
     type Inputs = U1;
     type Outputs = U0;
     type Parameters = U0;
+    type Controls = U0;
 
     fn process(
         &mut self,
@@ -2629,6 +2689,14 @@ impl<F: Float> UGen for FeedbackSink<F> {
         _value: knaster_core::ParameterValue,
     ) {
     }
+
+    fn control_metadata(
+        &self,
+    ) -> NumericArray<knaster_core::controls::ControlMetadata<Self::Sample>, Self::Controls> {
+        [].into()
+    }
+
+    fn control(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: Self::Sample) {}
 }
 /// The source for a feedback connection
 ///
@@ -2645,6 +2713,7 @@ impl<F: Float> UGen for FeedbackSource<F> {
     type Inputs = U0;
     type Outputs = U1;
     type Parameters = U0;
+    type Controls = U0;
 
     fn process(
         &mut self,
@@ -2685,6 +2754,14 @@ impl<F: Float> UGen for FeedbackSource<F> {
         _value: knaster_core::ParameterValue,
     ) {
     }
+
+    fn control_metadata(
+        &self,
+    ) -> NumericArray<knaster_core::controls::ControlMetadata<Self::Sample>, Self::Controls> {
+        [].into()
+    }
+
+    fn control(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: Self::Sample) {}
 }
 #[cfg(test)]
 mod tests {

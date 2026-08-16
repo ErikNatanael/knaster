@@ -6,6 +6,7 @@
 use knaster_core::{AudioCtx, ParameterHint, ParameterValue, UGen, UGenFlags};
 use knaster_core::{
     Float, Size,
+    controls::ControlMetadata,
     numeric_array::{NumericArray, narr},
     typenum::*,
 };
@@ -36,6 +37,8 @@ impl<F: Float, I: Size, O: Size> UGen for UGenClosure<F, I, O> {
 
     type Parameters = U0;
 
+    type Controls = U0;
+
     fn process(
         &mut self,
         ctx: &mut AudioCtx,
@@ -50,6 +53,13 @@ impl<F: Float, I: Size, O: Size> UGen for UGenClosure<F, I, O> {
     }
 
     fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: ParameterValue) {}
+
+    fn control_metadata(&self) -> NumericArray<ControlMetadata<Self::Sample>, Self::Controls> {
+        todo!()
+    }
+    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: Self::Sample) {
+        todo!()
+    }
 }
 
 impl<F: Float, T> From<T> for UGenClosure<F, U0, U1>

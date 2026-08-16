@@ -21,12 +21,13 @@ use crate::{
     graph::NodeKey,
 };
 
+use knaster_core::PFloat;
 use knaster_core::log::ArLogSender;
 #[allow(unused)]
 use knaster_core::{ParameterError, ParameterSmoothing, ParameterValue, Seconds, rt_log};
 
-/// A trait for sending parameter changes to a GraphGen i.e. the running Graph.
-pub trait ParameterChangeSender {
+/// A trait for sending parameter and control changes to a GraphGen i.e. the running Graph.
+pub trait LiveChangeSender {
     /// Send a [`SchedulingEvent`] to the audio thread.
     fn schedule_change(&self, event: SchedulingEvent) -> Result<(), GraphError>;
 }
@@ -38,39 +39,69 @@ pub trait ParameterChangeSender {
 #[derive(Debug, Clone)]
 pub struct SchedulingEvent {
     pub(crate) node_key: NodeKey,
-    pub(crate) parameter: usize,
-    pub(crate) value: Option<ParameterValue>,
-    pub(crate) smoothing: Option<ParameterSmoothing>,
     pub(crate) token: Option<SchedulingToken>,
     pub(crate) time: Option<Time>,
+    pub(crate) kind: SchedulingEventKind,
+}
+
+#[derive(Debug, Clone)]
+/// Which kind of scheduling event is being scheduled, i.e. Parameter or Control
+pub enum SchedulingEventKind {
+    Parameter {
+        index: usize,
+        value: ParameterValue,
+    },
+    Control {
+        index: usize,
+        value: Option<PFloat>,
+        smoothing: Option<ParameterSmoothing>,
+    },
 }
 impl SchedulingEvent {
-    /// Create a new parameter change.
-    pub fn new(node_key: NodeKey, parameter: usize) -> Self {
+    /// Create a new parameter change event.
+    pub fn parameter_change(
+        node_key: NodeKey,
+        parameter: usize,
+        value: impl Into<ParameterValue>,
+    ) -> Self {
         Self {
             node_key,
-            parameter,
-            value: None,
-            smoothing: None,
             token: None,
             time: None,
+            kind: SchedulingEventKind::Parameter {
+                index: parameter,
+                value: value.into(),
+            },
         }
     }
-    /// Set the value of the parameter change.
-    pub fn value(mut self, v: impl Into<ParameterValue>) -> Self {
-        self.value = Some(v.into());
-        self
+    /// Create a new control change event.
+    pub fn control_change(
+        node_key: NodeKey,
+        index: usize,
+        value: Option<PFloat>,
+        smoothing: Option<ParameterSmoothing>,
+    ) -> Self {
+        Self {
+            node_key,
+            token: None,
+            time: None,
+            kind: SchedulingEventKind::Control {
+                index,
+                value,
+                smoothing,
+            },
+        }
     }
-    /// Set the parameter value to trigger.
-    pub fn trig(mut self) -> Self {
-        self.value = Some(ParameterValue::Trigger);
-        self
-    }
-    /// Set the smoothing setting for the parameter change.
-    pub fn smoothing(mut self, s: impl Into<ParameterSmoothing>) -> Self {
-        self.smoothing = Some(s.into());
-        self
-    }
+    // /// Set the parameter value to trigger.
+    // pub fn trig(mut self) -> Self {
+    //     self.value = Some(ParameterValue::Trigger);
+    //     self
+    // }
+    // /// Set the smoothing setting for the parameter change.
+    // pub fn smoothing(mut self, s: impl Into<ParameterSmoothing>) -> Self {
+    //     self.smoothing = Some(s.into());
+    //     self
+    // }
     /// Attach a scheduling token to the parameter change. The token will be activated at the start
     /// of a block ang guarantees that all changes with the same token are applied in the same
     /// block.
@@ -91,8 +122,11 @@ impl SchedulingEvent {
     }
     /// Resets value, smoothing, token and time. Node and parameter are preserved.
     pub fn reset(&mut self) {
-        self.value = None;
-        self.smoothing = None;
+        self.kind = SchedulingEventKind::Control {
+            index: 0,
+            value: None,
+            smoothing: None,
+        };
         self.token = None;
         self.time = None;
     }

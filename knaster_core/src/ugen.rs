@@ -1,3 +1,4 @@
+use crate::controls::ControlMetadata;
 use crate::log::ArLogSender;
 use crate::numeric_array::NumericArray;
 use crate::{Param, ParameterError, ParameterHint, ParameterType, ParameterValue, rt_log};
@@ -239,6 +240,8 @@ pub trait UGen {
     type Outputs: Size;
     /// The number of parameters this Gen has.
     type Parameters: Size;
+    /// The number of controls (float parameters) this Gen has.
+    type Controls: Size;
     /// `init()` is the place where you should implement initialisation of
     /// internal state with knowledge of the sample rate and the block size. It
     /// is safe to allocate here.
@@ -366,4 +369,9 @@ pub trait UGen {
             }
         }
     }
+
+    /// Get the metadata for every control of this UGen
+    fn control_metadata(&self) -> NumericArray<ControlMetadata<Self::Sample>, Self::Controls>;
+    /// Set the value of a control (float parameter)
+    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: Self::Sample);
 }

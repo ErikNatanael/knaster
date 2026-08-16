@@ -5,18 +5,44 @@ use crate::dynugen::UGenEnum;
 use std::prelude::v1::*;
 
 use ecow::EcoString;
-use knaster_core::{Float, Param, ParameterError, ParameterHint, UGen, typenum::*};
+use knaster_core::controls::ControlMetadata;
+use knaster_core::{
+    ControlPurpose, ControlRange, Float, PFloat, Param, ParameterError, ParameterHint, UGen,
+    heapless, typenum::*,
+};
 
 use crate::graph::{GraphId, NodeKey};
 use crate::{buffer_allocator::BufferAllocator, dynugen::DynUGen, task::Task};
 
-#[derive(Clone, Copy, Debug)]
+/// Metadata about a control with erased float type
+#[derive(Clone, Debug, PartialEq)]
+pub struct NodeControlMetadata {
+    name: heapless::String<16>,
+    default: PFloat,
+    range: Option<ControlRange<PFloat>>,
+    purpose: Option<ControlPurpose>,
+}
+
+impl<F: Float> From<ControlMetadata<F>> for NodeControlMetadata {
+    fn from(value: ControlMetadata<F>) -> Self {
+        Self {
+            name: value.name().clone(),
+            default: value.default().to_f64() as PFloat,
+            range: value.range().map(|r| r.to_pfloat()),
+            purpose: *value.purpose(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct NodeData {
     pub(crate) parameter_descriptions_fn: fn(usize) -> Option<&'static str>,
     pub(crate) parameter_hints_fn: fn(usize) -> Option<ParameterHint>,
+    pub(crate) control_metadata: Vec<NodeControlMetadata>,
     pub(crate) inputs: u16,
     pub(crate) outputs: u16,
     pub(crate) parameters: u16,
+    pub(crate) controls: u16,
 }
 impl NodeData {
     pub fn parameter_descriptions(&self) -> impl Iterator<Item = &'static str> {
@@ -35,13 +61,34 @@ impl NodeData {
             s
         })
     }
-    pub fn from_ugen<T: UGen>() -> Self {
+    pub fn from_ugen<T: UGen>(ugen: &T) -> Self {
         Self {
             parameter_descriptions_fn: |index: usize| T::param_descriptions().get(index).copied(),
             parameter_hints_fn: |index: usize| T::param_hints().get(index).copied(),
+            control_metadata: ugen
+                .control_metadata()
+                .into_iter()
+                .map(|m| m.into())
+                .collect::<Vec<_>>(),
             inputs: T::Inputs::U16,
             outputs: T::Outputs::U16,
             parameters: T::Parameters::U16,
+            controls: T::Controls::U16,
+        }
+    }
+    pub fn from_dyn_ugen<F: Float, T: DynUGen<F>>(ugen: &T) -> Self {
+        Self {
+            parameter_descriptions_fn: ugen.param_description_fn(),
+            parameter_hints_fn: ugen.param_hints_fn(),
+            control_metadata: ugen
+                .control_metadata()
+                .into_iter()
+                .map(|m| m.into())
+                .collect::<Vec<_>>(),
+            inputs: ugen.inputs(),
+            outputs: ugen.outputs(),
+            parameters: ugen.parameters(),
+            controls: ugen.controls(),
         }
     }
 }
@@ -93,24 +140,15 @@ pub(crate) struct Node<F: Float> {
 }
 impl<F: Float> Node<F> {
     pub fn new<T: DynUGen<F> + 'static>(name: EcoString, ugen: T) -> Self {
-        let parameter_descriptions_fn = ugen.param_description_fn();
-        let parameter_hints_fn = ugen.param_hints_fn();
-        let parameters = ugen.parameters();
         let inputs = ugen.inputs();
-        let outputs = ugen.outputs();
+        let data = NodeData::from_dyn_ugen(&ugen);
         let ugen = NodeUGen::Local(UGenEnum::from_ugen(ugen));
         // let boxed_gen = Box::new(ugen);
         // let ptr = Box::into_raw(boxed_gen);
 
         Self {
             name,
-            data: NodeData {
-                parameter_descriptions_fn,
-                parameter_hints_fn,
-                inputs,
-                outputs,
-                parameters,
-            },
+            data,
             ugen,
             node_inputs: vec![crate::core::ptr::null_mut(); inputs as usize],
             node_output: NodeOutput::Offset(0),

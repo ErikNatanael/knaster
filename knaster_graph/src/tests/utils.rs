@@ -1,6 +1,9 @@
 use anyhow::anyhow;
 use knaster_core::{
-    AudioCtx, BlockRead, Float, ParameterHint, UGen, UGenFlags, impl_ugen, typenum::U1,
+    AudioCtx, BlockRead, ControlRange, Float, ParameterHint, UGen, UGenFlags,
+    controls::ControlMetadata,
+    impl_ugen,
+    typenum::{U0, U1},
 };
 
 use crate::processor::AudioProcessor;
@@ -33,10 +36,10 @@ impl<F: Float> TestInPlusParamUGen<F> {
 }
 impl<F: Float> UGen for TestInPlusParamUGen<F> {
     type Sample = F;
-
     type Inputs = U1;
-
     type Outputs = U1;
+    type Parameters = U0;
+    type Controls = U1;
 
     fn process(
         &mut self,
@@ -46,27 +49,43 @@ impl<F: Float> UGen for TestInPlusParamUGen<F> {
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         [self.number + input[0]].into()
     }
-    type Parameters = U1;
 
     fn param_descriptions()
     -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
-        ["number"].into()
+        [].into()
     }
 
     fn param_hints()
     -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::Parameters>
     {
-        [ParameterHint::infinite_float()].into()
+        [].into()
     }
 
     fn param_apply(
         &mut self,
         _ctx: &mut AudioCtx,
-        index: usize,
-        value: knaster_core::ParameterValue,
+        _index: usize,
+        _value: knaster_core::ParameterValue,
     ) {
+    }
+
+    fn control_metadata(
+        &self,
+    ) -> knaster_core::numeric_array::NumericArray<
+        knaster_core::controls::ControlMetadata<Self::Sample>,
+        Self::Controls,
+    > {
+        [ControlMetadata::new(
+            "number",
+            self.number,
+            ControlRange::Infinity,
+        )]
+        .into()
+    }
+
+    fn control(&mut self, _ctx: &mut AudioCtx, index: usize, value: Self::Sample) {
         if index == 0 {
-            self.set_number(F::new(value.float().unwrap()));
+            self.set_number(value);
         }
     }
 }

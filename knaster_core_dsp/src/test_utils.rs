@@ -1,5 +1,6 @@
 use knaster_core::{
-    AudioCtx, Float, Frame, PFloat, ParameterHint, ParameterValue, UGen, UGenFlags,
+    AudioCtx, ControlRange, Float, Frame, ParameterHint, ParameterValue, UGen, UGenFlags,
+    controls::ControlMetadata,
     numeric_array::NumericArray,
     typenum::{U0, U1},
 };
@@ -39,6 +40,14 @@ impl<F: Float> UGen for TestNumUGen<F> {
     }
 
     fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: ParameterValue) {}
+
+    type Controls = U0;
+
+    fn control_metadata(&self) -> NumericArray<ControlMetadata<Self::Sample>, Self::Controls> {
+        [].into()
+    }
+
+    fn control(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: Self::Sample) {}
 }
 
 /// Outputs a static number every frame
@@ -49,8 +58,8 @@ impl<F: Float> TestInPlusParamGen<F> {
     pub fn new() -> Self {
         Self { number: F::ZERO }
     }
-    pub fn number(&mut self, n: PFloat) {
-        self.number = F::new(n);
+    pub fn number(&mut self, n: F) {
+        self.number = n;
     }
 }
 impl<F: Float> UGen for TestInPlusParamGen<F> {
@@ -68,19 +77,33 @@ impl<F: Float> UGen for TestInPlusParamGen<F> {
     ) -> Frame<Self::Sample, Self::Outputs> {
         [self.number + input[0]].into()
     }
-    type Parameters = U1;
+    type Parameters = U0;
 
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
-        ["number"].into()
+        [].into()
     }
 
     fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
-        [ParameterHint::infinite_float()].into()
+        [].into()
     }
 
-    fn param_apply(&mut self, _ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
-        if index == 0 {
-            self.number(value.float().unwrap());
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: ParameterValue) {}
+
+    type Controls = U1;
+
+    fn control_metadata(
+        &self,
+    ) -> NumericArray<knaster_core::controls::ControlMetadata<Self::Sample>, Self::Controls> {
+        NumericArray::from([ControlMetadata::new(
+            "number",
+            F::ZERO,
+            ControlRange::Infinity,
+        )])
+    }
+    fn control(&mut self, _ctx: &mut AudioCtx, index: usize, value: Self::Sample) {
+        match index {
+            0 => self.number(value),
+            _ => (),
         }
     }
 }

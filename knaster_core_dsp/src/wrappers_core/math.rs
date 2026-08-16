@@ -1,6 +1,8 @@
 use crate::core::ops::Add;
 use knaster_core::{
-    AudioCtx, Float, FloatMethods, ParameterHint, ParameterValue, Size, UGen, UGenFlags,
+    AudioCtx, ControlPurpose, ControlRange, Float, FloatMethods, ParameterHint, ParameterValue,
+    Size, UGen, UGenFlags,
+    controls::ControlMetadata,
     numeric_array::NumericArray,
     typenum::{Add1, Unsigned, bit::B1},
 };
@@ -24,10 +26,9 @@ impl<T: UGen> WrMul<T> {
 }
 impl<T: UGen> UGen for WrMul<T>
 where
-    // Make sure we can add a parameter
-    <T as UGen>::Parameters: Add<B1>,
-    <<T as UGen>::Parameters as Add<B1>>::Output: Size,
-    T::Sample: Float,
+    // Make sure we can add a control
+    <T as UGen>::Controls: Add<B1>,
+    <<T as UGen>::Controls as Add<B1>>::Output: Size,
 {
     type Sample = T::Sample;
     type Inputs = T::Inputs;
@@ -66,34 +67,37 @@ where
             }
         }
     }
-    type Parameters = Add1<T::Parameters>;
+    type Parameters = T::Parameters;
 
     fn param_descriptions()
     -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
-        let gd = T::param_descriptions();
-        let mut d = NumericArray::default();
-        for i in 0..T::Parameters::USIZE {
-            d[i] = gd[i];
-        }
-        d[T::Parameters::USIZE] = "wr_mul";
-        d
+        T::param_descriptions()
     }
 
     fn param_hints() -> knaster_core::numeric_array::NumericArray<ParameterHint, Self::Parameters> {
-        let gd = T::param_hints();
-        let mut d = NumericArray::default();
-        for i in 0..T::Parameters::USIZE {
-            d[i] = gd[i];
-        }
-        d[T::Parameters::USIZE] = ParameterHint::new_float(|h| h.logarithmic(true).infinite());
-        d
+        T::param_hints()
     }
 
     fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
-        if index == T::Parameters::USIZE {
-            self.value = T::Sample::new(value.float().unwrap());
+        T::param_apply(&mut self.ugen, ctx, index, value)
+    }
+
+    type Controls = Add1<T::Controls>;
+    fn control_metadata(&self) -> NumericArray<ControlMetadata<Self::Sample>, Self::Controls> {
+        let org = T::control_metadata(&self.ugen);
+        let mut d = NumericArray::default();
+        for (i, org_meta) in org.into_iter().enumerate() {
+            d[i] = org_meta;
+        }
+        d[T::Controls::USIZE] = ControlMetadata::new("wr_mul", self.value, ControlRange::Infinity)
+            .with_purpose(ControlPurpose::Amplitude);
+        d
+    }
+    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: Self::Sample) {
+        if index == T::Controls::USIZE {
+            self.value = value;
         } else {
-            T::param_apply(&mut self.ugen, ctx, index, value)
+            self.ugen.control(ctx, index, value);
         }
     }
     unsafe fn set_ar_param_buffer(
@@ -123,7 +127,12 @@ impl<T: UGen> WrAdd<T> {
         Self { ugen, value }
     }
 }
-impl<T: UGen> UGen for WrAdd<T> {
+impl<T: UGen> UGen for WrAdd<T>
+where
+    // Make sure we can add a control
+    <T as UGen>::Controls: Add<B1>,
+    <<T as UGen>::Controls as Add<B1>>::Output: Size,
+{
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -188,6 +197,25 @@ impl<T: UGen> UGen for WrAdd<T> {
         self.ugen
             .set_delay_within_block_for_param(ctx, index, delay);
     }
+
+    type Controls = Add1<T::Controls>;
+    fn control_metadata(&self) -> NumericArray<ControlMetadata<Self::Sample>, Self::Controls> {
+        let org = T::control_metadata(&self.ugen);
+        let mut d = NumericArray::default();
+        for (i, org_meta) in org.into_iter().enumerate() {
+            d[i] = org_meta;
+        }
+        d[T::Controls::USIZE] = ControlMetadata::new("wr_add", self.value, ControlRange::Infinity)
+            .with_purpose(ControlPurpose::Offset);
+        d
+    }
+    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: Self::Sample) {
+        if index == T::Controls::USIZE {
+            self.value = value;
+        } else {
+            self.ugen.control(ctx, index, value);
+        }
+    }
 }
 
 /// `gen` - `value`
@@ -201,7 +229,12 @@ impl<T: UGen> WrSub<T> {
         Self { ugen, value }
     }
 }
-impl<T: UGen> UGen for WrSub<T> {
+impl<T: UGen> UGen for WrSub<T>
+where
+    // Make sure we can add a control
+    <T as UGen>::Controls: Add<B1>,
+    <<T as UGen>::Controls as Add<B1>>::Output: Size,
+{
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -266,6 +299,25 @@ impl<T: UGen> UGen for WrSub<T> {
         self.ugen
             .set_delay_within_block_for_param(ctx, index, delay);
     }
+
+    type Controls = Add1<T::Controls>;
+    fn control_metadata(&self) -> NumericArray<ControlMetadata<Self::Sample>, Self::Controls> {
+        let org = T::control_metadata(&self.ugen);
+        let mut d = NumericArray::default();
+        for (i, org_meta) in org.into_iter().enumerate() {
+            d[i] = org_meta;
+        }
+        d[T::Controls::USIZE] = ControlMetadata::new("wr_sub", self.value, ControlRange::Infinity)
+            .with_purpose(ControlPurpose::Offset);
+        d
+    }
+    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: Self::Sample) {
+        if index == T::Controls::USIZE {
+            self.value = value;
+        } else {
+            self.ugen.control(ctx, index, value);
+        }
+    }
 }
 /// The inverse of WrSub, i.e. the inner UGen is the right hand operand:
 /// `value` - `ugen`
@@ -279,7 +331,13 @@ impl<T: UGen> WrVSub<T> {
         Self { ugen, value }
     }
 }
-impl<T: UGen> UGen for WrVSub<T> {
+impl<T: UGen> UGen for WrVSub<T>
+where
+    // Make sure we can add a control
+    <T as UGen>::Controls: Add<B1>,
+    <<T as UGen>::Controls as Add<B1>>::Output: Size,
+    T::Sample: Float,
+{
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -345,6 +403,24 @@ impl<T: UGen> UGen for WrVSub<T> {
         self.ugen
             .set_delay_within_block_for_param(ctx, index, delay);
     }
+    type Controls = Add1<T::Controls>;
+    fn control_metadata(&self) -> NumericArray<ControlMetadata<Self::Sample>, Self::Controls> {
+        let org = T::control_metadata(&self.ugen);
+        let mut d = NumericArray::default();
+        for (i, org_meta) in org.into_iter().enumerate() {
+            d[i] = org_meta;
+        }
+        d[T::Controls::USIZE] = ControlMetadata::new("wr_vsub", self.value, ControlRange::Infinity)
+            .with_purpose(ControlPurpose::Offset);
+        d
+    }
+    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: Self::Sample) {
+        if index == T::Controls::USIZE {
+            self.value = value;
+        } else {
+            self.ugen.control(ctx, index, value);
+        }
+    }
 }
 
 /// `gen` / `value`
@@ -358,7 +434,12 @@ impl<T: UGen> WrDiv<T> {
         Self { ugen, value }
     }
 }
-impl<T: UGen> UGen for WrDiv<T> {
+impl<T: UGen> UGen for WrDiv<T>
+where
+    // Make sure we can add a control
+    <T as UGen>::Controls: Add<B1>,
+    <<T as UGen>::Controls as Add<B1>>::Output: Size,
+{
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -423,6 +504,23 @@ impl<T: UGen> UGen for WrDiv<T> {
         self.ugen
             .set_delay_within_block_for_param(ctx, index, delay);
     }
+    type Controls = Add1<T::Controls>;
+    fn control_metadata(&self) -> NumericArray<ControlMetadata<Self::Sample>, Self::Controls> {
+        let org = T::control_metadata(&self.ugen);
+        let mut d = NumericArray::default();
+        for (i, org_meta) in org.into_iter().enumerate() {
+            d[i] = org_meta;
+        }
+        d[T::Controls::USIZE] = ControlMetadata::new("wr_div", self.value, ControlRange::Infinity);
+        d
+    }
+    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: Self::Sample) {
+        if index == T::Controls::USIZE {
+            self.value = value;
+        } else {
+            self.ugen.control(ctx, index, value);
+        }
+    }
 }
 
 /// `value` / `gen`
@@ -436,7 +534,12 @@ impl<T: UGen> WrVDiv<T> {
         Self { ugen, value }
     }
 }
-impl<T: UGen> UGen for WrVDiv<T> {
+impl<T: UGen> UGen for WrVDiv<T>
+where
+    // Make sure we can add a control
+    <T as UGen>::Controls: Add<B1>,
+    <<T as UGen>::Controls as Add<B1>>::Output: Size,
+{
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -502,6 +605,23 @@ impl<T: UGen> UGen for WrVDiv<T> {
         self.ugen
             .set_delay_within_block_for_param(ctx, index, delay);
     }
+    type Controls = Add1<T::Controls>;
+    fn control_metadata(&self) -> NumericArray<ControlMetadata<Self::Sample>, Self::Controls> {
+        let org = T::control_metadata(&self.ugen);
+        let mut d = NumericArray::default();
+        for (i, org_meta) in org.into_iter().enumerate() {
+            d[i] = org_meta;
+        }
+        d[T::Controls::USIZE] = ControlMetadata::new("wr_vdiv", self.value, ControlRange::Infinity);
+        d
+    }
+    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: Self::Sample) {
+        if index == T::Controls::USIZE {
+            self.value = value;
+        } else {
+            self.ugen.control(ctx, index, value);
+        }
+    }
 }
 
 /// `gen.powf(value)`
@@ -515,7 +635,12 @@ impl<T: UGen> WrPowf<T> {
         Self { ugen, value }
     }
 }
-impl<T: UGen> UGen for WrPowf<T> {
+impl<T: UGen> UGen for WrPowf<T>
+where
+    // Make sure we can add a control
+    <T as UGen>::Controls: Add<B1>,
+    <<T as UGen>::Controls as Add<B1>>::Output: Size,
+{
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -581,6 +706,23 @@ impl<T: UGen> UGen for WrPowf<T> {
         self.ugen
             .set_delay_within_block_for_param(ctx, index, delay);
     }
+    type Controls = Add1<T::Controls>;
+    fn control_metadata(&self) -> NumericArray<ControlMetadata<Self::Sample>, Self::Controls> {
+        let org = T::control_metadata(&self.ugen);
+        let mut d = NumericArray::default();
+        for (i, org_meta) in org.into_iter().enumerate() {
+            d[i] = org_meta;
+        }
+        d[T::Controls::USIZE] = ControlMetadata::new("wr_powf", self.value, ControlRange::Infinity);
+        d
+    }
+    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: Self::Sample) {
+        if index == T::Controls::USIZE {
+            self.value = value;
+        } else {
+            self.ugen.control(ctx, index, value);
+        }
+    }
 }
 
 /// `gen.powi(value)`
@@ -594,7 +736,12 @@ impl<T: UGen> WrPowi<T> {
         Self { ugen, value }
     }
 }
-impl<T: UGen> UGen for WrPowi<T> {
+impl<T: UGen> UGen for WrPowi<T>
+where
+    // Make sure we can add a control
+    <T as UGen>::Controls: Add<B1>,
+    <<T as UGen>::Controls as Add<B1>>::Output: Size,
+{
     type Sample = T::Sample;
     type Inputs = T::Inputs;
     type Outputs = T::Outputs;
@@ -657,5 +804,26 @@ impl<T: UGen> UGen for WrPowi<T> {
     fn set_delay_within_block_for_param(&mut self, ctx: &mut AudioCtx, index: usize, delay: u16) {
         self.ugen
             .set_delay_within_block_for_param(ctx, index, delay);
+    }
+    type Controls = Add1<T::Controls>;
+    fn control_metadata(&self) -> NumericArray<ControlMetadata<Self::Sample>, Self::Controls> {
+        let org = T::control_metadata(&self.ugen);
+        let mut d = NumericArray::default();
+        for (i, org_meta) in org.into_iter().enumerate() {
+            d[i] = org_meta;
+        }
+        d[T::Controls::USIZE] = ControlMetadata::new(
+            "wr_powi",
+            Self::Sample::new(self.value as f64),
+            ControlRange::Infinity,
+        );
+        d
+    }
+    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: Self::Sample) {
+        if index == T::Controls::USIZE {
+            self.value = value.to_f64() as i32;
+        } else {
+            self.ugen.control(ctx, index, value);
+        }
     }
 }

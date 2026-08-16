@@ -1,3 +1,5 @@
+mod control;
+
 extern crate proc_macro;
 
 use darling::FromMeta;
@@ -9,6 +11,8 @@ use syn::{
     DeriveInput, Expr, ExprRange, Ident, ImplItem, ImplItemFn, ItemImpl, Lit, Type,
     parse_macro_input, spanned::Spanned,
 };
+
+use crate::control::{generate_controls_methods, parse_control_functions};
 
 // TODO: Allow passing process and process_block functions with the same signature as for the UGen
 // trait
@@ -93,7 +97,9 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
     // optional
     let mut process_block_fn = None;
     let mut param_fns = Vec::new();
-    // Overrides the associated types of the UGen trait. `Parameters` cannot be overridden
+    let mut control_fns = Vec::new();
+    // Overrides the associated types of the UGen trait. `Parameters` and `Controls` cannot be
+    // overridden
     let mut sample_type_override: Option<Type> = None;
     let mut inputs_type_override: Option<Type> = None;
     let mut outputs_type_override: Option<Type> = None;
@@ -125,6 +131,8 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
                         process_block_fn = Some(method);
                     } else if attr.path().is_ident("param") {
                         param_fns.push(method);
+                    } else if attr.path().is_ident("control") {
+                        control_fns.push(method);
                     }
                 }
             }
@@ -572,10 +580,12 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
     let num_input_channels = num_input_channels.unwrap_or(0);
     let num_output_channels = num_output_channels.unwrap_or(0);
     let num_params: syn::Type = syn::parse_str(&format!("U{}", param_fns.len())).unwrap();
+    let num_controls: syn::Type = syn::parse_str(&format!("U{}", control_fns.len())).unwrap();
     let num_inputs: syn::Type = syn::parse_str(&format!("U{}", num_input_channels)).unwrap();
     let num_outputs: syn::Type = syn::parse_str(&format!("U{}", num_output_channels)).unwrap();
 
     let params = parse_parameter_functions(param_fns)?;
+    let controls = parse_control_functions(control_fns)?;
 
     let parameter_descriptions = params
         .iter()
@@ -665,6 +675,7 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
         })
         .collect::<Vec<_>>();
 
+    let control_methods = generate_controls_methods(controls, &crate_ident)?;
     // Remove all parsed attributes from the impl block
     let mut input = input.clone();
     let mut items_to_remove = vec![];
@@ -690,6 +701,7 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
             }
             method.attrs.retain(|attr| {
                 !attr.path().is_ident("param")
+                    && !attr.path().is_ident("control")
                     && !attr.path().is_ident("init")
                     && !attr.path().is_ident("process")
                     && !attr.path().is_ident("process_block")
@@ -730,6 +742,7 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
             #atype_inputs
             #atype_outputs
             type Parameters = #crate_ident::typenum::#num_params ;
+            type Controls = #crate_ident::typenum::#num_controls;
 
             #init_impl
 
@@ -764,6 +777,8 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
                     }
                 }
             }
+
+            #control_methods
         }
         #input
     })

@@ -6,6 +6,7 @@ use core::marker::PhantomData;
 
 use knaster_core::{
     Float, ParameterHint, ParameterValue, Size,
+    controls::ControlMetadata,
     numeric_array::NumericArray,
     typenum::{Double, U0, U1},
 };
@@ -162,6 +163,11 @@ where
         NumericArray::from([])
     }
     fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: ParameterValue) {}
+    type Controls = U0;
+    fn control_metadata(&self) -> NumericArray<ControlMetadata<Self::Sample>, Self::Controls> {
+        [].into()
+    }
+    fn control(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: Self::Sample) {}
 }
 
 /// Mathematical operation of the form 1 in 1 out (e.g. sqrt, fract, ceil)
@@ -302,6 +308,11 @@ impl<F: Float, Op: Operation1<F>> UGen for Math1UGen<F, Op> {
         NumericArray::from([])
     }
     fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: ParameterValue) {}
+    type Controls = U0;
+    fn control_metadata(&self) -> NumericArray<ControlMetadata<Self::Sample>, Self::Controls> {
+        [].into()
+    }
+    fn control(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: Self::Sample) {}
 }
 
 #[cfg(test)]

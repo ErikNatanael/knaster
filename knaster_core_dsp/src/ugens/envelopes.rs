@@ -310,7 +310,9 @@ mod alloc_envelopes {
 
     use core::marker::PhantomData;
 
-    use knaster_core::{AudioCtx, PInteger, ParameterHint, ParameterValue, UGen, UGenFlags};
+    use knaster_core::{
+        AudioCtx, PFloat, PInteger, ParameterHint, ParameterValue, UGen, UGenFlags, impl_ugen,
+    };
     use knaster_core::{
         Float, Frame,
         numeric_array::NumericArray,
@@ -383,10 +385,10 @@ mod alloc_envelopes {
             }
         }
         /// Set the scaling for the time of progressing through the segments
-        pub fn time_scale(mut self, time_scale: f64) -> Self {
-            self.time_scale = time_scale;
-            self
-        }
+        // pub fn time_scale(mut self, time_scale: f64) -> Self {
+        //     self.time_scale = time_scale;
+        //     self
+        // }
         /// Set the `looping` state of the envelope, i.e. whether it should go back to the start
         /// once it has reached the end.
         pub fn looping(mut self, looping: bool) -> Self {
@@ -394,11 +396,9 @@ mod alloc_envelopes {
             self
         }
     }
-    impl<F: Float> UGen for Envelope<F> {
-        type Sample = F;
-        type Inputs = U0;
-        type Outputs = U1;
-        type Parameters = U4;
+    #[impl_ugen]
+    impl<F: Float> Envelope<F> {
+        // type Parameters = U4;
 
         fn init(&mut self, sample_rate: u32, _block_size: usize) {
             self.base_scale = 1.0 / sample_rate as f64;
@@ -408,8 +408,8 @@ mod alloc_envelopes {
             &mut self,
             _ctx: &mut AudioCtx,
             flags: &mut UGenFlags,
-            _input: Frame<Self::Sample, Self::Inputs>,
-        ) -> Frame<Self::Sample, Self::Outputs> {
+            _input: [F; 0],
+        ) -> [F; 1] {
             let out: F;
             match self.state {
                 EnvelopeState::Stopped => {
@@ -459,70 +459,58 @@ mod alloc_envelopes {
                     }
                 }
             }
-            [out].into()
+            [out]
         }
-        fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
-            ["time_scale", "jump_to_segment", "t_restart", "t_stop"].into()
+        // TODO: mark as logarithmic
+        #[param(range=0.0..=20.0)]
+        fn time_scale(&mut self, value: PFloat) {
+            self.time_scale = F::new(value).to_f64();
         }
-        fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
-            [
-                ParameterHint::new_float(|h| h.logarithmic(true).minmax(0.0, 20.0)),
-                ParameterHint::new_integer((PInteger::ZERO, PInteger::MAX), |h| h),
-                ParameterHint::Trigger,
-                ParameterHint::Trigger,
-            ]
-            .into()
-        }
-        fn param_apply(&mut self, _ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
-            match index {
-                0 => {
-                    self.time_scale = F::new(value.float().unwrap()).to_f64();
-                }
-                1 => {
-                    let mut jump_to_segment = value.integer().unwrap().0;
-                    if jump_to_segment >= self.segments.len() {
-                        jump_to_segment = self.segments.len() - 1;
-                    }
-                    match &mut self.state {
-                        EnvelopeState::Stopped => {
-                            self.state = EnvelopeState::Running {
-                                current_segment: jump_to_segment,
-                                current_time: 0.0,
-                            };
-                        }
-                        EnvelopeState::Running {
-                            current_segment,
-                            current_time,
-                        } => {
-                            *current_segment = jump_to_segment;
-                            *current_time = 0.0;
-                        }
-                    }
-
-                    self.current_segment = jump_to_segment;
-                }
-                2 => {
+        #[param]
+        fn jump_to_segment(&mut self, value: PInteger) {
+            let mut jump_to_segment = value.0;
+            if jump_to_segment >= self.segments.len() {
+                jump_to_segment = self.segments.len() - 1;
+            }
+            match &mut self.state {
+                EnvelopeState::Stopped => {
                     self.state = EnvelopeState::Running {
-                        current_segment: 0,
+                        current_segment: jump_to_segment,
                         current_time: 0.0,
                     };
-                    self.from_value = self.start_value;
                 }
-                3 => {
-                    if let EnvelopeState::Running {
-                        current_segment,
-                        current_time,
-                    } = self.state
-                    {
-                        let t = current_time;
-                        let segment = &self.segments[current_segment];
-                        self.from_value = self.from_value
-                            + (t * segment.reciprocal_duration) * (segment.value - self.from_value);
-                    }
-                    self.state = EnvelopeState::Stopped;
+                EnvelopeState::Running {
+                    current_segment,
+                    current_time,
+                } => {
+                    *current_segment = jump_to_segment;
+                    *current_time = 0.0;
                 }
-                _ => (),
             }
+
+            self.current_segment = jump_to_segment;
+        }
+        #[param]
+        fn t_restart(&mut self) {
+            self.state = EnvelopeState::Running {
+                current_segment: 0,
+                current_time: 0.0,
+            };
+            self.from_value = self.start_value;
+        }
+        #[param]
+        fn t_stop(&mut self) {
+            if let EnvelopeState::Running {
+                current_segment,
+                current_time,
+            } = self.state
+            {
+                let t = current_time;
+                let segment = &self.segments[current_segment];
+                self.from_value = self.from_value
+                    + (t * segment.reciprocal_duration) * (segment.value - self.from_value);
+            }
+            self.state = EnvelopeState::Stopped;
         }
     }
 }

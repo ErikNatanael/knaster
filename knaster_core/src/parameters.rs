@@ -1,5 +1,7 @@
-//! This approach gives us an enum which can apply itself to the exact type, but
-//! that is not very useful when the type is erased. It is also not very ergonomic.
+//! Parameter metadata and types
+//!
+//! Parameter messages can be sent to UGens to change settings. Float parameters are called
+//! `control`s and are handled separately.
 
 mod types;
 
@@ -74,6 +76,9 @@ pub enum ParameterError {
     #[error("You are trying to set a parameter to a type it does not support.")]
     #[allow(missing_docs)]
     WrongParameterType,
+    #[error("You are trying to schedule a parameter change without providing a value.")]
+    #[allow(missing_docs)]
+    ParameterValueMissing,
     #[error("The parameter index is out of bounds.")]
     #[allow(missing_docs)]
     ParameterIndexOutOfBounds,

@@ -52,10 +52,9 @@ where
     <<T as UGen>::Parameters as Add<B1>>::Output: Size,
 {
     type Sample = T::Sample;
-
     type Inputs = T::Inputs;
-
     type Outputs = T::Outputs;
+    type Controls = T::Controls;
 
     fn init(&mut self, sample_rate: u32, block_size: usize) {
         self.ugen.init(sample_rate, block_size)
@@ -117,5 +116,15 @@ where
         } else {
             self.ugen.param_apply(ctx, index, value);
         }
+    }
+
+    fn control_metadata(
+        &self,
+    ) -> NumericArray<knaster_core::controls::ControlMetadata<Self::Sample>, Self::Controls> {
+        self.ugen.control_metadata()
+    }
+
+    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: Self::Sample) {
+        self.ugen.control(ctx, index, value);
     }
 }

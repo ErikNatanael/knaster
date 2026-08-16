@@ -9,6 +9,7 @@ use std::prelude::v1::*;
 use crate::block::{RawAggregateBlockRead, RawContiguousBlock};
 #[allow(unused)]
 use crate::graph::Graph;
+use knaster_core::controls::ControlMetadata;
 use knaster_core::{AudioCtx, Float, ParameterValue, UGen, UGenFlags};
 use knaster_core::{ParameterHint, typenum::*};
 
@@ -39,6 +40,8 @@ pub trait DynUGen<F: Float> {
     fn outputs(&self) -> u16;
     /// Returns the number of parameters of the UGen
     fn parameters(&self) -> u16;
+    /// Returns the number of controls of the UGen
+    fn controls(&self) -> u16;
 
     /// Register a new buffer from which a parameter should be set every sample
     ///
@@ -60,6 +63,10 @@ pub trait DynUGen<F: Float> {
     /// Returns a function which provides the parameter hints for parameters of this
     /// UGen
     fn param_hints_fn(&self) -> fn(usize) -> Option<ParameterHint>;
+    /// Get the metadata for every control of this UGen
+    fn control_metadata(&self) -> Vec<ControlMetadata<F>>;
+    /// Set the value of a control (float parameter)
+    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: F);
 }
 impl<F: Float, T: UGen<Sample = F> + 'static> DynUGen<F> for T {
     fn init(&mut self, sample_rate: u32, block_size: usize) {
@@ -87,6 +94,9 @@ impl<F: Float, T: UGen<Sample = F> + 'static> DynUGen<F> for T {
     fn parameters(&self) -> u16 {
         T::Parameters::U16
     }
+    fn controls(&self) -> u16 {
+        T::Controls::U16
+    }
 
     unsafe fn set_ar_param_buffer(&mut self, ctx: &mut AudioCtx, index: usize, buffer: *const F) {
         unsafe { self.set_ar_param_buffer(ctx, index, buffer) };
@@ -106,6 +116,14 @@ impl<F: Float, T: UGen<Sample = F> + 'static> DynUGen<F> for T {
 
     fn param_hints_fn(&self) -> fn(usize) -> Option<ParameterHint> {
         |index: usize| T::param_hints().get(index).copied()
+    }
+
+    fn control_metadata(&self) -> Vec<ControlMetadata<F>> {
+        T::control_metadata(&self).to_vec()
+    }
+
+    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: F) {
+        self.control(ctx, index, value);
     }
 }
 
@@ -279,6 +297,14 @@ impl<F: Float> DynUGen<F> for UGenEnum<F> {
         }
     }
 
+    fn controls(&self) -> u16 {
+        match self {
+            UGenEnum::None => 0,
+            UGenEnum::TakeFromTask(_) => 0,
+            UGenEnum::Dyn(ugen) => DynUGen::controls(&(**ugen)),
+        }
+    }
+
     unsafe fn set_ar_param_buffer(&mut self, ctx: &mut AudioCtx, index: usize, buffer: *const F) {
         unsafe {
             match self {
@@ -356,6 +382,20 @@ impl<F: Float> DynUGen<F> for UGenEnum<F> {
             // UGenEnum::Constant(ugen) => DynUGen::param_hints_fn(ugen),
             // UGenEnum::SinWt(ugen) => DynUGen::param_hints_fn(ugen),
             UGenEnum::Dyn(ugen) => DynUGen::param_hints_fn(&(**ugen)),
+        }
+    }
+
+    fn control_metadata(&self) -> Vec<ControlMetadata<F>> {
+        match self {
+            UGenEnum::Dyn(ugen) => DynUGen::control_metadata(&(**ugen)),
+            _ => unreachable!("control_metadata called on a non Dyn UGenEnum"),
+        }
+    }
+
+    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: F) {
+        match self {
+            UGenEnum::Dyn(ugen) => DynUGen::control(&mut (**ugen), ctx, index, value),
+            _ => unreachable!("controlcalled on a non Dyn UGenEnum"),
         }
     }
 }

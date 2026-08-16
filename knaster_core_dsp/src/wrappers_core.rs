@@ -175,15 +175,15 @@ mod tests {
         let mut flags = UGenFlags::new();
         let mut g = WrPreciseTiming::<10, _>::new(TestInPlusParamGen::new());
         g.set_delay_within_block_for_param(ctx, 0, 5);
-        g.param(ctx, 0, 5.).unwrap();
+        g.control(ctx, 0, 5.);
         g.set_delay_within_block_for_param(ctx, 0, 6);
-        g.param(ctx, 0, 6.).unwrap();
+        g.control(ctx, 0, 6.);
         g.set_delay_within_block_for_param(ctx, 0, 8);
-        g.param(ctx, 0, 8.).unwrap();
+        g.control(ctx, 0, 8.);
         g.set_delay_within_block_for_param(ctx, 0, 9);
-        g.param(ctx, 0, 9.).unwrap();
+        g.control(ctx, 0, 9.);
         g.set_delay_within_block_for_param(ctx, 0, 10);
-        g.param(ctx, 0, 10.).unwrap();
+        g.control(ctx, 0, 10.);
 
         let in_block = StaticBlock::<f32, U2, U16>::new();
         let mut out_block = StaticBlock::<f32, U2, U16>::new();
@@ -219,15 +219,15 @@ mod tests {
             .wr_powi(1)
             .wr(|v| v);
         g.set_delay_within_block_for_param(ctx, 0, 5);
-        g.param(ctx, 0, 5.).unwrap();
+        g.control(ctx, 0, 5.);
         g.set_delay_within_block_for_param(ctx, 0, 6);
-        g.param(ctx, 0, 6.).unwrap();
+        g.control(ctx, 0, 6.);
         g.set_delay_within_block_for_param(ctx, 0, 8);
-        g.param(ctx, 0, 8.).unwrap();
+        g.control(ctx, 0, 8.);
         g.set_delay_within_block_for_param(ctx, 0, 9);
-        g.param(ctx, 0, 9.).unwrap();
+        g.control(ctx, 0, 9.);
         g.set_delay_within_block_for_param(ctx, 0, 10);
-        g.param(ctx, 0, 10.).unwrap();
+        g.control(ctx, 0, 10.);
 
         let in_block = StaticBlock::<f32, U2, U16>::new();
         let mut out_block = StaticBlock::<f32, U2, U16>::new();

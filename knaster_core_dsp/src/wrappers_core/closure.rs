@@ -1,4 +1,7 @@
-use knaster_core::{AudioCtx, Block, BlockRead, ParameterHint, ParameterValue, UGen, UGenFlags};
+use knaster_core::{
+    AudioCtx, Block, BlockRead, ParameterHint, ParameterValue, UGen, UGenFlags,
+    controls::ControlMetadata, numeric_array::NumericArray,
+};
 
 /// Applies the closure to every sample of every channel in the [`UGen`] output
 ///
@@ -55,17 +58,23 @@ impl<T: UGen, C: FnMut(T::Sample) -> T::Sample + 'static> UGen for WrClosure<T, 
 
     type Parameters = T::Parameters;
 
-    fn param_descriptions()
-    -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
+    fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         T::param_descriptions()
     }
 
-    fn param_hints() -> knaster_core::numeric_array::NumericArray<ParameterHint, Self::Parameters> {
+    fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
         T::param_hints()
     }
 
     fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         T::param_apply(&mut self.ugen, ctx, index, value)
+    }
+    type Controls = T::Controls;
+    fn control_metadata(&self) -> NumericArray<ControlMetadata<Self::Sample>, Self::Controls> {
+        T::control_metadata(&self.ugen)
+    }
+    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: Self::Sample) {
+        self.ugen.control(ctx, index, value);
     }
     unsafe fn set_ar_param_buffer(
         &mut self,

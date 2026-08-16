@@ -15,7 +15,7 @@ fn main() -> Result<()> {
         let amp = g.push(Constant::new(0.2).smooth_params());
         let sig = sine * amp;
         sig.out([0, 0]).to_graph_out();
-        (sine.param("freq"), amp.param(0))
+        (sine.control("freq"), amp.param(0))
     });
     // Linearly interpolate to new amplitude values from the previous value over 0.1 seconds
     amp.smooth(ParameterSmoothing::Linear(0.1))?;

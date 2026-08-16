@@ -33,6 +33,7 @@ mod core {
     // pub use std::*;
 }
 
+pub mod controls;
 pub mod log;
 mod parameters;
 mod ugen;
@@ -43,6 +44,8 @@ pub use knaster_primitives::*;
 pub use parameters::*;
 use std::prelude::v1::*;
 pub use ugen::*;
+
+pub use heapless;
 
 /// Rate determines the speed at which something is running. Something running
 /// at block rate is only calculated once per block, whereas something running

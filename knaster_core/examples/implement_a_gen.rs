@@ -2,11 +2,12 @@
 
 use anyhow::Result;
 use knaster_core::{
-    AudioCtx, Block, EmptyBlock, Float, Frame, Param, ParameterError, ParameterHint, ParameterType,
-    ParameterValue, StaticBlock, UGen, UGenFlags,
+    AudioCtx, Block, ControlPurpose, ControlRange, EmptyBlock, Float, Frame, Param, ParameterError,
+    ParameterHint, ParameterType, ParameterValue, StaticBlock, UGen, UGenFlags,
+    controls::ControlMetadata,
     log::ArLogSender,
     numeric_array::NumericArray,
-    typenum::{U0, U1, U3, U64, Unsigned},
+    typenum::{U0, U1, U2, U3, U64, Unsigned},
 };
 fn main() -> Result<()> {
     // Let's pretend we're running an audio backend at 48kHz with a block size of 64.
@@ -83,18 +84,15 @@ impl<F: Float> UGen for Osc<F> {
         }
         NumericArray::from([out])
     }
-    type Parameters = U3;
+    type Controls = U2;
+    type Parameters = U1;
 
     fn param_types() -> NumericArray<ParameterType, Self::Parameters> {
-        NumericArray::from([
-            ParameterType::Float,
-            ParameterType::Float,
-            ParameterType::Trigger,
-        ])
+        NumericArray::from([ParameterType::Trigger])
     }
 
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
-        NumericArray::from(["freq", "phase_offset", "reset_phase"])
+        NumericArray::from(["reset_phase"])
     }
 
     fn param_hints() -> NumericArray<ParameterHint, Self::Parameters> {
@@ -103,12 +101,7 @@ impl<F: Float> UGen for Osc<F> {
 
     fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
         match index {
-            0 => self.freq(
-                F::from(value.float().unwrap()).unwrap(),
-                F::from(ctx.sample_rate()).unwrap(),
-            ),
-            1 => self.phase_offset(F::from(value.float().unwrap()).unwrap()),
-            2 => self.phase_offset(F::ZERO),
+            0 => self.phase_offset(F::ZERO),
             _ => (),
         }
     }
@@ -139,5 +132,23 @@ impl<F: Float> UGen for Osc<F> {
             }
         };
         var_name
+    }
+
+    fn control_metadata(
+        &self,
+    ) -> NumericArray<knaster_core::controls::ControlMetadata<Self::Sample>, Self::Controls> {
+        NumericArray::from([
+            ControlMetadata::new("freq", F::new(440.), ControlRange::Nyquist)
+                .with_purpose(ControlPurpose::Frequency),
+            ControlMetadata::new("phase_offset", F::ZERO, ControlRange::Infinity)
+                .with_purpose(ControlPurpose::Phase),
+        ])
+    }
+    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: Self::Sample) {
+        match index {
+            0 => self.freq(value, F::from(ctx.sample_rate()).unwrap()),
+            1 => self.phase_offset(value),
+            _ => (),
+        }
     }
 }

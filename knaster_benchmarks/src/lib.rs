@@ -30,10 +30,10 @@ impl<F: Float> TestNumUGen<F> {
 }
 impl<F: Float> UGen for TestNumUGen<F> {
     type Sample = F;
-
     type Inputs = U0;
-
     type Outputs = U1;
+    type Parameters = U0;
+    type Controls = U0;
 
     fn process(
         &mut self,
@@ -43,7 +43,6 @@ impl<F: Float> UGen for TestNumUGen<F> {
     ) -> Frame<Self::Sample, Self::Outputs> {
         [self.number].into()
     }
-    type Parameters = U0;
 
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         [].into()
@@ -54,4 +53,12 @@ impl<F: Float> UGen for TestNumUGen<F> {
     }
 
     fn param_apply(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: ParameterValue) {}
+
+    fn control_metadata(
+        &self,
+    ) -> NumericArray<knaster::controls::ControlMetadata<Self::Sample>, Self::Controls> {
+        [].into()
+    }
+
+    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: Self::Sample) {}
 }

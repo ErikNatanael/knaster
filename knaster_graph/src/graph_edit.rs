@@ -20,7 +20,6 @@ use crate::core::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use core::mem::MaybeUninit;
 use core::ops::{BitOr, Div, Shr, Sub};
 
-use crate::Time;
 use crate::core::{
     clone::Clone,
     marker::PhantomData,
@@ -31,9 +30,11 @@ use crate::graph_gen::GraphGen;
 use crate::handle::SchedulingChannelSender;
 use crate::node::NodeData;
 use crate::wrappers_graph::done::WrDone;
+use crate::{SchedulingEventKind, Time};
 
 use ecow::EcoString;
-use knaster_core::{Done, ParameterSmoothing, ParameterValue, Seconds};
+use knaster_core::controls::ControlMetadata;
+use knaster_core::{Done, PFloat, ParameterSmoothing, ParameterValue, Seconds};
 use knaster_core::{Float, Param, Size, UGen, numeric_array::NumericArray, typenum::*};
 use knaster_core_dsp::math::MathUGen;
 use knaster_core_dsp::util::Constant;
@@ -63,7 +64,10 @@ impl<'a, F: Float> GraphRef<'a, F> {
     fn write(&self) -> RwLockWriteGuard<'_, &'a mut Graph<F>> {
         #[cfg(feature = "std")]
         {
-            self.0.write().unwrap()
+            match self.0.write() {
+                Ok(guard) => guard,
+                Err(e) => panic!("Error locking Graph: {e}"),
+            }
         }
         #[cfg(not(feature = "std"))]
         {
@@ -86,13 +90,18 @@ impl<'b, F: Float> GraphEdit<'b, F> {
         }
     }
     /// Create a new node in the graph and return a handle to it.
-    pub fn push<'a, T: UGen<Sample = F> + 'static>(&'a self, ugen: T) -> SH<'a, 'b, F, Handle3<T>> {
+    pub fn push<'a, T: UGen<Sample = F> + 'static>(
+        &'a self,
+        ugen: T,
+    ) -> SH<'a, 'b, F, NodeHandle3<T>> {
+        let control_metadata = ugen.control_metadata();
         let handle = self.graph.write().push_internal(ugen);
         let node_id = handle.node_id();
         SH {
-            nodes: Handle3 {
+            nodes: NodeHandle3 {
                 node_id,
                 ugen: PhantomData,
+                control_metadata,
             },
             graph: &self.graph,
         }
@@ -104,21 +113,23 @@ impl<'b, F: Float> GraphEdit<'b, F> {
         &'a self,
         ugen: T,
         default_done_action: Done,
-    ) -> SH<'a, 'b, F, Handle3<WrDone<T>>>
+    ) -> SH<'a, 'b, F, NodeHandle3<WrDone<T>>>
     where
         // Make sure we can add a parameter
         <T as UGen>::Parameters: crate::core::ops::Add<B1>,
         <<T as UGen>::Parameters as crate::core::ops::Add<B1>>::Output: Size,
     {
+        let control_metadata = ugen.control_metadata();
         let handle = self
             .graph
             .write()
             .push_with_done_action(ugen, default_done_action);
         let node_id = handle.node_id();
         SH {
-            nodes: Handle3 {
+            nodes: NodeHandle3 {
                 node_id,
                 ugen: PhantomData,
+                control_metadata,
             },
             graph: &self.graph,
         }
@@ -127,7 +138,11 @@ impl<'b, F: Float> GraphEdit<'b, F> {
     pub fn handle<'a>(&'a self, id: impl Into<NodeId>) -> Option<DH<'a, 'b, F, DynamicHandle3>> {
         let id = id.into();
         self.graph.read().node_data(id).map(|data| DH {
-            nodes: DynamicHandle3 { node_id: id, data },
+            nodes: DynamicHandle3 {
+                node_id: id,
+                outputs: data.outputs,
+                inputs: data.inputs,
+            },
             graph: &self.graph,
         })
     }
@@ -140,7 +155,11 @@ impl<'b, F: Float> GraphEdit<'b, F> {
             .read()
             .node_data_from_name(name)
             .map(|(id, data)| DH {
-                nodes: DynamicHandle3 { node_id: id, data },
+                nodes: DynamicHandle3 {
+                    node_id: id,
+                    outputs: data.outputs,
+                    inputs: data.inputs,
+                },
                 graph: &self.graph,
             })
     }
@@ -212,14 +231,14 @@ impl<'b, F: Float> GraphEdit<'b, F> {
         options: GraphOptions,
         init_callback: impl FnOnce(GraphEdit<F>),
     ) -> (
-        SH<'a, 'b, F, Handle3<GraphGen<F, Inputs, Outputs>>>,
+        SH<'a, 'b, F, RoutingHandle3<GraphGen<F, Inputs, Outputs>>>,
         Graph<F>,
     ) {
         let mut g = self.graph.write();
         let subgraph = g.subgraph_init::<Inputs, Outputs>(options, init_callback);
         (
             SH {
-                nodes: Handle3 {
+                nodes: RoutingHandle3 {
                     node_id: subgraph.id(),
                     ugen: PhantomData,
                 },
@@ -771,11 +790,19 @@ impl<'a, 'b, F: Float, D: Dynamic> DH<'a, 'b, F, D> {
     }
 }
 
+/// Handle for submitting changes to a live node, e.g. parameter and control changes
+#[derive(Clone)]
+pub struct DynamicLiveHandle3 {
+    node_id: NodeId,
+    data: NodeData,
+}
+
 /// Handle to a node with a lifetime connected to Graph3
 #[derive(Clone, Copy)]
 pub struct DynamicHandle3 {
     node_id: NodeId,
-    data: NodeData,
+    outputs: u16,
+    inputs: u16,
 }
 impl Dynamic for DynamicHandle3 {
     fn iter_outputs(&self) -> DynamicChannelIter {
@@ -790,7 +817,7 @@ impl Dynamic for DynamicHandle3 {
     }
 
     fn outputs(&self) -> u16 {
-        self.data.outputs
+        self.outputs
     }
     fn iter_inputs(&self) -> DynamicChannelIter {
         let mut channels = SmallVec::with_capacity(self.inputs() as usize);
@@ -804,32 +831,54 @@ impl Dynamic for DynamicHandle3 {
     }
 
     fn inputs(&self) -> u16 {
-        self.data.inputs
+        self.inputs
     }
 }
 
 /// Handle to a node with a lifetime connected to Graph3
-pub struct Handle3<U: UGen> {
+pub struct RoutingHandle3<U: UGen> {
     node_id: NodeId,
     ugen: PhantomData<U>,
 }
-impl<'a, 'b, F: Float, U: UGen<Sample = F>> From<SH<'a, 'b, F, Handle3<U>>> for NodeId {
-    fn from(value: SH<'a, 'b, F, Handle3<U>>) -> Self {
+impl<'a, 'b, F: Float, U: UGen<Sample = F>> From<SH<'a, 'b, F, RoutingHandle3<U>>> for NodeId {
+    fn from(value: SH<'a, 'b, F, RoutingHandle3<U>>) -> Self {
         value.nodes.node_id
     }
 }
-impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, Handle3<U>> {
-    /// Change the name of the node in the [`Graph`].
-    pub fn name(self, n: impl Into<EcoString>) -> Self {
-        self.graph.write().set_name(self.nodes.node_id, n.into());
-        self
+impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, RoutingHandle3<U>> {
+    /// Returns the [`NodeId`] of the node this handle points to.
+    pub fn id(&self) -> NodeId {
+        self.nodes.node_id
+    }
+}
+/// Handle to a node which can be used to edit aspects of that
+pub struct NodeHandle3<U: UGen> {
+    node_id: NodeId,
+    ugen: PhantomData<U>,
+    control_metadata: NumericArray<ControlMetadata<U::Sample>, U::Controls>,
+}
+impl<'a, 'b, F: Float, U: UGen<Sample = F>> From<&SH<'a, 'b, F, NodeHandle3<U>>> for NodeId {
+    fn from(value: &SH<'a, 'b, F, NodeHandle3<U>>) -> Self {
+        value.nodes.node_id
+    }
+}
+impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, NodeHandle3<U>> {
+    /// Make a handle that can be used for routing without Clone
+    pub fn route(&self) -> SH<'a, 'b, F, RoutingHandle3<U>> {
+        SH {
+            nodes: RoutingHandle3 {
+                node_id: self.nodes.node_id,
+                ugen: PhantomData,
+            },
+            graph: self.graph,
+        }
     }
     /// Link the parameter to a node output
     pub fn link<S: Static<Outputs = U1>>(
-        self,
+        &mut self,
         p: impl Into<Param>,
         source: SH<'a, 'b, F, S>,
-    ) -> Self {
+    ) -> &mut Self {
         let input = source.nodes.iter_outputs().next().unwrap();
         let mut g = self.graph.write();
         if let NodeOrGraph::Node(source_node) = input.0 {
@@ -848,12 +897,18 @@ impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, Handle3<U>> {
         self
     }
 
+    /// Change the name of the node in the [`Graph`].
+    pub fn name(&mut self, n: impl Into<EcoString>) -> &mut Self {
+        self.graph.write().set_name(self.nodes.node_id, n.into());
+        self
+    }
+
     /// Returns the [`NodeId`] of the node this handle points to.
-    pub fn id(self) -> NodeId {
+    pub fn id(&self) -> NodeId {
         self.nodes.node_id
     }
     /// Get a parameter from the node this handle points to if it exists. Panics if the parameter doesn't exist.
-    pub fn param(self, p: impl Into<Param>) -> Parameter {
+    pub fn param(&mut self, p: impl Into<Param>) -> Parameter {
         let p = p.into();
         match self.try_param(p) {
             Some(param) => param,
@@ -861,7 +916,7 @@ impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, Handle3<U>> {
         }
     }
     /// Get a parameter from the node this handle points to if it exists.
-    pub fn try_param(self, p: impl Into<Param>) -> Option<Parameter> {
+    pub fn try_param(&mut self, p: impl Into<Param>) -> Option<Parameter> {
         let p = p.into();
         match p {
             Param::Index(i) => {
@@ -881,6 +936,43 @@ impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, Handle3<U>> {
                         return Some(Parameter {
                             node: self.nodes.node_id,
                             param_index: i as u16,
+                            sender: self.graph.read().scheduling_channel_sender(),
+                        });
+                    }
+                }
+                None
+            }
+        }
+    }
+    /// Get a parameter from the node this handle points to if it exists. Panics if the parameter doesn't exist.
+    pub fn control(&mut self, p: impl Into<Param>) -> Control {
+        let p = p.into();
+        match self.try_control(p) {
+            Some(control) => control,
+            None => panic!("Control {:?} doesn't exist on node {:?}", p, self.id()),
+        }
+    }
+    /// Get a parameter from the node this handle points to if it exists.
+    pub fn try_control(&mut self, p: impl Into<Param>) -> Option<Control> {
+        let p = p.into();
+        match p {
+            Param::Index(i) => {
+                if i < U::Controls::USIZE {
+                    Some(Control {
+                        node: self.nodes.node_id,
+                        index: i as u16,
+                        sender: self.graph.read().scheduling_channel_sender(),
+                    })
+                } else {
+                    None
+                }
+            }
+            Param::Desc(s) => {
+                for (i, meta) in self.nodes.control_metadata.iter().enumerate() {
+                    if s == meta.name_str() {
+                        return Some(Control {
+                            node: self.nodes.node_id,
+                            index: i as u16,
                             sender: self.graph.read().scheduling_channel_sender(),
                         });
                     }
@@ -920,7 +1012,7 @@ impl<'a, 'b, F: Float> DH<'a, 'b, F, DynamicHandle3> {
         self.graph.write().set_name(self.nodes.node_id, n.into());
         self
     }
-    /// Link the parameter to a node output
+    /// Link a node output to a control
     pub fn link<S: Static<Outputs = U1>>(
         self,
         p: impl Into<Param>,
@@ -948,6 +1040,9 @@ impl<'a, 'b, F: Float> DH<'a, 'b, F, DynamicHandle3> {
     pub fn id(self) -> NodeId {
         self.nodes.node_id
     }
+}
+
+impl<'a, 'b, F: Float> DH<'a, 'b, F, DynamicLiveHandle3> {
     /// Get a parameter from the node this handle points to if it exists. Panics if the parameter doesn't exist.
     pub fn param(self, p: impl Into<Param>) -> Parameter {
         self.try_param(p).unwrap()
@@ -983,18 +1078,18 @@ impl<'a, 'b, F: Float> DH<'a, 'b, F, DynamicHandle3> {
     }
 }
 // Manual Clone and Copy impls necessary because of PhantomData
-impl<U: UGen> Clone for Handle3<U> {
+impl<U: UGen> Clone for RoutingHandle3<U> {
     fn clone(&self) -> Self {
         *self
     }
 }
-impl<U: UGen> Copy for Handle3<U> {}
-impl<U: UGen> From<Handle3<U>> for NodeId {
-    fn from(value: Handle3<U>) -> Self {
+impl<U: UGen> Copy for RoutingHandle3<U> {}
+impl<U: UGen> From<RoutingHandle3<U>> for NodeId {
+    fn from(value: RoutingHandle3<U>) -> Self {
         value.node_id
     }
 }
-impl<U: UGen> Static for Handle3<U> {
+impl<U: UGen> Static for RoutingHandle3<U> {
     type Outputs = U::Outputs;
 
     type Inputs = U::Inputs;
@@ -1025,7 +1120,8 @@ impl<U: UGen> Static for Handle3<U> {
         let data = graph.read().node_data(self.node_id).unwrap();
         DynamicHandle3 {
             node_id: self.node_id,
-            data,
+            outputs: data.outputs,
+            inputs: data.inputs,
         }
     }
 }
@@ -1838,9 +1934,10 @@ impl Parameter {
         let value = value.into();
         self.sender.send(crate::SchedulingEvent {
             node_key: self.node.key(),
-            parameter: self.param_index as usize,
-            value: Some(value),
-            smoothing: None,
+            kind: SchedulingEventKind::Parameter {
+                index: self.param_index as usize,
+                value,
+            },
             token: None,
             time: None,
         })?;
@@ -1855,9 +1952,10 @@ impl Parameter {
         let value = value.into();
         self.sender.send(crate::SchedulingEvent {
             node_key: self.node.key(),
-            parameter: self.param_index as usize,
-            value: Some(value),
-            smoothing: None,
+            kind: SchedulingEventKind::Parameter {
+                index: self.param_index as usize,
+                value,
+            },
             token: None,
             time: Some(t.into()),
         })?;
@@ -1872,9 +1970,10 @@ impl Parameter {
         let value = value.into();
         self.sender.send(crate::SchedulingEvent {
             node_key: self.node.key(),
-            parameter: self.param_index as usize,
-            value: Some(value),
-            smoothing: None,
+            kind: SchedulingEventKind::Parameter {
+                index: self.param_index as usize,
+                value,
+            },
             token: None,
             time: Some(Time::at(t.into())),
         })?;
@@ -1890,74 +1989,10 @@ impl Parameter {
         let value = value.into();
         self.sender.send(crate::SchedulingEvent {
             node_key: self.node.key(),
-            parameter: self.param_index as usize,
-            value: Some(value),
-            smoothing: None,
-            token: None,
-            time: Some(Time::after(t.into())),
-        })?;
-        Ok(())
-    }
-    /// Set the smoothing setting for the parameter.
-    pub fn smooth(&mut self, s: impl Into<ParameterSmoothing>) -> Result<(), GraphError> {
-        let s = s.into();
-        self.sender.send(crate::SchedulingEvent {
-            node_key: self.node.key(),
-            parameter: self.param_index as usize,
-            value: None,
-            smoothing: Some(s),
-            token: None,
-            time: None,
-        })?;
-        Ok(())
-    }
-    /// Set the smoothing setting for the parameter with the given `Time` setting.
-    pub fn smooth_time(
-        &mut self,
-        s: impl Into<ParameterSmoothing>,
-        t: impl Into<Time>,
-    ) -> Result<(), GraphError> {
-        let s = s.into();
-        self.sender.send(crate::SchedulingEvent {
-            node_key: self.node.key(),
-            parameter: self.param_index as usize,
-            value: None,
-            smoothing: Some(s),
-            token: None,
-            time: Some(t.into()),
-        })?;
-        Ok(())
-    }
-    /// Set the smoothing setting for the parameter _at_ the given time in [`Seconds`], in absolute time.
-    pub fn smooth_at(
-        &mut self,
-        s: impl Into<ParameterSmoothing>,
-        t: impl Into<Seconds>,
-    ) -> Result<(), GraphError> {
-        let s = s.into();
-        self.sender.send(crate::SchedulingEvent {
-            node_key: self.node.key(),
-            parameter: self.param_index as usize,
-            value: None,
-            smoothing: Some(s),
-            token: None,
-            time: Some(Time::at(t.into())),
-        })?;
-        Ok(())
-    }
-    /// Set the smoothing setting for the parameter _after_ the given time in [`Seconds`], in relative time to
-    /// when it it scheduled on the audio thread.
-    pub fn smooth_after(
-        &mut self,
-        s: impl Into<ParameterSmoothing>,
-        t: impl Into<Seconds>,
-    ) -> Result<(), GraphError> {
-        let s = s.into();
-        self.sender.send(crate::SchedulingEvent {
-            node_key: self.node.key(),
-            parameter: self.param_index as usize,
-            value: None,
-            smoothing: Some(s),
+            kind: SchedulingEventKind::Parameter {
+                index: self.param_index as usize,
+                value,
+            },
             token: None,
             time: Some(Time::after(t.into())),
         })?;
@@ -1967,9 +2002,10 @@ impl Parameter {
     pub fn trig(&mut self) -> Result<(), GraphError> {
         self.sender.send(crate::SchedulingEvent {
             node_key: self.node.key(),
-            parameter: self.param_index as usize,
-            value: Some(ParameterValue::Trigger),
-            smoothing: None,
+            kind: SchedulingEventKind::Parameter {
+                index: self.param_index as usize,
+                value: ParameterValue::Trigger,
+            },
             token: None,
             time: None,
         })?;
@@ -1979,9 +2015,10 @@ impl Parameter {
     pub fn trig_time(&mut self, t: impl Into<Time>) -> Result<(), GraphError> {
         self.sender.send(crate::SchedulingEvent {
             node_key: self.node.key(),
-            parameter: self.param_index as usize,
-            value: Some(ParameterValue::Trigger),
-            smoothing: None,
+            kind: SchedulingEventKind::Parameter {
+                index: self.param_index as usize,
+                value: ParameterValue::Trigger,
+            },
             token: None,
             time: Some(t.into()),
         })?;
@@ -1991,9 +2028,10 @@ impl Parameter {
     pub fn trig_at(&mut self, t: impl Into<Seconds>) -> Result<(), GraphError> {
         self.sender.send(crate::SchedulingEvent {
             node_key: self.node.key(),
-            parameter: self.param_index as usize,
-            value: Some(ParameterValue::Trigger),
-            smoothing: None,
+            kind: SchedulingEventKind::Parameter {
+                index: self.param_index as usize,
+                value: ParameterValue::Trigger,
+            },
             token: None,
             time: Some(Time::at(t.into())),
         })?;
@@ -2004,9 +2042,10 @@ impl Parameter {
     pub fn trig_after(&mut self, t: impl Into<Seconds>) -> Result<(), GraphError> {
         self.sender.send(crate::SchedulingEvent {
             node_key: self.node.key(),
-            parameter: self.param_index as usize,
-            value: Some(ParameterValue::Trigger),
-            smoothing: None,
+            kind: SchedulingEventKind::Parameter {
+                index: self.param_index as usize,
+                value: ParameterValue::Trigger,
+            },
             token: None,
             time: Some(Time::after(t.into())),
         })?;
@@ -2014,6 +2053,77 @@ impl Parameter {
     }
 }
 
+/// A handle to a specific parameter of a specific node.
+#[derive(Clone)]
+pub struct Control {
+    pub(crate) node: NodeId,
+    /// Control index
+    pub(crate) index: u16,
+    /// Allows us to send parameter changes straight to the audio thread
+    sender: SchedulingChannelSender,
+}
+impl Control {
+    /// Set the value of the parameter.
+    pub fn set(&mut self, value: PFloat) -> Result<(), GraphError> {
+        let value = value.into();
+        self.sender.send(crate::SchedulingEvent {
+            node_key: self.node.key(),
+            kind: SchedulingEventKind::Control {
+                index: self.index as usize,
+                value: Some(value),
+                smoothing: None,
+            },
+            token: None,
+            time: None,
+        })?;
+        Ok(())
+    }
+    /// Set the value of the control with the given `Time` setting.
+    pub fn set_time(&mut self, value: PFloat, t: impl Into<Time>) -> Result<(), GraphError> {
+        let value = value.into();
+        self.sender.send(crate::SchedulingEvent {
+            node_key: self.node.key(),
+            kind: SchedulingEventKind::Control {
+                index: self.index as usize,
+                value: Some(value),
+                smoothing: None,
+            },
+            token: None,
+            time: Some(t.into()),
+        })?;
+        Ok(())
+    }
+    /// Set the value of the control _at_ the given time in [`Seconds`], in absolute time.
+    pub fn set_at(&mut self, value: PFloat, t: impl Into<Seconds>) -> Result<(), GraphError> {
+        let value = value.into();
+        self.sender.send(crate::SchedulingEvent {
+            node_key: self.node.key(),
+            kind: SchedulingEventKind::Control {
+                index: self.index as usize,
+                value: Some(value),
+                smoothing: None,
+            },
+            token: None,
+            time: Some(Time::at(t.into())),
+        })?;
+        Ok(())
+    }
+    /// Set the value of the control _after_ the given time in [`Seconds`], in relative time to
+    /// when it it scheduled on the audio thread.
+    pub fn set_after(&mut self, value: PFloat, t: impl Into<Seconds>) -> Result<(), GraphError> {
+        let value = value.into();
+        self.sender.send(crate::SchedulingEvent {
+            node_key: self.node.key(),
+            kind: SchedulingEventKind::Parameter {
+                index: self.index as usize,
+                value,
+            },
+            token: None,
+            time: Some(Time::after(t.into())),
+        })?;
+        Ok(())
+    }
+}
 // /// Statically allocated collection of parameters to which changes can be scheduled.
 // ///
 // /// [`Parameters`] is a way of collecting many parameters without unnecessary heap
@@ -2145,30 +2255,13 @@ mod tests {
             });
         let (kept_sine, kept_lpf) = graph.edit(|graph| {
             {
-                let sine = graph.push(SinWt::new(200.));
-                let sine2 = graph.push(SinWt::new(200.));
-                let lpf = graph.push(OnePoleLpf::new(2000.));
-                let c = graph.push(Constant::new(0.2));
-                let amp = graph.push(Constant::new(0.2));
-                let pan = graph.push(Pan2::new(0.2));
+                let sine2 = graph.push(SinWt::new(200.)).route();
+                let lpf = graph.push(OnePoleLpf::new(2000.)).route();
+                let c = graph.push(Constant::new(0.2)).route();
+                let mut sine = graph.push(SinWt::new(200.));
                 sine.name("MySine").link("freq", sine2 * c);
-                let a = sine * sine2 * c;
-                let lpf_l = graph.push(OnePoleLpf::new(2600.));
-                let lpf_r = graph.push(OnePoleLpf::new(2600.));
-                a.to(lpf).to(pan).to_graph_out();
-                let d = (a / c - c) + c * c * 0.2 / 4 - c;
-                let _e = (d | d) - (c | c);
-                // (0.2 * e).to_graph_out();
-                ((a >> lpf >> pan >> (lpf_l | lpf_r)) * (amp | amp)).to_graph_out();
-                lpf.to_graph_out_channels(1);
-
-                let exciter_amp = graph.push(Constant::new(0.5));
-                let exciter = graph.push(SinWt::new(2000.).wr_mul(0.1));
-                let noise_mix = graph.push(Constant::new(0.25));
-                let noise = graph.push(WhiteNoise::new());
-                let exciter_lpf = graph.push(OnePoleLpf::new(2600.));
-                let ex = exciter * exciter_amp;
-                ((noise * noise_mix * ex + ex) >> exciter_lpf).to_graph_out_channels([1]);
+                let amp = graph.push(Constant::new(0.2)).route();
+                let pan = graph.push(Pan2::new(0.2)).route();
 
                 let t = Time::at(Seconds::from_secs_f64(2.5));
                 // p.set("freq", 400., t).unwrap();
@@ -2176,8 +2269,28 @@ mod tests {
                 freq.set_time(400., t).unwrap();
 
                 let _freq = sine.try_param("freq").unwrap();
+                let sine = sine.route();
+
+                let a = sine * sine2 * c;
+                let lpf_l = graph.push(OnePoleLpf::new(2600.)).route();
+                let lpf_r = graph.push(OnePoleLpf::new(2600.)).route();
+                a.to(lpf).to(pan).to_graph_out();
+                let d = (a / c - c) + c * c * 0.2 / 4 - c;
+                let _e = (d | d) - (c | c);
+                // (0.2 * e).to_graph_out();
+                ((a >> lpf >> pan >> (lpf_l | lpf_r)) * (amp | amp)).to_graph_out();
+                lpf.to_graph_out_channels(1);
+
+                let exciter_amp = graph.push(Constant::new(0.5)).route();
+                let exciter = graph.push(SinWt::new(2000.).wr_mul(0.1)).route();
+                let noise_mix = graph.push(Constant::new(0.25)).route();
+                let noise = graph.push(WhiteNoise::new()).route();
+                let exciter_lpf = graph.push(OnePoleLpf::new(2600.)).route();
+                let ex = exciter * exciter_amp;
+                ((noise * noise_mix * ex + ex) >> exciter_lpf).to_graph_out_channels([1]);
+
                 // s = Some(sine);
-                let c = graph.push(Constant::new(0.2));
+                let c = graph.push(Constant::new(0.2)).route();
                 let _c = sine * sine2 * c;
                 (sine.id(), lpf.id())
             }
@@ -2188,11 +2301,11 @@ mod tests {
                 // Retreive a handle to the node
                 let handle = graph.handle(kept_sine).unwrap();
                 let handle2 = graph.handle_from_name("MySine").unwrap();
-                assert_eq!(handle.id(), handle2.id());
+                assert_eq!(handle.clone().id(), handle2.clone().id());
                 let lpf = graph.handle(kept_lpf).unwrap();
                 // Use the handle to connect it to another node
-                let new_sine = graph.push(SinWt::new(200.));
-                let new_pan = graph.push(Pan2::new(0.));
+                let new_sine = graph.push(SinWt::new(200.)).route();
+                let new_pan = graph.push(Pan2::new(0.)).route();
                 let _a = (handle * new_sine) >> new_pan >> (lpf | lpf);
                 let a = (new_sine * handle) >> new_pan;
                 let _result = ((handle * 2.0) - 3) / 5.0 + handle;
@@ -2216,11 +2329,11 @@ mod tests {
             });
 
         g.edit(|g| {
-            let n1 = g.push(TestInPlusParamUGen::new()).name("n1");
+            let n1 = g.push(TestInPlusParamUGen::new()).name("n1").route();
             g.set(n1, 0, 0.5, Time::asap()).unwrap();
-            let n2 = g.push(TestInPlusParamUGen::new()).name("n2");
+            let n2 = g.push(TestInPlusParamUGen::new()).name("n2").route();
             g.set(n2, 0, 1.25, Time::asap()).unwrap();
-            let n3 = g.push(TestInPlusParamUGen::new()).name("n3");
+            let n3 = g.push(TestInPlusParamUGen::new()).name("n3").route();
             g.set(n3, 0, 0.125, Time::asap()).unwrap();
             (n1 >> n2 >> n3).to_graph_out();
         });

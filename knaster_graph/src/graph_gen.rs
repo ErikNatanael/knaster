@@ -68,6 +68,8 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
     type Sample = F;
     type Inputs = Inputs;
     type Outputs = Outputs;
+    type Parameters = U0;
+    type Controls = U0;
 
     fn init(&mut self, _sample_rate: u32, _block_size: usize) {
         self.blocks_to_keep_scheduled_changes = self.sample_rate / self.block_size as u32;
@@ -257,7 +259,6 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
     ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
         unreachable!()
     }
-    type Parameters = U0;
 
     fn param_descriptions() -> NumericArray<&'static str, Self::Parameters> {
         [].into()
@@ -274,6 +275,14 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
         _value: knaster_core::ParameterValue,
     ) {
     }
+
+    fn control_metadata(
+        &self,
+    ) -> NumericArray<knaster_core::controls::ControlMetadata<Self::Sample>, Self::Controls> {
+        [].into()
+    }
+
+    fn control(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: Self::Sample) {}
 }
 
 #[inline]
@@ -299,14 +308,34 @@ fn apply_parameter_change<'a, F: Float>(
         for (key, task) in keys.iter().zip(tasks.iter_mut()) {
             if *key == node_key {
                 let g = &mut task.ugen;
-                if delay_in_block > 0 {
-                    g.set_delay_within_block_for_param(ctx, event.parameter, delay_in_block as u16);
-                }
-                if let Some(smoothing) = event.smoothing {
-                    g.param_apply(ctx, event.parameter, smoothing.into());
-                }
-                if let Some(value) = event.value {
-                    g.param_apply(ctx, event.parameter, value);
+                match event.kind {
+                    crate::SchedulingEventKind::Parameter { index, value } => {
+                        if delay_in_block > 0 {
+                            g.set_delay_within_block_for_param(ctx, index, delay_in_block as u16);
+                        }
+                        g.param_apply(ctx, index, value);
+                    }
+                    crate::SchedulingEventKind::Control {
+                        index,
+                        value,
+                        smoothing,
+                    } => {
+                        if delay_in_block > 0 {
+                            g.set_delay_within_block_for_param(
+                                ctx,
+                                g.parameters() as usize + index,
+                                delay_in_block as u16,
+                            );
+                        }
+                        if let Some(smoothing) = smoothing {
+                            // TODO: Set control smoothing correctly
+                            g.param_apply(ctx, index, smoothing.into());
+                            todo!("Control smoothin not yet correctly implemented");
+                        }
+                        if let Some(value) = value {
+                            g.control(ctx, index, F::new(value));
+                        }
+                    }
                 }
                 return None;
             }

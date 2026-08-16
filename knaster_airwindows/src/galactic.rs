@@ -6,7 +6,7 @@
 // Ported code: Copyright 2023 Erik Natanael Gustafsson
 
 use knaster_core::{
-    AudioCtx, Float, ParameterHint, UGen,
+    AudioCtx, Float, PFloat, ParameterHint, UGen, impl_ugen,
     typenum::{U2, U5},
 };
 use knaster_core_dsp::{delay::StaticSampleDelay, noise::next_randomness_seed};
@@ -40,14 +40,13 @@ const GALACTIC_DELAY_TIMES: [usize; 12] = [
     6480, 3660, 1720, 680, 9700, 6000, 2320, 940, 15220, 8460, 4540, 3200,
 ];
 
-impl<F: Float> UGen for Galactic<F> {
+#[impl_ugen]
+impl<F: Float> Galactic<F> {
     type Sample = F;
 
     type Inputs = U2;
 
     type Outputs = U2;
-
-    type Parameters = U5;
 
     fn init(&mut self, sample_rate: u32, _block_size: usize) {
         for (delay, time) in self.delays_left.iter_mut().zip(GALACTIC_DELAY_TIMES) {
@@ -77,13 +76,13 @@ impl<F: Float> UGen for Galactic<F> {
         &mut self,
         _ctx: &mut AudioCtx,
         _flags: &mut knaster_core::UGenFlags,
-        input: knaster_core::Frame<Self::Sample, Self::Inputs>,
-    ) -> knaster_core::Frame<Self::Sample, Self::Outputs> {
+        input: [F; 2],
+    ) -> [F; 2] {
         let left_in = [input[0]];
         let right_in = [input[1]];
         let mut left_out = [F::ZERO];
         let mut right_out = [F::ZERO];
-        self.process(&left_in, &right_in, &mut left_out, &mut right_out);
+        self.next_block(&left_in, &right_in, &mut left_out, &mut right_out);
         [left_out[0], right_out[0]].into()
     }
     fn process_block<InBlock, OutBlock>(
@@ -99,40 +98,32 @@ impl<F: Float> UGen for Galactic<F> {
         let mut outs = output.iter_mut();
         let o0 = outs.next().unwrap();
         let o1 = outs.next().unwrap();
-        self.process(input.channel_as_slice(0), input.channel_as_slice(1), o0, o1);
+        self.next_block(input.channel_as_slice(0), input.channel_as_slice(1), o0, o1);
     }
 
-    fn param_hints()
-    -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::Parameters>
-    {
-        [
-            ParameterHint::one(),
-            ParameterHint::one(),
-            ParameterHint::one(),
-            ParameterHint::one(),
-            ParameterHint::one(),
-        ]
-        .into()
-    }
-    fn param_descriptions()
-    -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
-        ["replace", "detune", "brightness", "bigness", "wet"].into()
+    #[param]
+    fn replace(&mut self, value: PFloat) {
+        self.replace = F::new(value);
     }
 
-    fn param_apply(
-        &mut self,
-        _ctx: &mut AudioCtx,
-        index: usize,
-        value: knaster_core::ParameterValue,
-    ) {
-        match index {
-            Self::REPLACE => self.replace = value.f().unwrap(),
-            Self::DETUNE => self.detune = value.f().unwrap(),
-            Self::BRIGHTNESS => self.brightness = value.f().unwrap(),
-            Self::BIGNESS => self.bigness = value.f().unwrap(),
-            Self::WET => self.wet = value.f().unwrap(),
-            _ => (),
-        }
+    #[param]
+    fn detune(&mut self, value: PFloat) {
+        self.detune = F::new(value);
+    }
+
+    #[param]
+    fn brightness(&mut self, value: PFloat) {
+        self.brightness = F::new(value);
+    }
+
+    #[param]
+    fn bigness(&mut self, value: PFloat) {
+        self.bigness = F::new(value);
+    }
+
+    #[param]
+    fn wet(&mut self, value: PFloat) {
+        self.wet = F::new(value);
     }
 }
 impl<F: Float> Galactic<F> {
@@ -169,7 +160,7 @@ impl<F: Float> Galactic<F> {
         }
     }
     // #[replace_float_literals(F::from(literal).expect("Literal must fit in T"))]
-    pub fn process(&mut self, left: &[F], right: &[F], left_out: &mut [F], right_out: &mut [F]) {
+    pub fn next_block(&mut self, left: &[F], right: &[F], left_out: &mut [F], right_out: &mut [F]) {
         // double regen = 0.0625+((1.0-A)*0.0625); // High (0.125) if Replace is low
         // double attenuate = (1.0 - (regen / 0.125))*1.333; // 1.33 if regen is low / replace is high
 

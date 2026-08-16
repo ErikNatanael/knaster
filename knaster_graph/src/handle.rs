@@ -4,13 +4,13 @@
 //! - Typesafe Handle types
 
 use crate::{
-    ParameterChangeSender, SchedulingEvent, SchedulingToken, SharedFrameClock, Time,
+    LiveChangeSender, SchedulingEvent, SchedulingToken, SharedFrameClock, Time,
     core::marker::PhantomData,
     graph::{GraphError, NodeId, NodeOrGraph},
 };
 use knaster_core::{
-    Param, ParameterError, ParameterHint, ParameterSmoothing, ParameterValue, Seconds, UGen,
-    typenum::Unsigned,
+    PFloat, Param, ParameterError, ParameterHint, ParameterSmoothing, ParameterValue, Seconds,
+    UGen, typenum::Unsigned,
 };
 /// no_std_compat prelude import, supporting both std and no_std
 use std::prelude::v1::*;
@@ -129,7 +129,7 @@ impl RawHandle {
         self.shared_frame_clock.get()
     }
 }
-impl ParameterChangeSender for RawHandle {
+impl LiveChangeSender for RawHandle {
     fn schedule_change(&self, event: SchedulingEvent) -> Result<(), GraphError> {
         self.send(event)
     }
@@ -187,7 +187,7 @@ impl<T: HandleTrait> From<&T> for NodeId {
         value.node_id()
     }
 }
-impl<T: UGen> ParameterChangeSender for Handle<T> {
+impl<T: UGen> LiveChangeSender for Handle<T> {
     fn schedule_change(&self, event: SchedulingEvent) -> Result<(), GraphError> {
         self.raw_handle.send(event)
     }
@@ -378,29 +378,27 @@ impl HandleTrait for AnyHandle {
         ))
     }
 }
-impl ParameterChangeSender for AnyHandle {
+impl LiveChangeSender for AnyHandle {
     fn schedule_change(&self, event: SchedulingEvent) -> Result<(), GraphError> {
         self.raw_handle.send(event)
     }
 }
 /// A parameter change API for the [`HandleTrait`] (deprecated).
 pub struct ParameterChange2<'a> {
-    sender: &'a dyn ParameterChangeSender,
+    sender: &'a dyn LiveChangeSender,
     node_id: NodeId,
     param: usize,
     value: Option<ParameterValue>,
-    smoothing: Option<ParameterSmoothing>,
     token: Option<SchedulingToken>,
     time: Option<Time>,
     was_sent: bool,
 }
 impl<'a> ParameterChange2<'a> {
-    fn new(sender: &'a dyn ParameterChangeSender, node_id: NodeId, param: usize) -> Self {
+    fn new(sender: &'a dyn LiveChangeSender, node_id: NodeId, param: usize) -> Self {
         Self {
             sender,
             param,
             value: None,
-            smoothing: None,
             token: None,
             time: None,
             was_sent: false,
@@ -415,6 +413,83 @@ impl<'a> ParameterChange2<'a> {
     /// Send a parameter change with the given value.
     pub fn value(mut self, v: impl Into<ParameterValue>) -> Self {
         self.value = Some(v.into());
+        self
+    }
+    /// Use a scheduling token to activate the parameter change.
+    pub fn token(mut self, v: impl Into<SchedulingToken>) -> Self {
+        self.token = Some(v.into());
+        self
+    }
+    /// Apply the parameter change after the given time.
+    pub fn after(mut self, v: impl Into<Seconds>) -> Self {
+        self.time = Some(Time::after(v.into()));
+        self
+    }
+    /// Apply the parameter change at the given time.
+    pub fn at(mut self, v: impl Into<Time>) -> Self {
+        let t = v.into().to_absolute();
+        self.time = Some(t);
+        self
+    }
+    fn send_inner(&mut self) -> Result<(), GraphError> {
+        self.was_sent = true;
+
+        let Some(value) = self.value.take() else {
+            return Err(ParameterError::ParameterValueMissing.into());
+        };
+
+        self.sender.schedule_change(SchedulingEvent {
+            node_key: self.node_id.key(),
+            kind: crate::SchedulingEventKind::Parameter {
+                index: self.param,
+                value,
+            },
+            token: self.token.take(),
+            time: self.time.take(),
+        })
+    }
+    /// Send the parameter change.
+    pub fn send(mut self) -> Result<(), GraphError> {
+        self.send_inner()
+    }
+}
+impl Drop for ParameterChange2<'_> {
+    fn drop(&mut self) {
+        if !self.was_sent {
+            if let Err(e) = self.send_inner() {
+                log::error!("Error sending parameter change: {e}");
+            }
+        }
+    }
+}
+
+/// A parameter change API for the [`HandleTrait`] (deprecated).
+pub struct ControlChange2<'a> {
+    sender: &'a dyn LiveChangeSender,
+    node_id: NodeId,
+    param: usize,
+    value: Option<PFloat>,
+    smoothing: Option<ParameterSmoothing>,
+    token: Option<SchedulingToken>,
+    time: Option<Time>,
+    was_sent: bool,
+}
+impl<'a> ControlChange2<'a> {
+    fn new(sender: &'a dyn LiveChangeSender, node_id: NodeId, param: usize) -> Self {
+        Self {
+            sender,
+            param,
+            value: None,
+            smoothing: None,
+            token: None,
+            time: None,
+            was_sent: false,
+            node_id,
+        }
+    }
+    /// Send a parameter change with the given value.
+    pub fn value(mut self, v: PFloat) -> Self {
+        self.value = Some(v);
         self
     }
     /// Set the smoothing setting for the parameter.
@@ -438,31 +513,29 @@ impl<'a> ParameterChange2<'a> {
         self.time = Some(t);
         self
     }
-    /// Send the parameter change.
-    pub fn send(mut self) -> Result<(), GraphError> {
+    fn send_inner(&mut self) -> Result<(), GraphError> {
         self.was_sent = true;
 
         self.sender.schedule_change(SchedulingEvent {
             node_key: self.node_id.key(),
-            parameter: self.param,
-            value: self.value,
-            smoothing: self.smoothing,
             token: self.token.take(),
             time: self.time.take(),
-        })
-    }
-}
-impl Drop for ParameterChange2<'_> {
-    fn drop(&mut self) {
-        if !self.was_sent {
-            if let Err(e) = self.sender.schedule_change(SchedulingEvent {
-                node_key: self.node_id.key(),
-                parameter: self.param,
+            kind: crate::SchedulingEventKind::Control {
+                index: self.param,
                 value: self.value,
                 smoothing: self.smoothing,
-                token: self.token.take(),
-                time: self.time.take(),
-            }) {
+            },
+        })
+    }
+    /// Send the parameter change.
+    pub fn send(mut self) -> Result<(), GraphError> {
+        self.send_inner()
+    }
+}
+impl Drop for ControlChange2<'_> {
+    fn drop(&mut self) {
+        if !self.was_sent {
+            if let Err(e) = self.send_inner() {
                 log::error!("Error sending parameter change: {e}");
             }
         }

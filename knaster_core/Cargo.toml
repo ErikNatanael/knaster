@@ -25,6 +25,7 @@ thiserror = { version = "2.0.3", default-features = false }
 rtrb = { version = "0.3.2", default-features = false }
 log = "0.4.26"
 no-std-compat = "0.4.1"
+heapless = { version = "0.9.3", features = ["defmt"] }
 
 [dev-dependencies]
 anyhow = "1.0.94"
