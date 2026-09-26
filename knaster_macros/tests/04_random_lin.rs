@@ -1,4 +1,4 @@
-use knaster_core::{AudioCtx, Float, PFloat, UGen, UGenFlags};
+use knaster_core::{AudioCtx, ControlRange, Float, UGen, UGenFlags, controls::ControlMetadata};
 /// Random numbers 0..1 with linear interpolation with new values at some frequency. Freq is sampled at control rate only.
 pub struct RandomLin<F: Copy = f32> {
     current_value: F,
@@ -45,8 +45,8 @@ impl<F: Float> RandomLin<F> {
         }
         [out]
     }
-    #[param]
-    pub fn freq(&mut self, value: PFloat) {
+    #[control(default = 20.)]
+    pub fn freq(&mut self, value: F) {
         if self.freq_to_phase_inc == F::ZERO {
             // freq is stored in phase_step until init
             self.phase_step = F::new(value);
@@ -57,5 +57,10 @@ impl<F: Float> RandomLin<F> {
 }
 
 fn main() {
-    assert_eq!(RandomLin::<f32>::param_descriptions()[0], "freq");
+    let ugen = RandomLin::new(20.0f32);
+    let cm = ugen.control_metadata();
+    assert_eq!(
+        cm[0],
+        ControlMetadata::new("freq", 20.0, ControlRange::Infinity)
+    );
 }

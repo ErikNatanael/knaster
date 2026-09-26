@@ -32,11 +32,9 @@ mod core {
 // Reexport to not make the structure part of the public API and to reduce noise in paths.
 mod block;
 mod controls;
-mod parameters;
 mod time;
 pub use block::*;
 pub use controls::*;
-pub use parameters::*;
 pub use time::*;
 mod float;
 pub use float::*;
@@ -56,3 +54,6 @@ use numeric_array::{ArrayLength, NumericArray};
 
 /// Alias of [`NumericArray`].
 pub type Frame<T, Size> = NumericArray<T, Size>;
+
+/// The float type used when type erasing float values.
+pub type PFloat = f64;

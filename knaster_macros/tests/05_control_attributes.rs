@@ -1,7 +1,11 @@
 use knaster_core::{
-    AudioCtx, Block, Float, KnasterIntegerParameter, PFloat, PFloatHint, PInteger, ParameterValue,
-    StaticBlock, UGen, UGenFlags, log::ArLogSender, num_derive::FromPrimitive,
-    num_derive::ToPrimitive, num_traits, typenum::U64,
+    AudioCtx, Block, ControlPurpose, ControlRange, Float, KnasterIntegerParameter, PFloat,
+    PInteger, StaticBlock, UGen, UGenFlags,
+    controls::ControlMetadata,
+    log::ArLogSender,
+    num_derive::{FromPrimitive, ToPrimitive},
+    num_traits,
+    typenum::U64,
 };
 
 /// Outputs a static number every frame
@@ -27,19 +31,19 @@ impl<F: Float> TestInPlusParamGen<F> {
     pub fn new() -> Self {
         Self { number: F::ZERO }
     }
-    #[param(default = 0.0)]
-    pub fn number(&mut self, n: f64) {
+    #[control(default = 0.0)]
+    pub fn number(&mut self, n: F) {
         self.number = F::new(n);
     }
-    #[param(default = 0.1, range = 0.5..=1.0)]
-    pub fn number2(&mut self, ctx: &mut AudioCtx, n: f32) {
-        self.number = F::new(n + ctx.block_size() as f32);
+    #[control(default = 0.1, range = 0.5..=1.0)]
+    pub fn number2(&mut self, ctx: &mut AudioCtx, n: F) {
+        self.number = n + F::new(ctx.block_size() as f64);
     }
-    #[param(default = 100.0, kind = Frequency)]
-    pub fn number3(&mut self, ctx: &AudioCtx, n: PFloat) {
-        self.number = F::new(n * ctx.sample_rate() as PFloat);
+    #[control(default = 100.0, purpose = Frequency)]
+    pub fn number3(&mut self, ctx: &AudioCtx, n: F) {
+        self.number = n * F::new(ctx.sample_rate() as f64);
     }
-    #[param(default = 0.0, from = NumberEnum)]
+    #[param(default = 0, from = NumberEnum)]
     pub fn number4(&mut self, n: PInteger) {
         self.number = F::new(n.0 as PFloat);
     }
@@ -64,32 +68,11 @@ impl<F: Float> TestInPlusParamGen<F> {
 }
 
 fn main() {
-    assert_eq!(TestInPlusParamGen::<f32>::param_descriptions()[0], "number");
     assert_eq!(
-        TestInPlusParamGen::<f32>::param_descriptions()[1],
-        "number2"
-    );
-    assert_eq!(
-        TestInPlusParamGen::<f32>::param_hints()[1].float_hint(),
-        Some(&PFloatHint::new().minmax(0.5, 1.0).default(0.1))
-    );
-    assert_eq!(
-        TestInPlusParamGen::<f32>::param_descriptions()[2],
-        "number3"
-    );
-    assert_eq!(
-        TestInPlusParamGen::<f32>::param_hints()[2].float_hint(),
-        Some(
-            &PFloatHint::new()
-                .kind(knaster_core::FloatParameterKind::Frequency)
-                .default(100.)
-        )
-    );
-    assert_eq!(
-        TestInPlusParamGen::<f32>::param_descriptions()[3],
+        TestInPlusParamGen::<f32>::param_descriptions()[0],
         "number4"
     );
-    let p3_descriptions = TestInPlusParamGen::<f32>::param_hints()[3]
+    let p3_descriptions = TestInPlusParamGen::<f32>::param_hints()[0]
         .integer_hint()
         .unwrap()
         .descriptions()
@@ -99,13 +82,27 @@ fn main() {
     let mut ctx = AudioCtx::new(44100, 64, ArLogSender::non_rt());
     let mut flags = UGenFlags::new();
     let mut ugen = TestInPlusParamGen::<f64>::new();
+    let cm = ugen.control_metadata();
+    assert_eq!(
+        cm[0],
+        ControlMetadata::new("number", 0.0, ControlRange::Infinity)
+    );
+    assert_eq!(
+        cm[1],
+        ControlMetadata::new("number2", 0.1, ControlRange::RangeInclusive(0.5, 1.0))
+    );
+    assert_eq!(
+        cm[2],
+        ControlMetadata::new("number3", 100., ControlRange::Infinity)
+            .with_purpose(ControlPurpose::Frequency)
+    );
     assert_eq!(ugen.process(&mut ctx, &mut flags, [7.]), [7.]);
     ugen.number(2.);
     assert_eq!(
         UGen::process(&mut ugen, &mut ctx, &mut flags, [17.].into())[0],
         17. + 2.
     );
-    ugen.param_apply(&mut ctx, 0, ParameterValue::Float(3.));
+    ugen.control(&mut ctx, 0, 3.);
     assert_eq!(
         UGen::process(&mut ugen, &mut ctx, &mut flags, [17.].into())[0],
         17. + 3.

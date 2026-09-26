@@ -3,7 +3,6 @@ mod control;
 extern crate proc_macro;
 
 use darling::FromMeta;
-use knaster_primitives::FloatParameterKind;
 use proc_macro::TokenStream;
 use proc_macro_crate::{FoundCrate, crate_name};
 use quote::quote;
@@ -218,10 +217,21 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
             for (index, input) in process_fn.sig.inputs.iter().enumerate() {
                 match (index, input) {
                     (0, syn::FnArg::Receiver(rec)) => {
-                        if rec.mutability.is_none() {
+                        let valid_self = match &rec.kind {
+                            syn::ReceiverKind::Value => false,
+                            syn::ReceiverKind::Reference(_and, _lifetime, mutable) => {
+                                mutable.is_some()
+                            }
+                            syn::ReceiverKind::Typed(_colon, _) => false,
+                            _ => todo!(),
+                        };
+                        if !valid_self {
                             return Err(syn::Error::new(
                                 rec.span(),
-                                "process function must take &mut self",
+                                format!(
+                                    "process function must take &mut self, receiver: {:?}",
+                                    rec
+                                ),
                             ));
                         }
                     }
@@ -369,10 +379,21 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
             for (index, input) in process_block_fn.sig.inputs.iter().enumerate() {
                 match (index, input) {
                     (0, syn::FnArg::Receiver(rec)) => {
-                        if rec.mutability.is_none() {
+                        let valid_self = match &rec.kind {
+                            syn::ReceiverKind::Value => false,
+                            syn::ReceiverKind::Reference(_and, _lifetime, mutable) => {
+                                mutable.is_some()
+                            }
+                            syn::ReceiverKind::Typed(_colon, _) => false,
+                            _ => todo!(),
+                        };
+                        if !valid_self {
                             return Err(syn::Error::new(
                                 rec.span(),
-                                "process function must take &mut self",
+                                format!(
+                                    "process_block function must take &mut self, receiver: {:?}",
+                                    rec
+                                ),
                             ));
                         }
                     }
@@ -585,7 +606,7 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
     let num_outputs: syn::Type = syn::parse_str(&format!("U{}", num_output_channels)).unwrap();
 
     let params = parse_parameter_functions(param_fns)?;
-    let controls = parse_control_functions(control_fns)?;
+    let controls = parse_control_functions(control_fns, &crate_ident)?;
 
     let parameter_descriptions = params
         .iter()
@@ -608,9 +629,9 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
             let fn_name = &p.fn_name;
             let arguments = p.arguments.iter().map(|a| match a {
                 ParameterArgumentTypes::Parameter(ty) => match ty {
-                    ParameterType::PFloat => quote! { _value.float().expect("parameter value is expected to be a float") },
-                    ParameterType::Float64 => quote! { _value.float().expect("parameter value is expected to be a float") as f64 },
-                    ParameterType::Float32 => quote! { _value.float().expect("parameter value is expected to be a float") as f32 },
+                    // ParameterType::PFloat => quote! { _value.float().expect("parameter value is expected to be a float") },
+                    // ParameterType::Float64 => quote! { _value.float().expect("parameter value is expected to be a float") as f64 },
+                    // ParameterType::Float32 => quote! { _value.float().expect("parameter value is expected to be a float") as f32 },
                     ParameterType::Integer => quote! { _value.integer().expect("parameter value is expected to be an integer") },
                     ParameterType::Bool => quote! { _value.bool().expect("parameter value is expected to be a boolean") },
                     ParameterType::Trigger => quote! {},
@@ -623,40 +644,40 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
     let parameter_hints = params
         .iter()
         .map(|p| match &p.ty {
-            ParameterType::Float32 | ParameterType::PFloat | ParameterType::Float64 => {
-                // let kind = if let Some(kind) = &p.kind {
-                //     quote! { .kind }
-                // } else {
-                //     quote! {}
-                // };
-                let range = if let Some(range) = &p.range {
-                    quote! { .range(#range) }
-                } else {
-                    quote! {}
-                };
-                let kind = if let Some(kind) = &p.kind {
-                    let kind = match kind {
-                        FloatParameterKind::Amplitude => quote! { #crate_ident::FloatParameterKind::Amplitude },
-                        FloatParameterKind::Frequency => quote! { #crate_ident::FloatParameterKind::Frequency },
-                        FloatParameterKind::Q => quote! { #crate_ident::FloatParameterKind::Q },
-                        FloatParameterKind::Seconds => quote! { #crate_ident::FloatParameterKind::Seconds },
-                    };
-                    quote! { .kind(#kind) }
-                } else {
-                    quote! {}
-                };
-                let logarithmic = if p.logarithmic {
-                    quote! { .logarithmic(true) }
-                } else {
-                    quote! {}
-                };
-                let default = if let Some(default) = &p.default {
-                    quote! { .default(#default) }
-                } else {
-                    quote! {}
-                };
-                quote! { #crate_ident::ParameterHint::new_float(|h| h #range #kind #logarithmic #default ) }
-            }
+            // ParameterType::Float32 | ParameterType::PFloat | ParameterType::Float64 => {
+            //     // let kind = if let Some(kind) = &p.kind {
+            //     //     quote! { .kind }
+            //     // } else {
+            //     //     quote! {}
+            //     // };
+            //     let range = if let Some(range) = &p.range {
+            //         quote! { .range(#range) }
+            //     } else {
+            //         quote! {}
+            //     };
+            //     let kind = if let Some(kind) = &p.kind {
+            //         let kind = match kind {
+            //             FloatParameterKind::Amplitude => quote! { #crate_ident::FloatParameterKind::Amplitude },
+            //             FloatParameterKind::Frequency => quote! { #crate_ident::FloatParameterKind::Frequency },
+            //             FloatParameterKind::Q => quote! { #crate_ident::FloatParameterKind::Q },
+            //             FloatParameterKind::Seconds => quote! { #crate_ident::FloatParameterKind::Seconds },
+            //         };
+            //         quote! { .kind(#kind) }
+            //     } else {
+            //         quote! {}
+            //     };
+            //     let logarithmic = if p.logarithmic {
+            //         quote! { .logarithmic(true) }
+            //     } else {
+            //         quote! {}
+            //     };
+            //     let default = if let Some(default) = &p.default {
+            //         quote! { .default(#default) }
+            //     } else {
+            //         quote! {}
+            //     };
+            //     quote! { #crate_ident::ParameterHint::new_float(|h| h #range #kind #logarithmic #default ) }
+            // }
             ParameterType::Integer => {
                 if p.from_pinteger_convertible.is_some() {
                     let from = p.from_pinteger_convertible.as_ref().unwrap();
@@ -788,8 +809,6 @@ fn parse_ugen_impl(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream>
 struct ParameterAttribute {
     default: Option<syn::Expr>,
     range: Option<syn::Expr>,
-    kind: Option<syn::Path>,
-    logarithmic: Option<bool>,
     from: Option<syn::Path>,
 }
 
@@ -805,8 +824,6 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
             fn_name: f.sig.ident.clone(),
             default: None,
             range: None,
-            kind: None,
-            logarithmic: false,
             from_pinteger_convertible: None,
         };
         let mut attrs = None;
@@ -864,25 +881,25 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
                                 "each parameter function can only take one parameter value as argument",
                             ));
                         }
-                        if path.path.segments.iter().any(|seg| seg.ident == "PFloat") {
-                            pdata.ty = ParameterType::PFloat;
-                            pdata
-                                .arguments
-                                .push(ParameterArgumentTypes::Parameter(ParameterType::PFloat));
-                            num_parameter_value_arguments += 1;
-                        } else if path.path.segments.iter().any(|seg| seg.ident == "f32") {
-                            pdata.ty = ParameterType::Float32;
-                            pdata
-                                .arguments
-                                .push(ParameterArgumentTypes::Parameter(ParameterType::Float32));
-                            num_parameter_value_arguments += 1;
-                        } else if path.path.segments.iter().any(|seg| seg.ident == "f64") {
-                            pdata.ty = ParameterType::Float64;
-                            pdata
-                                .arguments
-                                .push(ParameterArgumentTypes::Parameter(ParameterType::Float64));
-                            num_parameter_value_arguments += 1;
-                        } else if path.path.segments.iter().any(|seg| seg.ident == "PInteger") {
+                        // if path.path.segments.iter().any(|seg| seg.ident == "PFloat") {
+                        //     pdata.ty = ParameterType::PFloat;
+                        //     pdata
+                        //         .arguments
+                        //         .push(ParameterArgumentTypes::Parameter(ParameterType::PFloat));
+                        //     num_parameter_value_arguments += 1;
+                        // } else if path.path.segments.iter().any(|seg| seg.ident == "f32") {
+                        //     pdata.ty = ParameterType::Float32;
+                        //     pdata
+                        //         .arguments
+                        //         .push(ParameterArgumentTypes::Parameter(ParameterType::Float32));
+                        //     num_parameter_value_arguments += 1;
+                        // } else if path.path.segments.iter().any(|seg| seg.ident == "f64") {
+                        //     pdata.ty = ParameterType::Float64;
+                        //     pdata
+                        //         .arguments
+                        //         .push(ParameterArgumentTypes::Parameter(ParameterType::Float64));
+                        //     num_parameter_value_arguments += 1;
+                        if path.path.segments.iter().any(|seg| seg.ident == "PInteger") {
                             pdata.ty = ParameterType::Integer;
                             pdata
                                 .arguments
@@ -911,32 +928,32 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
             }
         }
         if let Some(attrs) = attrs {
-            if let Some(akind) = attrs.kind {
-                if !matches!(
-                    pdata.ty,
-                    ParameterType::Float32 | ParameterType::PFloat | ParameterType::Float64
-                ) {
-                    return Err(syn::Error::new(
-                        akind.span(),
-                        "`kind` is only supported for float parameters. Use `from` to derive PInteger hints from a PIntegerConvertible type.",
-                    ));
-                }
-                pdata.kind = {
-                    if akind.segments.len() != 1 {
-                        return Err(syn::Error::new(akind.span(), "Invalid parameter kind"));
-                    }
-                    let ident = akind.segments.first().unwrap().ident.to_string();
-                    match ident.as_str() {
-                        "Frequency" => Some(FloatParameterKind::Frequency),
-                        "Amplitude" => Some(FloatParameterKind::Amplitude),
-                        "Q" => Some(FloatParameterKind::Q),
-                        "Seconds" => Some(FloatParameterKind::Seconds),
-                        _ => {
-                            return Err(syn::Error::new(akind.span(), "Invalid parameter kind"));
-                        }
-                    }
-                };
-            }
+            // if let Some(akind) = attrs.kind {
+            //     if !matches!(
+            //         pdata.ty,
+            //         ParameterType::Float32 | ParameterType::PFloat | ParameterType::Float64
+            //     ) {
+            //         return Err(syn::Error::new(
+            //             akind.span(),
+            //             "`kind` is only supported for float parameters. Use `from` to derive PInteger hints from a PIntegerConvertible type.",
+            //         ));
+            //     }
+            //     pdata.kind = {
+            //         if akind.segments.len() != 1 {
+            //             return Err(syn::Error::new(akind.span(), "Invalid parameter kind"));
+            //         }
+            //         let ident = akind.segments.first().unwrap().ident.to_string();
+            //         match ident.as_str() {
+            //             "Frequency" => Some(FloatParameterKind::Frequency),
+            //             "Amplitude" => Some(FloatParameterKind::Amplitude),
+            //             "Q" => Some(FloatParameterKind::Q),
+            //             "Seconds" => Some(FloatParameterKind::Seconds),
+            //             _ => {
+            //                 return Err(syn::Error::new(akind.span(), "Invalid parameter kind"));
+            //             }
+            //         }
+            //     };
+            // }
             if let Some(from) = attrs.from {
                 if !matches!(pdata.ty, ParameterType::Integer) {
                     return Err(syn::Error::new(
@@ -968,9 +985,6 @@ fn parse_parameter_functions(param_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<Par
                 pdata.range = Some(range);
             }
             pdata.default = attrs.default;
-            if let Some(logarithmic) = attrs.logarithmic {
-                pdata.logarithmic = logarithmic;
-            }
         }
 
         params.push(pdata)
@@ -991,14 +1005,9 @@ struct ParameterData {
     fn_name: Ident,
     default: Option<Expr>,
     range: Option<ExprRange>,
-    kind: Option<FloatParameterKind>,
     from_pinteger_convertible: Option<syn::Path>,
-    logarithmic: bool,
 }
 enum ParameterType {
-    PFloat,
-    Float64,
-    Float32,
     Trigger,
     Integer,
     Bool,

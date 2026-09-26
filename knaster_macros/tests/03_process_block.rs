@@ -1,6 +1,6 @@
 use knaster_core::{
-    AudioCtx, Block, Float, PFloat, ParameterValue, StaticBlock, UGen, UGenFlags, log::ArLogSender,
-    typenum::*,
+    AudioCtx, Block, ControlRange, Float, PInteger, StaticBlock, UGen, UGenFlags,
+    controls::ControlMetadata, log::ArLogSender, typenum::*,
 };
 
 /// Outputs a static number every frame
@@ -13,17 +13,13 @@ impl<F: Float> TestInPlusParamGen<F> {
     pub fn new() -> Self {
         Self { number: F::ZERO }
     }
-    #[param(default = 0.0)]
-    pub fn number(&mut self, n: f64) {
-        self.number = F::new(n);
+    #[control(default = 0.0)]
+    pub fn number(&mut self, n: F) {
+        self.number = n;
     }
-    #[param(default = 0.0)]
-    pub fn number2(&mut self, n: f32) {
-        self.number = F::new(n);
-    }
-    #[param(default = 0.0)]
-    pub fn number3(&mut self, n: PFloat) {
-        self.number = F::new(n);
+    #[param]
+    pub fn number_int(&mut self, n: PInteger) {
+        self.number = F::new(n.0 as f32);
     }
     #[param]
     pub fn t_reset(&mut self) {
@@ -46,29 +42,25 @@ impl<F: Float> TestInPlusParamGen<F> {
 }
 
 fn main() {
-    assert_eq!(TestInPlusParamGen::<f32>::param_descriptions()[0], "number");
     assert_eq!(
-        TestInPlusParamGen::<f32>::param_descriptions()[1],
-        "number2"
-    );
-    assert_eq!(
-        TestInPlusParamGen::<f32>::param_descriptions()[2],
-        "number3"
-    );
-    assert_eq!(
-        TestInPlusParamGen::<f32>::param_descriptions()[3],
-        "t_reset"
+        TestInPlusParamGen::<f32>::param_descriptions()[0],
+        "number_int"
     );
     let mut ctx = AudioCtx::new(44100, 64, ArLogSender::non_rt());
     let mut flags = UGenFlags::new();
     let mut ugen = TestInPlusParamGen::<f64>::new();
+    let cm = ugen.control_metadata();
+    assert_eq!(
+        cm[0],
+        ControlMetadata::new("number", 0.0, ControlRange::Infinity)
+    );
     assert_eq!(ugen.process(&mut ctx, &mut flags, [7.]), [7.]);
     ugen.number(2.);
     assert_eq!(
         UGen::process(&mut ugen, &mut ctx, &mut flags, [17.].into())[0],
         17. + 2.
     );
-    ugen.param_apply(&mut ctx, 0, ParameterValue::Float(3.));
+    ugen.control(&mut ctx, 0, 3.0);
     assert_eq!(
         UGen::process(&mut ugen, &mut ctx, &mut flags, [17.].into())[0],
         17. + 3.

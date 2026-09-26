@@ -118,7 +118,7 @@ pub trait Block {
     // The implementation of this iterator relies on the guarantee that
     // channels returned from a [`Block`] may not overlap. If they do, calling
     // this function is UB.
-    fn iter_mut(&mut self) -> BlockIterMut<Self> {
+    fn iter_mut(&'_ mut self) -> BlockIterMut<'_, Self> {
         BlockIterMut {
             block: self,
             channels_returned: 0,

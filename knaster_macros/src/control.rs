@@ -30,7 +30,10 @@ pub struct ControlAttribute {
 /// Parse a function marked by the `#[control]` attribute.
 ///
 /// Can take parameters as defined in ControlAttribute
-pub fn parse_control_functions(control_fns: Vec<&ImplItemFn>) -> syn::Result<Vec<ControlData>> {
+pub fn parse_control_functions(
+    control_fns: Vec<&ImplItemFn>,
+    crate_ident: &proc_macro2::TokenStream,
+) -> syn::Result<Vec<ControlData>> {
     // Parse control data from attribute and function signature
     let mut controls = Vec::new();
     for f in control_fns {
@@ -138,7 +141,7 @@ pub fn parse_control_functions(control_fns: Vec<&ImplItemFn>) -> syn::Result<Vec
             .transpose()?;
         let range = attrs
             .range
-            .map(|range| parse_control_range(range))
+            .map(|range| parse_control_range(range, crate_ident))
             .transpose()?;
         let default = attrs.default;
         let logarithmic = attrs.logarithmic.unwrap_or(false);
@@ -179,10 +182,18 @@ pub fn generate_controls_methods(
             let default = &p.default;
             let range = p
                 .range
-                .unwrap_or(quote! { ControlRange::Infinity });
+                .unwrap_or(quote! { #crate_ident::ControlRange::Infinity });
             // ControlMetadata::new("freq", F::new(440.), ControlRange::Nyquist)
             //  .with_purpose(ControlPurpose::Frequency),
-            quote! { ControlMetadata::new( #name , #default , #range ) }
+            if let Some(purpose) = p.purpose {
+                let purpose = purpose.to_tokens(crate_ident);
+                quote! { 
+                    #crate_ident::controls::ControlMetadata::new( #name , F::new(#default) , #range )
+                        .with_purpose( #purpose )
+                }
+            } else {
+                quote! { #crate_ident::controls::ControlMetadata::new( #name , F::new(#default) , #range ) }
+            }
         })
         .collect::<Vec<_>>();
 
@@ -203,15 +214,22 @@ pub fn generate_controls_methods(
     })
 }
 
-fn parse_control_range(range: Expr) -> syn::Result<proc_macro2::TokenStream> {
+fn parse_control_range(
+    range: Expr,
+    crate_ident: &proc_macro2::TokenStream,
+) -> syn::Result<proc_macro2::TokenStream> {
     match range {
         Expr::Lit(lit) => {
             let textual_range = match lit.lit {
                 syn::Lit::Str(lit_str) => match lit_str.value().to_lowercase().as_ref() {
-                    "nyquist"  => quote! { ControlRange::Nyquist },
-                    "infinity" => quote! { ControlRange::Infinity },
-                    "positiveinfinity" => quote! { ControlRange::PositiveInfinity },
-                    "negativeinfinity" => quote! { ControlRange::NegativeInfinity },
+                    "nyquist" => quote! { #crate_ident::ControlRange::Nyquist },
+                    "infinity" => quote! { #crate_ident::ControlRange::Infinity },
+                    "positiveinfinity" => {
+                        quote! { #crate_ident::ControlRange::PositiveInfinity }
+                    }
+                    "negativeinfinity" => {
+                        quote! { #crate_ident::ControlRange::NegativeInfinity }
+                    }
                     _ => return Err(syn::Error::new(lit_str.span(), "Invalid ControlRange")),
                 },
                 _ => return Err(syn::Error::new(lit.span(), "Could not parse control range")),
@@ -237,11 +255,29 @@ fn parse_control_range(range: Expr) -> syn::Result<proc_macro2::TokenStream> {
             }
             let min = range.start.unwrap();
             let max = range.end.unwrap();
-            Ok(quote!{ ControlRange::RangeInclusive(#min, #max) })
+            // Ok(quote! { #crate_ident::ControlRange::range_inclusive(F::new(#min), F::new(#max)) })
+            Ok(quote! { #crate_ident::ControlRange::RangeInclusive(F::new(#min), F::new(#max)) })
         }
         _ => Err(syn::Error::new(
             range.span(),
             "Control range syntax is invalid",
         )),
+    }
+}
+
+trait PrimitiveToTokenStream {
+    fn to_tokens(&self, crate_ident: &proc_macro2::TokenStream) -> proc_macro2::TokenStream;
+}
+impl PrimitiveToTokenStream for ControlPurpose {
+    fn to_tokens(&self, crate_ident: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+        match self {
+            ControlPurpose::Frequency => quote!{ #crate_ident::ControlPurpose::Frequency },
+            ControlPurpose::Phase => quote!{ #crate_ident::ControlPurpose::Phase },
+            ControlPurpose::Q => quote!{ #crate_ident::ControlPurpose::Q },
+            ControlPurpose::ReciprocalQ => quote!{ #crate_ident::ControlPurpose::ReciprocalQ },
+            ControlPurpose::Amplitude => quote!{ #crate_ident::ControlPurpose::Amplitude },
+            ControlPurpose::Offset => quote!{ #crate_ident::ControlPurpose::Offset },
+            ControlPurpose::Seconds => quote!{ #crate_ident::ControlPurpose::Seconds },
+        }
     }
 }

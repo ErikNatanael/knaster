@@ -4,12 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-syn = { version = "2.0", features = ["full", "extra-traits"] }
+syn = { version = "3.0", features = ["full", "extra-traits"] }
 proc-macro2 = "1.0"
 quote = "1.0"
 proc-macro-crate = "3.3.0"
 knaster_primitives = { path = "../knaster_primitives" }
-darling = "0.20.11"
+darling = "0.24.1"
 
 [lib]
 proc-macro = true
