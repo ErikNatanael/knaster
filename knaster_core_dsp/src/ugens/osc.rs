@@ -6,7 +6,7 @@
 //! - [`SinNumeric`]: numeric (non-lookup) sine wave oscillator
 use crate::core::marker::PhantomData;
 
-use knaster_core::{AudioCtx, Float, PFloat, impl_ugen};
+use knaster_core::{AudioCtx, Float, impl_ugen};
 #[cfg(any(feature = "alloc", feature = "std"))]
 pub use wavetable_vec::*;
 
@@ -19,7 +19,7 @@ mod wavetable_vec {
     #[cfg(all(feature = "std", not(feature = "alloc")))]
     use std::sync::LazyLock;
 
-    use knaster_core::{Float, PFloat};
+    use knaster_core::Float;
 
     use crate::dsp::wavetable::{
         FRACTIONAL_PART, NonAaWavetable, TABLE_SIZE, Wavetable, WavetablePhase,

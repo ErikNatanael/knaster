@@ -60,5 +60,5 @@ impl<F: Float> UGen for TestNumUGen<F> {
         [].into()
     }
 
-    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: Self::Sample) {}
+    fn control(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: Self::Sample) {}
 }

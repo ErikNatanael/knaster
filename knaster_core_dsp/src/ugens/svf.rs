@@ -4,7 +4,7 @@
 //!
 
 use knaster_core::{
-    AudioCtx, Float, KnasterIntegerParameter, PFloat, PInteger, impl_ugen,
+    AudioCtx, Float, KnasterIntegerParameter, PInteger, impl_ugen,
     num_derive::{FromPrimitive, ToPrimitive},
     num_traits,
 };

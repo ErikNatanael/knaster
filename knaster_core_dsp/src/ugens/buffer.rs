@@ -5,7 +5,7 @@
 use crate::core::{marker::PhantomData, sync::Arc};
 
 use knaster_core::{
-    AudioCtx, Float, PFloat, Seconds, Size, UGenFlags, impl_ugen, numeric_array::NumericArray,
+    AudioCtx, Float, Seconds, Size, UGenFlags, impl_ugen, numeric_array::NumericArray,
     rt_log, typenum::U0,
 };
 

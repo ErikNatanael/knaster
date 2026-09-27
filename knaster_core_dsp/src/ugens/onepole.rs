@@ -1,7 +1,7 @@
 //! One pole filters make good and cheap lowpass 6dB/octave rolloff filters.
 //! It is also good for removing zipping from parameter changes.
 
-use knaster_core::{AudioCtx, Float, PFloat, impl_ugen};
+use knaster_core::{AudioCtx, Float, impl_ugen};
 
 // To use it as a DC blocker:
 //

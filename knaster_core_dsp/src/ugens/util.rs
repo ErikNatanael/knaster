@@ -2,7 +2,7 @@
 //!
 //! Utility UGens
 use crate::core::marker::PhantomData;
-use knaster_core::{AudioCtx, Float, PFloat, UGenFlags, impl_ugen, rt_log};
+use knaster_core::{AudioCtx, Float, UGenFlags, impl_ugen, rt_log};
 
 /// Sets the done flag when it receives a trigger. Use in combination with `Graph::push_with_done_action` or [`WrDone`] and a [`Done`] which frees more than the current node.
 pub struct DoneOnTrig<F> {

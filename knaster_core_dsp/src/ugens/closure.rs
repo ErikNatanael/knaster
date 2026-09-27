@@ -57,7 +57,7 @@ impl<F: Float, I: Size, O: Size> UGen for UGenClosure<F, I, O> {
     fn control_metadata(&self) -> NumericArray<ControlMetadata<Self::Sample>, Self::Controls> {
         todo!()
     }
-    fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: Self::Sample) {
+    fn control(&mut self, _ctx: &mut AudioCtx, _index: usize, _value: Self::Sample) {
         todo!()
     }
 }

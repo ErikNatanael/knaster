@@ -225,12 +225,12 @@ pub trait HandleTrait: Sized {
     /// # Panics
     ///
     /// Panics if a parameter description is given that doesn't exist on this node.
-    fn param(&self, param: impl Into<Param>) -> ParameterChange2 {
+    fn param(&self, param: impl Into<Param>) -> ParameterChange2<'_> {
         self.try_param(param).unwrap()
     }
     /// Create a parameter change. Returns an error if a parameter descriptioni is given that
     /// doesn't match any parameter on this node.
-    fn try_param(&self, param: impl Into<Param>) -> Result<ParameterChange2, ParameterError>;
+    fn try_param(&self, param: impl Into<Param>) -> Result<ParameterChange2<'_>, ParameterError>;
     /// Get the index of a parameter given a [`Param`], if the parameter exists.
     fn parameter_index(&self, param: impl Into<Param>) -> Result<usize, ParameterError> {
         let param = param.into();
@@ -250,12 +250,12 @@ pub trait HandleTrait: Sized {
     /// # Panics
     ///
     /// Panics if a control description is given that doesn't exist on this node.
-    fn control(&self, control: impl Into<Param>) -> ControlChange2 {
+    fn control(&self, control: impl Into<Param>) -> ControlChange2<'_> {
         self.try_control(control).unwrap()
     }
     /// Create a parameter change. Returns an error if a parameter descriptioni is given that
     /// doesn't match any parameter on this node.
-    fn try_control(&self, control: impl Into<Param>) -> Result<ControlChange2, ParameterError>;
+    fn try_control(&self, control: impl Into<Param>) -> Result<ControlChange2<'_>, ParameterError>;
     /// Get the [`NodeId`] of this node.
     fn node_id(&self) -> NodeId;
     /// Get the number of inputs of this node.
@@ -342,7 +342,7 @@ impl<T: UGen> HandleTrait for Handle<T> {
         T::param_hints().to_vec()
     }
 
-    fn try_param(&self, param: impl Into<Param>) -> Result<ParameterChange2, ParameterError> {
+    fn try_param(&self, param: impl Into<Param>) -> Result<ParameterChange2<'_>, ParameterError> {
         Ok(ParameterChange2::new(
             self,
             self.node_id(),
@@ -350,7 +350,7 @@ impl<T: UGen> HandleTrait for Handle<T> {
         ))
     }
 
-    fn try_control(&self, control: impl Into<Param>) -> Result<ControlChange2, ParameterError> {
+    fn try_control(&self, control: impl Into<Param>) -> Result<ControlChange2<'_>, ParameterError> {
         Ok(ControlChange2::new(
             self,
             self.node_id(),
@@ -387,7 +387,7 @@ impl HandleTrait for AnyHandle {
     //     self.raw_handle.send(event)
     // }
 
-    fn try_param(&self, param: impl Into<Param>) -> Result<ParameterChange2, ParameterError> {
+    fn try_param(&self, param: impl Into<Param>) -> Result<ParameterChange2<'_>, ParameterError> {
         Ok(ParameterChange2::new(
             self,
             self.node_id(),
@@ -423,7 +423,7 @@ impl HandleTrait for AnyHandle {
         self.raw_handle.is_alive()
     }
 
-    fn try_control(&self, control: impl Into<Param>) -> Result<ControlChange2, ParameterError> {
+    fn try_control(&self, _control: impl Into<Param>) -> Result<ControlChange2<'_>, ParameterError> {
         todo!()
     }
 }

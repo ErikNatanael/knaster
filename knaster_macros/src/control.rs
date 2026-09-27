@@ -1,7 +1,7 @@
 use darling::FromMeta;
-use knaster_primitives::{ControlPurpose, ControlRange, Float};
+use knaster_primitives::{ControlPurpose, Float};
 use quote::quote;
-use syn::{Expr, ExprRange, Ident, ImplItemFn, spanned::Spanned};
+use syn::{Expr, Ident, ImplItemFn, spanned::Spanned};
 
 pub enum ControlArgumentTypes {
     Value,
@@ -98,7 +98,7 @@ pub fn parse_control_functions(
                             ));
                         }
                     },
-                    syn::Type::Path(path) => {
+                    syn::Type::Path(_path) => {
                         if num_control_value_arguments > 0 {
                             return Err(syn::Error::new(
                                 input.span(),

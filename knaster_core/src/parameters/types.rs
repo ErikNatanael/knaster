@@ -1,9 +1,8 @@
-use knaster_primitives::Float;
 
 #[allow(unused)]
 use crate::{PInteger, PIntegerConvertible, Rate, UGen};
 
-use super::{PFloat, PTrigger};
+use super::PTrigger;
 
 /// The type of a [`UGen`] parameter
 #[derive(Copy, Clone)]

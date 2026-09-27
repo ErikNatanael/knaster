@@ -6,8 +6,8 @@
 // Ported code: Copyright 2023 Erik Natanael Gustafsson
 
 use knaster_core::{
-    AudioCtx, Float, PFloat, ParameterHint, UGen, impl_ugen,
-    typenum::{U2, U5},
+    AudioCtx, Float, UGen, impl_ugen,
+    typenum::U2,
 };
 use knaster_core_dsp::{delay::StaticSampleDelay, noise::next_randomness_seed};
 

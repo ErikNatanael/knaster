@@ -1,6 +1,6 @@
 use crate::core::{marker::PhantomData, ops::Add};
 use knaster_core::{
-    AudioCtx, Block, BlockRead, Float, Frame, PFloat, ParameterHint, ParameterValue, Size, UGen,
+    AudioCtx, Block, BlockRead, Frame, ParameterHint, ParameterValue, Size, UGen,
     UGenFlags,
     controls::ControlMetadata,
     numeric_array::NumericArray,

@@ -4,7 +4,7 @@
 use knaster_core::impl_ugen;
 #[allow(unused)]
 use knaster_core::{AudioCtx, UGen, UGenFlags};
-use knaster_core::{Block, BlockRead, Float, PFloat};
+use knaster_core::{Block, BlockRead, Float};
 
 #[derive(Debug, Clone, Copy)]
 enum AsrState {
@@ -311,13 +311,9 @@ mod alloc_envelopes {
     use core::marker::PhantomData;
 
     use knaster_core::{
-        AudioCtx, PFloat, PInteger, ParameterHint, ParameterValue, UGen, UGenFlags, impl_ugen,
+        AudioCtx, PInteger, UGen, UGenFlags, impl_ugen,
     };
-    use knaster_core::{
-        Float, Frame,
-        numeric_array::NumericArray,
-        typenum::{U0, U1, U4},
-    };
+    use knaster_core::Float;
 
     /// An envelope segment for an [`Envelope`]
     #[derive(Copy, Clone, Debug)]

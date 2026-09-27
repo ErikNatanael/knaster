@@ -31,7 +31,7 @@ Permission has been granted to release this port under the WDL/IPlug license:
 
 use crate::core::ops::Mul;
 use knaster_core::{
-    Float, KnasterIntegerParameter, PFloat, PInteger, impl_ugen,
+    Float, KnasterIntegerParameter, PInteger, impl_ugen,
     num_derive::{FromPrimitive, ToPrimitive},
 };
 use std::prelude::v1::*;
