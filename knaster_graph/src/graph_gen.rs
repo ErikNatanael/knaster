@@ -312,9 +312,6 @@ fn apply_parameter_change<'a, F: Float>(
                         g.param_apply(ctx, index, value);
                     }
                     crate::SchedulingEventKind::Control { index, value } => {
-                        std::dbg!(std::format!(
-                            "graph_gen set control index {index} to value {value} after delay {delay_in_block}"
-                        ));
                         if delay_in_block > 0 {
                             g.set_delay_within_block_for_param(
                                 ctx,

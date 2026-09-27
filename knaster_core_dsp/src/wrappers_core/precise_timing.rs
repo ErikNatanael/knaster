@@ -102,7 +102,6 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
             if let Some((delay, index, value)) = &self.waiting_control_changes[control_change_i]
                 && (*delay as usize) == frame_i + ctx.block_start_offset()
             {
-                std::dbg!("Applying control", index, value);
                 self.ugen.control(ctx, *index, *value);
                 self.waiting_control_changes[control_change_i] = None;
                 control_change_i += 1;
@@ -189,7 +188,6 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
         if index < T::Parameters::USIZE {
             self.next_delay[index] = delay;
         } else {
-            std::dbg!(T::Parameters::USIZE, T::Controls::USIZE, index, delay);
             self.next_control_delay[index - T::Parameters::USIZE] = delay;
         }
     }
