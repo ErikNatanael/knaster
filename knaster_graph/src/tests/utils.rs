@@ -1,9 +1,7 @@
 use anyhow::anyhow;
 use knaster_core::{
     AudioCtx, BlockRead, ControlRange, Float, ParameterHint, UGen, UGenFlags,
-    controls::ControlMetadata,
-    impl_ugen,
-    typenum::{U0, U1},
+    controls::ControlMetadata, impl_ugen, typenum::*,
 };
 
 use crate::processor::AudioProcessor;

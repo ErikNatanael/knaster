@@ -156,12 +156,10 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
                     ctx,
                     keys,
                     tasks,
-                ) {
-                    if self.waiting_parameter_changes.len()
-                        < self.waiting_parameter_changes.capacity()
-                    {
-                        self.waiting_parameter_changes.push_back((event, 0));
-                    }
+                ) && self.waiting_parameter_changes.len()
+                    < self.waiting_parameter_changes.capacity()
+                {
+                    self.waiting_parameter_changes.push_back((event, 0));
                 }
             }
         }
@@ -199,9 +197,9 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
         // needs to be set every block.
         for edge in graph_input_to_ar_parameter_edges {
             let ugen = &mut tasks[edge.node].ugen;
-            let channel = input.channel_as_slice(edge.graph_input_index as usize);
+            let channel = input.channel_as_slice(edge.graph_input_index);
             let graph_input_ptr = channel.as_ptr();
-            unsafe { ugen.set_ar_param_buffer(ctx, edge.control_index as usize, graph_input_ptr) };
+            unsafe { ugen.set_ar_param_buffer(ctx, edge.control_index, graph_input_ptr) };
         }
 
         let mut new_flags = UGenFlags::default();

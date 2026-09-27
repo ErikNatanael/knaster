@@ -5,7 +5,6 @@
 
 mod types;
 
-use knaster_primitives::PFloat;
 pub use types::*;
 
 use std::prelude::v1::*;
@@ -151,9 +150,10 @@ impl PIntegerHint {
 }
 
 /// An inclusive range for the supported values of a parameter
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub enum ParameterHint {
     /// Triggers do not have a range
+    #[default]
     Trigger,
     #[allow(missing_docs)]
     Integer(PIntegerHint),
@@ -195,10 +195,5 @@ impl ParameterHint {
             ParameterHint::Integer(hint) => Some(hint),
             _ => None,
         }
-    }
-}
-impl Default for ParameterHint {
-    fn default() -> Self {
-        Self::Trigger
     }
 }

@@ -101,9 +101,8 @@ impl<F: Float> UGen for TestInPlusParamGen<F> {
         )])
     }
     fn control(&mut self, _ctx: &mut AudioCtx, index: usize, value: Self::Sample) {
-        match index {
-            0 => self.number(value),
-            _ => (),
+        if index == 0 {
+            self.number(value)
         }
     }
 }

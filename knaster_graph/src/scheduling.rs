@@ -47,14 +47,11 @@ pub struct SchedulingEvent {
 #[derive(Debug, Clone)]
 /// Which kind of scheduling event is being scheduled, i.e. Parameter or Control
 pub enum SchedulingEventKind {
-    Parameter {
-        index: usize,
-        value: ParameterValue,
-    },
-    Control {
-        index: usize,
-        value: PFloat,
-    },
+    #[allow(missing_docs)]
+    Parameter { index: usize, value: ParameterValue },
+    #[allow(missing_docs)]
+    Control { index: usize, value: PFloat },
+    #[allow(missing_docs)]
     ControlSmoothing {
         index: usize,
         smoothing: ControlSmoothing,

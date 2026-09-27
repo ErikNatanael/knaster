@@ -11,7 +11,9 @@ use crate::{
 };
 use knaster_core::{
     ControlSmoothing, PFloat, Param, ParameterError, ParameterHint, ParameterValue, Seconds, UGen,
-    controls::ControlMetadata, numeric_array::NumericArray, typenum::Unsigned,
+    controls::{ControlError, ControlMetadata},
+    numeric_array::NumericArray,
+    typenum::Unsigned,
 };
 /// no_std_compat prelude import, supporting both std and no_std
 use std::prelude::v1::*;
@@ -185,7 +187,8 @@ impl<T: UGen> Handle<T> {
     pub fn outputs(&self) -> usize {
         T::Outputs::USIZE
     }
-    pub fn control_index(&self, param: impl Into<Param>) -> Result<usize, ParameterError> {
+    /// Get the index of a control, if it exists on self
+    pub fn control_index(&self, param: impl Into<Param>) -> Result<usize, ControlError> {
         let param = param.into();
         match param {
             Param::Index(param_i) => Ok(param_i),
@@ -197,7 +200,7 @@ impl<T: UGen> Handle<T> {
                 {
                     Ok(index)
                 } else {
-                    Err(ParameterError::DescriptionNotFound(desc))
+                    Err(ControlError::name_not_found(desc))
                 }
             }
         }
@@ -255,7 +258,7 @@ pub trait HandleTrait: Sized {
     }
     /// Create a parameter change. Returns an error if a parameter descriptioni is given that
     /// doesn't match any parameter on this node.
-    fn try_control(&self, control: impl Into<Param>) -> Result<ControlChange2<'_>, ParameterError>;
+    fn try_control(&self, control: impl Into<Param>) -> Result<ControlChange2<'_>, ControlError>;
     /// Get the [`NodeId`] of this node.
     fn node_id(&self) -> NodeId;
     /// Get the number of inputs of this node.
@@ -272,6 +275,8 @@ pub trait HandleTrait: Sized {
     }
     /// Get parameter descriptions for this node.
     fn parameters(&self) -> Vec<&'static str>;
+    /// Get control metadata for this node.
+    fn controls(&self) -> Vec<NodeControlMetadata>;
     /// Get parameter hints for this node.
     fn hints(&self) -> Vec<ParameterHint>;
 
@@ -314,6 +319,22 @@ impl<T: UGen> HandleTrait for Handle<T> {
     //     self.raw_handle.send(event)
     // }
 
+    fn try_param(&self, param: impl Into<Param>) -> Result<ParameterChange2<'_>, ParameterError> {
+        Ok(ParameterChange2::new(
+            self,
+            self.node_id(),
+            self.parameter_index(param)?,
+        ))
+    }
+
+    fn try_control(&self, control: impl Into<Param>) -> Result<ControlChange2<'_>, ControlError> {
+        Ok(ControlChange2::new(
+            self,
+            self.node_id(),
+            self.control_index(control)?,
+        ))
+    }
+
     fn node_id(&self) -> NodeId {
         self.raw_handle.node_id()
     }
@@ -326,14 +347,6 @@ impl<T: UGen> HandleTrait for Handle<T> {
         T::Outputs::U16
     }
 
-    fn current_frame_time(&self) -> Seconds {
-        self.raw_handle.current_frame_time()
-    }
-
-    fn can_send(&self) -> bool {
-        self.raw_handle.is_alive()
-    }
-
     fn parameters(&self) -> Vec<&'static str> {
         T::param_descriptions().to_vec()
     }
@@ -342,20 +355,20 @@ impl<T: UGen> HandleTrait for Handle<T> {
         T::param_hints().to_vec()
     }
 
-    fn try_param(&self, param: impl Into<Param>) -> Result<ParameterChange2<'_>, ParameterError> {
-        Ok(ParameterChange2::new(
-            self,
-            self.node_id(),
-            self.parameter_index(param)?,
-        ))
+    fn current_frame_time(&self) -> Seconds {
+        self.raw_handle.current_frame_time()
     }
 
-    fn try_control(&self, control: impl Into<Param>) -> Result<ControlChange2<'_>, ParameterError> {
-        Ok(ControlChange2::new(
-            self,
-            self.node_id(),
-            self.control_index(control)?,
-        ))
+    fn can_send(&self) -> bool {
+        self.raw_handle.is_alive()
+    }
+
+    fn controls(&self) -> Vec<NodeControlMetadata> {
+        self.control_metadata
+            .iter()
+            .cloned()
+            .map(Into::into)
+            .collect()
     }
 }
 impl HandleTrait for AnyHandle {
@@ -394,6 +407,26 @@ impl HandleTrait for AnyHandle {
             self.parameter_index(param)?,
         ))
     }
+    fn try_control(&self, control: impl Into<Param>) -> Result<ControlChange2<'_>, ControlError> {
+        let index = match control.into() {
+            Param::Index(i) => i,
+            Param::Desc(name) => {
+                let Some(i) = self
+                    .control_metadata
+                    .iter()
+                    .position(|m| m.name_str() == name)
+                else {
+                    return Err(ControlError::name_not_found(name));
+                };
+                i
+            }
+        };
+        Ok(ControlChange2::new(self, self.node_id(), index))
+    }
+
+    fn controls(&self) -> Vec<NodeControlMetadata> {
+        self.control_metadata.to_vec()
+    }
 
     fn node_id(&self) -> NodeId {
         self.raw_handle.node_id()
@@ -421,10 +454,6 @@ impl HandleTrait for AnyHandle {
 
     fn can_send(&self) -> bool {
         self.raw_handle.is_alive()
-    }
-
-    fn try_control(&self, _control: impl Into<Param>) -> Result<ControlChange2<'_>, ParameterError> {
-        todo!()
     }
 }
 impl LiveChangeSender for AnyHandle {
@@ -504,10 +533,10 @@ impl<'a> ParameterChange2<'a> {
 }
 impl Drop for ParameterChange2<'_> {
     fn drop(&mut self) {
-        if !self.was_sent {
-            if let Err(e) = self.send_inner() {
-                log::error!("Error sending parameter change: {e}");
-            }
+        if !self.was_sent
+            && let Err(e) = self.send_inner()
+        {
+            log::error!("Error sending parameter change: {e}");
         }
     }
 }
@@ -568,7 +597,7 @@ impl<'a> ControlChange2<'a> {
             self.sender.schedule_change(SchedulingEvent {
                 node_key: self.node_id.key(),
                 token: self.token.clone(),
-                time: self.time.clone(),
+                time: self.time,
                 kind: crate::SchedulingEventKind::ControlSmoothing {
                     index: self.param,
                     smoothing,
@@ -582,7 +611,7 @@ impl<'a> ControlChange2<'a> {
                 time: self.time.take(),
                 kind: crate::SchedulingEventKind::Control {
                     index: self.param,
-                    value: value,
+                    value,
                 },
             })?;
         }
@@ -595,10 +624,10 @@ impl<'a> ControlChange2<'a> {
 }
 impl Drop for ControlChange2<'_> {
     fn drop(&mut self) {
-        if !self.was_sent {
-            if let Err(e) = self.send_inner() {
-                log::error!("Error sending parameter change: {e}");
-            }
+        if !self.was_sent
+            && let Err(e) = self.send_inner()
+        {
+            log::error!("Error sending parameter change: {e}");
         }
     }
 }

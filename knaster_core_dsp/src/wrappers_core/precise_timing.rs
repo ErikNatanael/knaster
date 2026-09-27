@@ -92,20 +92,20 @@ impl<T: UGen, const DELAYED_CHANGES_PER_BLOCK: usize> UGen
         let mut control_change_i = 0;
         let org_block = ctx.block;
         for frame_i in 0..ctx.frames_to_process() {
-            if let Some((delay, index, value)) = &self.waiting_parameter_changes[change_i] {
-                if (*delay as usize) == frame_i + ctx.block_start_offset() {
-                    self.ugen.param_apply(ctx, *index, *value);
-                    self.waiting_parameter_changes[change_i] = None;
-                    change_i += 1;
-                }
+            if let Some((delay, index, value)) = &self.waiting_parameter_changes[change_i]
+                && (*delay as usize) == frame_i + ctx.block_start_offset()
+            {
+                self.ugen.param_apply(ctx, *index, *value);
+                self.waiting_parameter_changes[change_i] = None;
+                change_i += 1;
             }
-            if let Some((delay, index, value)) = &self.waiting_control_changes[control_change_i] {
-                if (*delay as usize) == frame_i + ctx.block_start_offset() {
-                    std::dbg!("Applying control", index, value);
-                    self.ugen.control(ctx, *index, *value);
-                    self.waiting_control_changes[control_change_i] = None;
-                    control_change_i += 1;
-                }
+            if let Some((delay, index, value)) = &self.waiting_control_changes[control_change_i]
+                && (*delay as usize) == frame_i + ctx.block_start_offset()
+            {
+                std::dbg!("Applying control", index, value);
+                self.ugen.control(ctx, *index, *value);
+                self.waiting_control_changes[control_change_i] = None;
+                control_change_i += 1;
             }
             let input = PartialBlock::from_block(input, frame_i, 1);
             let mut output = output.partial_mut(frame_i, 1);

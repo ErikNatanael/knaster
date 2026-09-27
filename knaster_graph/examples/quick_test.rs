@@ -62,7 +62,7 @@ fn main() -> Result<()> {
             osc1.control("freq").set(freq)?;
             let mut osc2 = SinNumeric::new(freq * 1.5);
             osc2.control_named(ctx, "freq", freq * 1.5)?;
-            let mut osc2 = graph.push(osc2.wr_mul(0.2));
+            let osc2 = graph.push(osc2.wr_mul(0.2));
             let mut osc3 = graph.push(SinNumeric::new(freq * 4.).wr_mul(0.2));
             osc3.control("freq").set(freq * 4.)?;
             let mut env = graph.push_with_done_action(EnvAsr::new(0.2, 0.2), Done::FreeParent);

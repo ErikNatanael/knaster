@@ -100,10 +100,9 @@ impl<F: Float> UGen for Osc<F> {
         todo!()
     }
 
-    fn param_apply(&mut self, ctx: &mut AudioCtx, index: usize, value: ParameterValue) {
-        match index {
-            0 => self.phase_offset(F::ZERO),
-            _ => (),
+    fn param_apply(&mut self, _ctx: &mut AudioCtx, index: usize, _value: ParameterValue) {
+        if index == 0 {
+            self.phase_offset(F::ZERO)
         }
     }
 

@@ -5,10 +5,7 @@
 // Original code: Copyright (c) 2016 airwindows, Airwindows uses the MIT license
 // Ported code: Copyright 2023 Erik Natanael Gustafsson
 
-use knaster_core::{
-    AudioCtx, Float, UGen, impl_ugen,
-    typenum::U2,
-};
+use knaster_core::{AudioCtx, Float, impl_ugen, typenum::U2};
 use knaster_core_dsp::{delay::StaticSampleDelay, noise::next_randomness_seed};
 
 pub struct Galactic<F> {
@@ -83,7 +80,7 @@ impl<F: Float> Galactic<F> {
         let mut left_out = [F::ZERO];
         let mut right_out = [F::ZERO];
         self.next_block(&left_in, &right_in, &mut left_out, &mut right_out);
-        [left_out[0], right_out[0]].into()
+        [left_out[0], right_out[0]]
     }
     fn process_block<InBlock, OutBlock>(
         &mut self,

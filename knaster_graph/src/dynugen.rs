@@ -119,7 +119,7 @@ impl<F: Float, T: UGen<Sample = F> + 'static> DynUGen<F> for T {
     }
 
     fn control_metadata(&self) -> Vec<ControlMetadata<F>> {
-        T::control_metadata(&self).to_vec()
+        T::control_metadata(self).to_vec()
     }
 
     fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: F) {

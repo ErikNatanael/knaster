@@ -859,6 +859,7 @@ impl<F: Float> Graph<F> {
             buffers: buffers.clone(),
             bufnum: bufnum.clone(),
         };
+        // TODO: Why is this "source" a FeedbackSink??
         let source = FeedbackSink {
             buffers: buffers.clone(),
             bufnum: bufnum.clone(),
@@ -1135,10 +1136,10 @@ impl<F: Float> Graph<F> {
                 if sink_channel >= self.num_outputs {
                     return Err(GraphError::GraphOutputOutOfBounds(sink_channel));
                 }
-                if let Some(edge) = self.output_edges[sink_channel as usize].take() {
-                    if let NodeKeyOrGraph::Node(source_node) = edge.source {
-                        self.evaluate_if_node_should_be_removed(source_node);
-                    }
+                if let Some(edge) = self.output_edges[sink_channel as usize].take()
+                    && let NodeKeyOrGraph::Node(source_node) = edge.source
+                {
+                    self.evaluate_if_node_should_be_removed(source_node);
                 }
             }
             Sink::Control { id, control: param } => {
@@ -1170,32 +1171,32 @@ impl<F: Float> Graph<F> {
                         for (_k, input_edges) in &mut self.node_input_edges {
                             for edge in input_edges.iter_mut().filter(|e| e.is_some()) {
                                 let edge = edge.as_mut().unwrap();
-                                if let NodeKeyOrGraph::Node(source) = &edge.source {
-                                    if *source == key {
-                                        *edge = input_edge;
-                                    }
+                                if let NodeKeyOrGraph::Node(source) = &edge.source
+                                    && *source == key
+                                {
+                                    *edge = input_edge;
                                 }
                             }
                         }
                         for (_k, input_edges) in &mut self.node_control_edges {
                             for edge in input_edges.iter_mut() {
-                                if let NodeKeyOrGraph::Node(source) = &edge.source {
-                                    if *source == key {
-                                        *edge = ControlEdge {
-                                            source: input_edge.source,
-                                            channel_in_source: input_edge.channel_in_source,
-                                            control_index: edge.control_index,
-                                        };
-                                    }
+                                if let NodeKeyOrGraph::Node(source) = &edge.source
+                                    && *source == key
+                                {
+                                    *edge = ControlEdge {
+                                        source: input_edge.source,
+                                        channel_in_source: input_edge.channel_in_source,
+                                        control_index: edge.control_index,
+                                    };
                                 }
                             }
                         }
                         for edge in &mut self.output_edges {
                             let edge = edge.as_mut().unwrap();
-                            if let NodeKeyOrGraph::Node(source) = &edge.source {
-                                if *source == key {
-                                    *edge = input_edge;
-                                }
+                            if let NodeKeyOrGraph::Node(source) = &edge.source
+                                && *source == key
+                            {
+                                *edge = input_edge;
                             }
                         }
                         self.free_node_from_key(key).ok();
@@ -1211,19 +1212,19 @@ impl<F: Float> Graph<F> {
         if node.auto_free_when_unconnected {
             let mut unconnected = true;
             'unconnected_block: {
-                if let Some(edges) = self.node_input_edges.get(key) {
-                    if edges.iter().flatten().peekable().peek().is_some() {
-                        unconnected = false;
-                        break 'unconnected_block;
-                    }
+                if let Some(edges) = self.node_input_edges.get(key)
+                    && edges.iter().flatten().peekable().peek().is_some()
+                {
+                    unconnected = false;
+                    break 'unconnected_block;
                 }
                 for (_k, input_edges) in &mut self.node_input_edges {
                     for edge in input_edges.iter().flatten() {
-                        if let NodeKeyOrGraph::Node(source) = &edge.source {
-                            if *source == key {
-                                unconnected = false;
-                                break 'unconnected_block;
-                            }
+                        if let NodeKeyOrGraph::Node(source) = &edge.source
+                            && *source == key
+                        {
+                            unconnected = false;
+                            break 'unconnected_block;
                         }
                     }
                 }
@@ -1558,7 +1559,7 @@ impl<F: Float> Graph<F> {
             .send(crate::SchedulingEvent {
                 node_key: node_id.key(),
                 kind: SchedulingEventKind::Parameter {
-                    index: param_index as usize,
+                    index: param_index,
                     value,
                 },
                 token: None,
@@ -1734,12 +1735,12 @@ impl<F: Float> Graph<F> {
             if node == from {
                 return true;
             }
-            if visited.insert(node) {
-                if let Some(edges) = self.node_input_edges.get(node) {
-                    for &parent in edges.iter().flatten() {
-                        if let NodeKeyOrGraph::Node(parent) = parent.source {
-                            stack.push(parent);
-                        }
+            if visited.insert(node)
+                && let Some(edges) = self.node_input_edges.get(node)
+            {
+                for &parent in edges.iter().flatten() {
+                    if let NodeKeyOrGraph::Node(parent) = parent.source {
+                        stack.push(parent);
                     }
                 }
             }
@@ -2039,12 +2040,11 @@ impl<F: Float> Graph<F> {
         // Remove all output edges leading from the node
         for (_k, input_edges) in &mut self.node_input_edges {
             for edge_opt in input_edges.iter_mut() {
-                if let Some(edge) = edge_opt {
-                    if let NodeKeyOrGraph::Node(source) = edge.source {
-                        if source == node_key {
-                            *edge_opt = None;
-                        }
-                    }
+                if let Some(edge) = edge_opt
+                    && let NodeKeyOrGraph::Node(source) = edge.source
+                    && source == node_key
+                {
+                    *edge_opt = None;
                 }
             }
             let mut i = 0;
@@ -2145,7 +2145,7 @@ impl<F: Float> Graph<F> {
                             NodeKeyOrGraph::Graph => EdgeSource::Graph,
                         },
                         from_index: edge.channel_in_source,
-                        to_index: edge.control_index as u16,
+                        to_index: edge.control_index,
                         is_feedback: false,
                     });
                 }
@@ -2207,10 +2207,10 @@ impl<F: Float> Graph<F> {
         // See if any nodes are marked for removal
         let mut free_queue = Vec::new();
         for (key, node) in self.get_nodes_mut() {
-            if let Some(to_free) = &mut node.remove_me {
-                if to_free.load(Ordering::SeqCst) {
-                    free_queue.push(key);
-                }
+            if let Some(to_free) = &mut node.remove_me
+                && to_free.load(Ordering::SeqCst)
+            {
+                free_queue.push(key);
             }
         }
         for key in free_queue {
@@ -2285,12 +2285,11 @@ impl<F: Float> Graph<F> {
                     stack.push((node_key, DfsState::Processed));
                     if let Some(input_edges) = &self.node_input_edges.get(node_key) {
                         for edge in input_edges.iter().filter_map(|e| *e) {
-                            if !edge.is_feedback {
-                                if let NodeKeyOrGraph::Node(source) = edge.source {
-                                    if !visited.contains(&source) {
-                                        stack.push((source, DfsState::ToProcess));
-                                    }
-                                }
+                            if !edge.is_feedback
+                                && let NodeKeyOrGraph::Node(source) = edge.source
+                                && !visited.contains(&source)
+                            {
+                                stack.push((source, DfsState::ToProcess));
                             }
                         }
                     } else {
@@ -2300,10 +2299,10 @@ impl<F: Float> Graph<F> {
                     }
                     let param_input_edges = &self.node_control_edges[node_key];
                     for edge in param_input_edges.iter() {
-                        if let NodeKeyOrGraph::Node(source) = edge.source {
-                            if !visited.contains(&source) {
-                                stack.push((source, DfsState::ToProcess));
-                            }
+                        if let NodeKeyOrGraph::Node(source) = edge.source
+                            && !visited.contains(&source)
+                        {
+                            stack.push((source, DfsState::ToProcess));
                         }
                     }
                 }
@@ -2326,42 +2325,42 @@ impl<F: Float> Graph<F> {
             let mut found_later_node = false;
             for (key, input_edges) in &self.node_input_edges {
                 for input_edge in input_edges.iter().filter_map(|e| *e) {
-                    if let NodeKeyOrGraph::Node(source) = input_edge.source {
-                        if source == last_connected_node_index && !visited.contains(&source) {
-                            last_connected_node_index = key;
-                            found_later_node = true;
+                    if let NodeKeyOrGraph::Node(source) = input_edge.source
+                        && source == last_connected_node_index
+                        && !visited.contains(&source)
+                    {
+                        last_connected_node_index = key;
+                        found_later_node = true;
 
-                            // check if it's an output node
-                            for edge in self.output_edges.iter().filter_map(|e| *e) {
-                                if let NodeKeyOrGraph::Node(source) = edge.source {
-                                    if last_connected_node_index == source {
-                                        last_connected_output_node_index =
-                                            last_connected_node_index;
-                                    }
-                                }
+                        // check if it's an output node
+                        for edge in self.output_edges.iter().filter_map(|e| *e) {
+                            if let NodeKeyOrGraph::Node(source) = edge.source
+                                && last_connected_node_index == source
+                            {
+                                last_connected_output_node_index = last_connected_node_index;
                             }
-                            break;
                         }
+                        break;
                     }
                 }
                 // TODO: When float parameters are split from other parameters, chain the iterators above instead
                 for control_edge in &self.node_control_edges[key] {
-                    if let NodeKeyOrGraph::Node(source) = control_edge.source {
-                        if source == last_connected_node_index && !visited.contains(&source) {
-                            last_connected_node_index = key;
-                            found_later_node = true;
+                    if let NodeKeyOrGraph::Node(source) = control_edge.source
+                        && source == last_connected_node_index
+                        && !visited.contains(&source)
+                    {
+                        last_connected_node_index = key;
+                        found_later_node = true;
 
-                            // check if it's an output node
-                            for edge in self.output_edges.iter().filter_map(|e| *e) {
-                                if let NodeKeyOrGraph::Node(source) = edge.source {
-                                    if last_connected_node_index == source {
-                                        last_connected_output_node_index =
-                                            last_connected_node_index;
-                                    }
-                                }
+                        // check if it's an output node
+                        for edge in self.output_edges.iter().filter_map(|e| *e) {
+                            if let NodeKeyOrGraph::Node(source) = edge.source
+                                && last_connected_node_index == source
+                            {
+                                last_connected_output_node_index = last_connected_node_index;
                             }
-                            break;
                         }
+                        break;
                     }
                 }
                 if found_later_node {

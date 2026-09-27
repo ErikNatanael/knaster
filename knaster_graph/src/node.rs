@@ -7,8 +7,7 @@ use std::prelude::v1::*;
 use ecow::EcoString;
 use knaster_core::controls::{ControlError, ControlMetadata};
 use knaster_core::{
-    ControlPurpose, ControlRange, Float, PFloat, Param, ParameterError, ParameterHint, UGen,
-    heapless, typenum::*,
+    ControlPurpose, ControlRange, Float, PFloat, Param, ParameterHint, UGen, heapless, typenum::*,
 };
 
 use crate::graph::{GraphId, NodeKey};
@@ -241,9 +240,9 @@ impl<F: Float> Node<F> {
             log::error!("Error: Tried to convert node offset to ptr, but the node had no offset!");
         }
     }
-    pub fn parameter_count(&self) -> u16 {
-        self.data.parameters
-    }
+    // pub fn parameter_count(&self) -> u16 {
+    //     self.data.parameters
+    // }
     pub fn control_count(&self) -> u16 {
         self.data.controls
     }
@@ -253,24 +252,24 @@ impl<F: Float> Node<F> {
     pub fn parameter_hints(&self) -> impl Iterator<Item = ParameterHint> {
         self.data.parameter_hints()
     }
-    pub fn get_parameter_index(&self, param: impl Into<Param>) -> Result<usize, ParameterError> {
-        let param = param.into();
-        match param {
-            Param::Index(param_i) => {
-                if (param_i as usize) >= self.parameter_count() as usize {
-                    Err(ParameterError::ParameterIndexOutOfBounds)
-                } else {
-                    Ok(param_i as usize)
-                }
-            }
-            Param::Desc(desc) => self
-                .parameter_descriptions()
-                .enumerate()
-                .find(|(_, d)| *d == desc)
-                .map(|(i, _)| i)
-                .ok_or(ParameterError::DescriptionNotFound(desc)),
-        }
-    }
+    // pub fn get_parameter_index(&self, param: impl Into<Param>) -> Result<usize, ParameterError> {
+    //     let param = param.into();
+    //     match param {
+    //         Param::Index(param_i) => {
+    //             if (param_i as usize) >= self.parameter_count() as usize {
+    //                 Err(ParameterError::ParameterIndexOutOfBounds)
+    //             } else {
+    //                 Ok(param_i as usize)
+    //             }
+    //         }
+    //         Param::Desc(desc) => self
+    //             .parameter_descriptions()
+    //             .enumerate()
+    //             .find(|(_, d)| *d == desc)
+    //             .map(|(i, _)| i)
+    //             .ok_or(ParameterError::DescriptionNotFound(desc)),
+    //     }
+    // }
     pub fn get_control_index(&self, control: impl Into<Param>) -> Result<usize, ControlError> {
         let param = control.into();
         match param {
