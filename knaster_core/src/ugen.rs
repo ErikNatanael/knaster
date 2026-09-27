@@ -1,4 +1,4 @@
-use crate::controls::ControlMetadata;
+use crate::controls::{ControlError, ControlMetadata};
 use crate::log::ArLogSender;
 use crate::numeric_array::NumericArray;
 use crate::{Param, ParameterError, ParameterHint, ParameterType, ParameterValue, rt_log};
@@ -374,4 +374,19 @@ pub trait UGen {
     fn control_metadata(&self) -> NumericArray<ControlMetadata<Self::Sample>, Self::Controls>;
     /// Set the value of a control (float parameter)
     fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: Self::Sample);
+    /// Set the value of a control (float parameter) using its name
+    fn control_named(
+        &mut self,
+        ctx: &mut AudioCtx,
+        name: &str,
+        value: Self::Sample,
+    ) -> Result<(), ControlError> {
+        let cm = self.control_metadata();
+        if let Some(index) = cm.iter().position(|m| m.name_str() == name) {
+            self.control(ctx, index, value);
+            Ok(())
+        } else {
+            Err(ControlError::name_not_found(name))
+        }
+    }
 }

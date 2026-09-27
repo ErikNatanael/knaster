@@ -101,28 +101,28 @@ impl<F: Float> Galactic<F> {
         self.next_block(input.channel_as_slice(0), input.channel_as_slice(1), o0, o1);
     }
 
-    #[param]
-    fn replace(&mut self, value: PFloat) {
+    #[control(default = 0.5)]
+    fn replace(&mut self, value: F) {
         self.replace = F::new(value);
     }
 
-    #[param]
-    fn detune(&mut self, value: PFloat) {
+    #[control(default = 0.1)]
+    fn detune(&mut self, value: F) {
         self.detune = F::new(value);
     }
 
-    #[param]
-    fn brightness(&mut self, value: PFloat) {
+    #[control(default = 0.9)]
+    fn brightness(&mut self, value: F) {
         self.brightness = F::new(value);
     }
 
-    #[param]
-    fn bigness(&mut self, value: PFloat) {
+    #[control(default = 1.0)]
+    fn bigness(&mut self, value: F) {
         self.bigness = F::new(value);
     }
 
-    #[param]
-    fn wet(&mut self, value: PFloat) {
+    #[control(default = 0.2)]
+    fn wet(&mut self, value: F) {
         self.wet = F::new(value);
     }
 }

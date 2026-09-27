@@ -61,13 +61,18 @@ pub fn parse_control_functions(
                             ));
                         }
                     };
+                } else {
+                    return Err(syn::Error::new(
+                        attr.span(),
+                        format!("default value required in control attribute"),
+                    ));
                 }
             }
         }
         let Some(attrs) = attrs else {
             return Err(syn::Error::new(
                 f.span(),
-                format!("No control attribute found for control function"),
+                format!("Failed to parse control attribute"),
             ));
         };
         let mut num_control_value_arguments = 0;
@@ -128,6 +133,8 @@ pub fn parse_control_functions(
                         "ReciprocalQ" => ControlPurpose::ReciprocalQ,
                         "Seconds" => ControlPurpose::Seconds,
                         "Offset" => ControlPurpose::Offset,
+                        "Pan" => ControlPurpose::Pan,
+                        "Decibel" => ControlPurpose::Decibel,
                         _ => {
                             return Err(syn::Error::new(
                                 apurpose.span(),
@@ -278,6 +285,8 @@ impl PrimitiveToTokenStream for ControlPurpose {
             ControlPurpose::Amplitude => quote!{ #crate_ident::ControlPurpose::Amplitude },
             ControlPurpose::Offset => quote!{ #crate_ident::ControlPurpose::Offset },
             ControlPurpose::Seconds => quote!{ #crate_ident::ControlPurpose::Seconds },
+            ControlPurpose::Pan => quote!{ #crate_ident::ControlPurpose::Pan },
+            ControlPurpose::Decibel => quote!{ #crate_ident::ControlPurpose::Decibel },
         }
     }
 }

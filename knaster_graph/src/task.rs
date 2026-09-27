@@ -82,11 +82,11 @@ pub(crate) struct TaskData<F: Float> {
     /// Audio rate parameter changes are tied to the graph structure just like
     /// audio passing through the graph. Changes get applied from this list at
     /// the point where the new schedule is received.
-    pub(crate) ar_parameter_changes: Vec<ArParameterChange<F>>,
+    pub(crate) ar_parameter_changes: Vec<ArControlChange<F>>,
     /// If a parameter input is fetched from a graph input, that graph input may
     /// be a different buffer every block. Therefore, the input needs to be
     /// passed in every block.
-    pub(crate) graph_input_to_ar_parameter_edges: Vec<GraphInToArParameterEdge>,
+    pub(crate) graph_input_to_ar_parameter_edges: Vec<GraphInToArControlEdge>,
     /// The order in which the nodes are executed and the tasks are stored in the `tasks` field.
     /// Used to apply parameter changes directly by function calls before any tasks are run.
     pub(crate) node_task_order: Vec<NodeKey>,
@@ -108,18 +108,14 @@ impl<F: Float> TaskData<F> {
                 task.ugen = old_task_data.tasks[j].ugen.take();
             }
             // Disable all ar parameter changes, since an edge may have been removed
-            for i in 0..task.ugen.parameters() as usize {
+            for i in 0..task.ugen.controls() as usize {
                 unsafe { task.ugen.set_ar_param_buffer(ctx, i, std::ptr::null()) }
             }
         }
         // Apply ar parameter changes
         for apc in &self.ar_parameter_changes {
             unsafe {
-                (self.tasks[apc.node].ugen).set_ar_param_buffer(
-                    ctx,
-                    apc.parameter_index,
-                    apc.buffer,
-                )
+                (self.tasks[apc.node].ugen).set_ar_param_buffer(ctx, apc.control_index, apc.buffer)
             };
             // unsafe {
             //     (*self.gens[apc.node].1).set_ar_param_buffer(ctx, apc.parameter_index, apc.buffer)
@@ -138,20 +134,20 @@ impl<F: Float> TaskData<F> {
 /// Pointers within ArParameterChange are guaranteed to be valid for as long as necessary because
 /// TaskData also contains an Arc to the underlying allocation `current_buffer_allocation` which
 /// is then stored in the GraphGen.
-unsafe impl<F: Float> Send for ArParameterChange<F> {}
+unsafe impl<F: Float> Send for ArControlChange<F> {}
 
-#[derive(Clone, Copy)]
-pub(crate) struct ArParameterChange<F> {
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ArControlChange<F> {
     /// Node index already converted to the index into `tasks` in TaskData
     pub(crate) node: usize,
-    pub(crate) parameter_index: usize,
+    pub(crate) control_index: usize,
     pub(crate) buffer: *const F,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct GraphInToArParameterEdge {
+pub(crate) struct GraphInToArControlEdge {
     /// Node index already converted to the index into `tasks` in TaskData
     pub(crate) node: usize,
-    pub(crate) parameter_index: usize,
+    pub(crate) control_index: usize,
     pub(crate) graph_input_index: usize,
 }

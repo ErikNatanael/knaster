@@ -81,8 +81,8 @@ impl<F: Float> EnvAsr<F> {
     }
 
     /// Set the attack time in seconds
-    #[param(kind = Seconds)]
-    pub fn attack_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
+    #[control(default = 0.01, purpose = Seconds)]
+    pub fn attack_time(&mut self, ctx: &mut AudioCtx, seconds: F) {
         let atk = F::new(seconds);
         if self.attack_seconds != atk {
             self.attack_seconds = atk;
@@ -95,8 +95,8 @@ impl<F: Float> EnvAsr<F> {
         }
     }
     /// Set the release time in seconds
-    #[param(kind = Seconds)]
-    pub fn release_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
+    #[control(default = 0.1, purpose = Seconds)]
+    pub fn release_time(&mut self, ctx: &mut AudioCtx, seconds: F) {
         let rel = F::new(seconds);
         if self.release_seconds != rel {
             self.release_seconds = rel;
@@ -232,9 +232,9 @@ impl<F: Float> EnvAr<F> {
         out
     }
     /// Set the attack time in seconds
-    #[param(kind = Seconds)]
-    pub fn attack_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
-        let atk = F::new(seconds);
+    #[control(default = 0.01, purpose = Seconds)]
+    pub fn attack_time(&mut self, ctx: &mut AudioCtx, seconds: F) {
+        let atk = seconds;
         if self.attack_seconds != atk {
             self.attack_seconds = atk;
             if atk == F::ZERO {
@@ -246,9 +246,9 @@ impl<F: Float> EnvAr<F> {
         }
     }
     /// Set the release time in seconds
-    #[param(kind = Seconds)]
-    pub fn release_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
-        let rel = F::new(seconds);
+    #[control(default = 0.1, purpose = Seconds)]
+    pub fn release_time(&mut self, ctx: &mut AudioCtx, seconds: F) {
+        let rel = seconds;
         if self.release_seconds != rel {
             self.release_seconds = rel;
             if rel == F::ZERO {
@@ -462,9 +462,9 @@ mod alloc_envelopes {
             [out]
         }
         // TODO: mark as logarithmic
-        #[param(range=0.0..=20.0)]
-        fn time_scale(&mut self, value: PFloat) {
-            self.time_scale = F::new(value).to_f64();
+        #[control(default = 1.0, range=0.0..=20.0)]
+        fn time_scale(&mut self, value: F) {
+            self.time_scale = value.to_f64();
         }
         #[param]
         fn jump_to_segment(&mut self, value: PInteger) {

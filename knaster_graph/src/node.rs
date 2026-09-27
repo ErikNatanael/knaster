@@ -5,7 +5,7 @@ use crate::dynugen::UGenEnum;
 use std::prelude::v1::*;
 
 use ecow::EcoString;
-use knaster_core::controls::ControlMetadata;
+use knaster_core::controls::{ControlError, ControlMetadata};
 use knaster_core::{
     ControlPurpose, ControlRange, Float, PFloat, Param, ParameterError, ParameterHint, UGen,
     heapless, typenum::*,
@@ -21,6 +21,28 @@ pub struct NodeControlMetadata {
     default: PFloat,
     range: Option<ControlRange<PFloat>>,
     purpose: Option<ControlPurpose>,
+}
+impl NodeControlMetadata {
+    /// Get the name of this control.
+    pub fn name(&self) -> &heapless::String<16> {
+        &self.name
+    }
+    /// Get the name of this control as a `&str`.
+    pub fn name_str(&self) -> &str {
+        self.name.as_str()
+    }
+    /// Get the range of this control, if any. This is a hint for GUIs and similar.
+    pub fn range(&self) -> &Option<ControlRange<PFloat>> {
+        &self.range
+    }
+    /// Get the purpose of this control, if any. This is a hint for GUIs and similar.
+    pub fn purpose(&self) -> &Option<ControlPurpose> {
+        &self.purpose
+    }
+    /// Get the default value of this control
+    pub fn default(&self) -> PFloat {
+        self.default
+    }
 }
 
 impl<F: Float> From<ControlMetadata<F>> for NodeControlMetadata {
@@ -222,6 +244,9 @@ impl<F: Float> Node<F> {
     pub fn parameter_count(&self) -> u16 {
         self.data.parameters
     }
+    pub fn control_count(&self) -> u16 {
+        self.data.controls
+    }
     pub fn parameter_descriptions(&self) -> impl Iterator<Item = &'static str> {
         self.data.parameter_descriptions()
     }
@@ -244,6 +269,26 @@ impl<F: Float> Node<F> {
                 .find(|(_, d)| *d == desc)
                 .map(|(i, _)| i)
                 .ok_or(ParameterError::DescriptionNotFound(desc)),
+        }
+    }
+    pub fn get_control_index(&self, control: impl Into<Param>) -> Result<usize, ControlError> {
+        let param = control.into();
+        match param {
+            Param::Index(param_i) => {
+                if (param_i) >= self.control_count() as usize {
+                    Err(ControlError::IndexOutOfBounds)
+                } else {
+                    Ok(param_i)
+                }
+            }
+            Param::Desc(desc) => self
+                .data
+                .control_metadata
+                .iter()
+                .enumerate()
+                .find(|(_, d)| d.name_str() == desc)
+                .map(|(i, _)| i)
+                .ok_or(ControlError::name_not_found(desc)),
         }
     }
 }

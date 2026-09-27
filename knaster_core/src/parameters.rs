@@ -5,7 +5,7 @@
 
 mod types;
 
-use knaster_primitives::{FloatParameterKind, FloatParameterRange, PFloat};
+use knaster_primitives::PFloat;
 pub use types::*;
 
 use std::prelude::v1::*;
@@ -109,86 +109,6 @@ impl From<&'static str> for Param {
     }
 }
 
-/// Value hints for a float parameter
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub struct PFloatHint {
-    /// Default value of parameter
-    pub default: Option<PFloat>,
-    /// Range of legal parameter values
-    pub range: Option<FloatParameterRange>,
-    /// Kind of parameter value
-    pub kind: Option<FloatParameterKind>,
-    /// Whether the parameter value should be selected from a logarithmic curve
-    pub is_logarithmic: Option<bool>,
-}
-impl PFloatHint {
-    #[allow(missing_docs)]
-    pub fn new() -> Self {
-        Self {
-            default: None,
-            range: None,
-            kind: None,
-            is_logarithmic: None,
-        }
-    }
-    /// Set the default value hint
-    pub fn default(mut self, v: PFloat) -> Self {
-        self.default = Some(v);
-        self
-    }
-    /// Set the range hint
-    pub fn range(mut self, range: impl Into<FloatParameterRange>) -> Self {
-        self.range = Some(range.into());
-        self
-    }
-    /// Set the kind hint
-    pub fn kind(mut self, kind: FloatParameterKind) -> Self {
-        self.kind = Some(kind);
-        self
-    }
-    /// Set the range hint from an inclusive range
-    pub fn minmax(mut self, min: PFloat, max: PFloat) -> Self {
-        self.range = Some(FloatParameterRange::Range(min, max));
-        self
-    }
-    /// Set the range hint to infinite
-    pub fn infinite(mut self) -> Self {
-        self.range = Some(FloatParameterRange::Infinite);
-        self
-    }
-    /// Set the range hint to (0.0, 1.0)
-    pub fn unipolar(mut self) -> Self {
-        self.range = Some(FloatParameterRange::Range(0.0, 1.0));
-        self
-    }
-    /// Set the range hint to positive infinity
-    pub fn positive_infinite(mut self) -> Self {
-        self.range = Some(FloatParameterRange::PositiveInfinite);
-        self
-    }
-    /// Set the range hint to negative infinity
-    pub fn negative_infinite(mut self) -> Self {
-        self.range = Some(FloatParameterRange::NegativeInfinite);
-        self
-    }
-    /// Set the range hint to (0.0, NYQUIST) where NYQUIST is `sample_rate / 2`
-    pub fn nyquist(mut self) -> Self {
-        self.range = Some(FloatParameterRange::Nyquist);
-        self
-    }
-    /// Set the logarithmic curve hint
-    pub fn logarithmic(mut self, b: bool) -> Self {
-        self.is_logarithmic = Some(b);
-        self
-    }
-}
-
-impl Default for PFloatHint {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// Hint metadata for a `PInteger` parameter. Hints are useful for accessibility, debugging and
 /// GUIs
 #[derive(Copy, Clone, Debug)]
@@ -233,8 +153,6 @@ impl PIntegerHint {
 /// An inclusive range for the supported values of a parameter
 #[derive(Copy, Clone, Debug)]
 pub enum ParameterHint {
-    #[allow(missing_docs)]
-    Float(PFloatHint),
     /// Triggers do not have a range
     Trigger,
     #[allow(missing_docs)]
@@ -243,11 +161,6 @@ pub enum ParameterHint {
     Bool,
 }
 impl ParameterHint {
-    /// New parameter hint for a float type parameter
-    pub fn new_float(with: impl FnOnce(PFloatHint) -> PFloatHint) -> Self {
-        let hint = with(PFloatHint::new());
-        Self::Float(hint)
-    }
     /// Manually set the hints for an integer parameter
     pub fn new_integer(
         range: (PInteger, PInteger),
@@ -264,28 +177,6 @@ impl ParameterHint {
             value_descriptions: Some(T::pinteger_descriptions),
         })
     }
-    // TODO: deprecate these helpers and use the proper syntax
-    #[deprecated]
-    /// New float parameter hint with nyquist range
-    pub fn nyquist() -> Self {
-        Self::new_float(|h| h.nyquist())
-    }
-    /// New float parameter hint with infinite range
-    pub fn infinite_float() -> Self {
-        Self::new_float(|h| h.infinite())
-    }
-    /// New float parameter hint with positive infinity range
-    pub fn positive_infinite_float() -> Self {
-        Self::new_float(|h| h.positive_infinite())
-    }
-    /// New float parameter hint with negative infinity range
-    pub fn negative_infinite_float() -> Self {
-        Self::new_float(|h| h.negative_infinite())
-    }
-    /// New float parameter hint with range (0.0, 1.0)
-    pub fn one() -> Self {
-        Self::new_float(|h| h.minmax(0.0, 1.))
-    }
     /// New boolean parameter hint
     pub fn boolean() -> Self {
         Self::Bool
@@ -293,17 +184,9 @@ impl ParameterHint {
     /// Convert [`ParameterHint`] to [`ParameterType`]
     pub fn ty(self) -> ParameterType {
         match self {
-            ParameterHint::Float(_) => ParameterType::Float,
             ParameterHint::Trigger => ParameterType::Trigger,
             ParameterHint::Integer(_) => ParameterType::Integer,
             ParameterHint::Bool => ParameterType::Bool,
-        }
-    }
-    /// Return the inner [`PFloatHint`] if this hint is of float type.
-    pub fn float_hint(&self) -> Option<&PFloatHint> {
-        match self {
-            ParameterHint::Float(hint) => Some(hint),
-            _ => None,
         }
     }
     /// Return the inner [`PIntegerHint`] if this hint is of integer type.
@@ -316,6 +199,6 @@ impl ParameterHint {
 }
 impl Default for ParameterHint {
     fn default() -> Self {
-        Self::Float(PFloatHint::new())
+        Self::Trigger
     }
 }

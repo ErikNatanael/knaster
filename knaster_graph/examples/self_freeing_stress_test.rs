@@ -58,18 +58,18 @@ fn main() -> Result<()> {
             let _graph = second_graph.edit(|graph| {
                 let (gh, graph) = graph.subgraph::<U0, U1>(GraphOptions::default(), |g| {
                     let osc1 = WrSmoothParams::new(SinNumeric::new(freq * (i + 1) as f32));
-                    let osc1 = g.push(osc1.wr_mul(0.05));
-                    osc1.param("freq").set(freq * (i + 1) as f32).unwrap();
+                    let mut osc1 = g.push(osc1.wr_mul(0.05));
+                    osc1.control("freq").set(freq * (i + 1) as f32).unwrap();
                     let attack_time = (attack_time_phase.sin() * 0.1).abs();
                     let release_time = release_time_phase.sin() * 2. + 2.1;
-                    let asr = g.push_with_done_action(
+                    let mut asr = g.push_with_done_action(
                         EnvAsr::new(attack_time as f32, release_time as f32),
                         Done::FreeParent,
                     );
                     attack_time_phase += 0.001;
-                    asr.param("attack_time").set(attack_time).unwrap();
+                    asr.control("attack_time").set(attack_time).unwrap();
                     release_time_phase += 0.00013;
-                    asr.param("release_time").set(release_time).unwrap();
+                    asr.control("release_time").set(release_time).unwrap();
                     asr.param("t_restart").trig().unwrap();
                     previous_asr = Some(asr.param("t_release"));
                     // connect them together

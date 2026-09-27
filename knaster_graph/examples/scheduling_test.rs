@@ -37,10 +37,11 @@ fn main() -> Result<()> {
         graph
     });
     let mut t_restart = graph.edit(|g| {
-        let env = g.push(EnvAsr::new(0.01, 0.2));
+        let mut env = g.push(EnvAsr::new(0.01, 0.2));
+        let t_restart = env.param("t_restart");
         let sine = g.push(SinWt::new(200.));
         (env * sine).to_graph_out();
-        env.param("t_restart")
+        t_restart
     });
     // push some nodes
     loop {

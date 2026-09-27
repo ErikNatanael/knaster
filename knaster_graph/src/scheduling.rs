@@ -24,7 +24,7 @@ use crate::{
 use knaster_core::PFloat;
 use knaster_core::log::ArLogSender;
 #[allow(unused)]
-use knaster_core::{ParameterError, ParameterSmoothing, ParameterValue, Seconds, rt_log};
+use knaster_core::{ControlSmoothing, ParameterError, ParameterValue, Seconds, rt_log};
 
 /// A trait for sending parameter and control changes to a GraphGen i.e. the running Graph.
 pub trait LiveChangeSender {
@@ -53,8 +53,11 @@ pub enum SchedulingEventKind {
     },
     Control {
         index: usize,
-        value: Option<PFloat>,
-        smoothing: Option<ParameterSmoothing>,
+        value: PFloat,
+    },
+    ControlSmoothing {
+        index: usize,
+        smoothing: ControlSmoothing,
     },
 }
 impl SchedulingEvent {
@@ -75,21 +78,26 @@ impl SchedulingEvent {
         }
     }
     /// Create a new control change event.
-    pub fn control_change(
+    pub fn control_change(node_key: NodeKey, index: usize, value: PFloat) -> Self {
+        Self {
+            node_key,
+            token: None,
+            time: None,
+            kind: SchedulingEventKind::Control { index, value },
+        }
+    }
+
+    /// Create a new control smoothing change event.
+    pub fn control_smoothing_change(
         node_key: NodeKey,
         index: usize,
-        value: Option<PFloat>,
-        smoothing: Option<ParameterSmoothing>,
+        smoothing: ControlSmoothing,
     ) -> Self {
         Self {
             node_key,
             token: None,
             time: None,
-            kind: SchedulingEventKind::Control {
-                index,
-                value,
-                smoothing,
-            },
+            kind: SchedulingEventKind::ControlSmoothing { index, smoothing },
         }
     }
     // /// Set the parameter value to trigger.
@@ -124,8 +132,7 @@ impl SchedulingEvent {
     pub fn reset(&mut self) {
         self.kind = SchedulingEventKind::Control {
             index: 0,
-            value: None,
-            smoothing: None,
+            value: 0.0,
         };
         self.token = None;
         self.time = None;

@@ -58,7 +58,7 @@ pub enum Sink {
     GraphOutput { channel: u16 },
     /// Connecting a graph source to a node parameter
     #[allow(missing_docs)]
-    Parameter { id: NodeId, param: Param },
+    Control { id: NodeId, control: Param },
 }
 
 impl Sink {
@@ -76,10 +76,10 @@ impl Sink {
         }
     }
     /// Connecting a graph source to a node parameter
-    pub fn param(node: impl Into<NodeId>, param: impl Into<Param>) -> Self {
-        Self::Parameter {
+    pub fn control(node: impl Into<NodeId>, param: impl Into<Param>) -> Self {
+        Self::Control {
             id: node.into(),
-            param: param.into(),
+            control: param.into(),
         }
     }
     /// Create a sink from a [`NodeOrGraph`] and a channel number

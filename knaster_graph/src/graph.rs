@@ -14,21 +14,23 @@ use crate::core::{
     sync::{Arc, Mutex},
 };
 
-use crate::task::GraphInToArParameterEdge;
+use crate::task::GraphInToArControlEdge;
 use crate::{
     SharedFrameClock, Time,
     buffer_allocator::BufferAllocator,
     core::sync::atomic::AtomicU64,
-    edge::{Edge, NodeKeyOrGraph, ParameterEdge},
+    edge::{ControlEdge, Edge, NodeKeyOrGraph},
     graph_edit::GraphEdit,
     graph_gen::GraphGen,
     handle::{Handle, RawHandle, SchedulingChannelSender},
     node::{Node, NodeData},
-    task::{ArParameterChange, BlockOrGraphInput, OutputTask, Task, TaskData},
+    task::{ArControlChange, BlockOrGraphInput, OutputTask, Task, TaskData},
 };
 use core::cell::Cell;
 use ecow::EcoString;
+use knaster_core::controls::ControlError;
 use knaster_core::numeric_array::NumericArray;
+use knaster_core::{ControlSmoothing, PFloat};
 use log::{error, trace};
 /// no_std_compat prelude import, supporting both std and no_std
 use std::prelude::v1::*;
@@ -178,7 +180,7 @@ pub struct Graph<F: Float> {
     node_input_edges: SecondaryMap<NodeKey, Box<[Option<Edge>]>>,
     /// Edges which control a parameter of a node through the output of another
     /// node. These can be in addition to audio input edges.
-    node_parameter_edges: SecondaryMap<NodeKey, Vec<ParameterEdge>>,
+    node_control_edges: SecondaryMap<NodeKey, Vec<ControlEdge>>,
     /// If a node can be freed or not. A node can be made immortal to avoid accidentally removing it.
     node_mortality: SecondaryMap<NodeKey, bool>,
     node_order: Vec<NodeKey>,
@@ -248,7 +250,7 @@ impl<F: Float> Graph<F> {
             name,
             nodes,
             node_input_edges,
-            node_parameter_edges,
+            node_control_edges: node_parameter_edges,
             node_mortality: SecondaryMap::with_capacity(DEFAULT_NUM_NODES),
             node_order: Vec::with_capacity(DEFAULT_NUM_NODES),
             disconnected_nodes: vec![],
@@ -332,21 +334,25 @@ impl<F: Float> Graph<F> {
         self.push_internal(ugen)
     }
     pub(crate) fn push_internal<T: UGen<Sample = F> + 'static>(&mut self, ugen: T) -> Handle<T> {
+        let control_metadata = ugen.control_metadata();
         let name = crate::core::any::type_name::<T>();
         let name = shorten_name(name);
         let node = Node::new(name, ugen);
         let node_key = self.push_node(node);
 
-        Handle::new(RawHandle::new(
-            NodeId {
-                key: node_key,
-                graph: self.graph_id,
-            },
-            self.graph_gen_communicator
-                .scheduling_event_producer
-                .clone(),
-            self.graph_gen_communicator.shared_frame_clock.clone(),
-        ))
+        Handle::new(
+            RawHandle::new(
+                NodeId {
+                    key: node_key,
+                    graph: self.graph_id,
+                },
+                self.graph_gen_communicator
+                    .scheduling_event_producer
+                    .clone(),
+                self.graph_gen_communicator.shared_frame_clock.clone(),
+            ),
+            control_metadata,
+        )
     }
     /// Push something implementing [`UGen`] to the graph, adding the [`WrDone`] wrapper. This
     /// enables the node to free itself if it marks itself as done or for removal using [`GenFlags`].
@@ -366,21 +372,25 @@ impl<F: Float> Graph<F> {
             free_self_flag: free_self_flag.clone(),
             done_action: default_done_action,
         };
+        let control_metadata = ugen.control_metadata();
         let name = crate::core::any::type_name::<T>();
         let name = shorten_name(name);
         let mut node = Node::new(name, ugen);
         node.remove_me = Some(free_self_flag);
         let node_key = self.push_node(node);
-        Handle::new(RawHandle::new(
-            NodeId {
-                key: node_key,
-                graph: self.graph_id,
-            },
-            self.graph_gen_communicator
-                .scheduling_event_producer
-                .clone(),
-            self.graph_gen_communicator.shared_frame_clock.clone(),
-        ))
+        Handle::new(
+            RawHandle::new(
+                NodeId {
+                    key: node_key,
+                    graph: self.graph_id,
+                },
+                self.graph_gen_communicator
+                    .scheduling_event_producer
+                    .clone(),
+                self.graph_gen_communicator.shared_frame_clock.clone(),
+            ),
+            control_metadata,
+        )
     }
     /// Get the channel to the GraphGen on the audio thread. Mainly used to schedule parameter
     /// changes.
@@ -430,7 +440,7 @@ impl<F: Float> Graph<F> {
             .insert(key, vec![None; node_inputs as usize].into_boxed_slice());
         // self.node_feedback_edges.insert(key, vec![]);
         self.node_mortality.insert(key, true);
-        self.node_parameter_edges.insert(key, vec![]);
+        self.node_control_edges.insert(key, vec![]);
 
         key
     }
@@ -633,14 +643,11 @@ impl<F: Float> Graph<F> {
         };
 
         let edges = self
-            .node_parameter_edges
+            .node_control_edges
             .get_mut(sink.key())
             .expect("All nodes should have parameter edges");
         if additive {
-            if let Some(pos) = edges
-                .iter()
-                .position(|pe| pe.parameter_index == param_index)
-            {
+            if let Some(pos) = edges.iter().position(|pe| pe.control_index == param_index) {
                 let existing_edge = edges.swap_remove(pos);
                 let add_node = self.new_additive_node();
                 self.node_input_edges[add_node][0] = Some(Edge {
@@ -659,27 +666,27 @@ impl<F: Float> Graph<F> {
                 );
                 // Need to fetch again not to borrow self twice
                 let edges = self
-                    .node_parameter_edges
+                    .node_control_edges
                     .get_mut(sink.key())
                     .expect("All nodes should have parameter edges");
-                edges.push(ParameterEdge {
+                edges.push(ControlEdge {
                     source: NodeKeyOrGraph::Node(add_node),
                     channel_in_source: 0,
-                    parameter_index: param_index,
+                    control_index: param_index,
                 });
             } else {
-                edges.push(ParameterEdge {
+                edges.push(ControlEdge {
                     source,
                     channel_in_source: source_channel,
-                    parameter_index: param_index,
+                    control_index: param_index,
                 });
             }
         } else {
-            edges.retain(|pe| pe.parameter_index != param_index);
-            edges.push(ParameterEdge {
+            edges.retain(|pe| pe.control_index != param_index);
+            edges.push(ControlEdge {
                 source,
                 channel_in_source: source_channel,
-                parameter_index: param_index,
+                control_index: param_index,
             });
         }
         Ok(())
@@ -928,9 +935,9 @@ impl<F: Float> Graph<F> {
                     return Err(GraphError::GraphOutputOutOfBounds(channel));
                 }
             }
-            Sink::Parameter { id, param } => {
+            Sink::Control { id, control: param } => {
                 self.node_is_valid(id)?;
-                let _ = self.get_nodes()[id.key()].get_parameter_index(param)?;
+                let _ = self.get_nodes()[id.key()].get_control_index(param)?;
             }
         }
         Ok(())
@@ -1021,38 +1028,38 @@ impl<F: Float> Graph<F> {
                 }
                 *input_edge = None;
             }
-            Sink::Parameter { id, param } => {
+            Sink::Control { id, control: param } => {
                 let (source_nog, source_channel) = source.into_parts();
                 let node_id = id;
                 let node = &self.get_nodes()[node_id.key()];
-                let parameter_index = node.get_parameter_index(param)? as u16;
-                if let Some(edge_i) = self.node_parameter_edges[node_id.key()]
-                    .iter_mut()
-                    .position(|pe| {
-                        pe.parameter_index == parameter_index
-                            && pe.source == source_nog.into()
-                            && pe.channel_in_source == source_channel
-                    })
+                let index = node.get_control_index(param)? as u16;
+                if let Some(edge_i) =
+                    self.node_control_edges[node_id.key()]
+                        .iter_mut()
+                        .position(|edge| {
+                            edge.control_index == index
+                                && edge.source == source_nog.into()
+                                && edge.channel_in_source == source_channel
+                        })
                 {
-                    self.node_parameter_edges[node_id.key()].remove(edge_i);
+                    self.node_control_edges[node_id.key()].remove(edge_i);
                 } else {
                     // Try to disconnect from any math node input to the same parameter
                     let mut found = false;
 
-                    for i in 0..self.node_parameter_edges[node_id.key()].len() {
-                        let pe = self.node_parameter_edges[node_id.key()][i];
-                        if pe.parameter_index == parameter_index {
-                            if self
+                    for i in 0..self.node_control_edges[node_id.key()].len() {
+                        let pe = self.node_control_edges[node_id.key()][i];
+                        if pe.control_index == index
+                            && self
                                 .disconnect_if_math_node(
                                     source_nog.into(),
                                     source_channel,
                                     pe.source,
                                 )
                                 .is_ok()
-                            {
-                                found = true;
-                                break;
-                            }
+                        {
+                            found = true;
+                            break;
                         }
                     }
                     if !found {
@@ -1080,7 +1087,7 @@ impl<F: Float> Graph<F> {
                 }
             }
         }
-        for (_k, parameter_edges) in &mut self.node_parameter_edges {
+        for (_k, parameter_edges) in &mut self.node_control_edges {
             parameter_edges
                 .retain(|pe| !(pe.channel_in_source == source_channel && source == pe.source));
         }
@@ -1134,14 +1141,14 @@ impl<F: Float> Graph<F> {
                     }
                 }
             }
-            Sink::Parameter { id, param } => {
+            Sink::Control { id, control: param } => {
                 let node_id = id;
                 let node = &self.get_nodes()[node_id.key()];
-                let parameter_index = node.get_parameter_index(param)? as u16;
-                dbg!(&self.node_parameter_edges[node_id.key()]);
-                self.node_parameter_edges[node_id.key()]
-                    .retain(|pe| pe.parameter_index != parameter_index);
-                dbg!(&self.node_parameter_edges[node_id.key()]);
+                let parameter_index = node.get_control_index(param)? as u16;
+                dbg!(&self.node_control_edges[node_id.key()]);
+                self.node_control_edges[node_id.key()]
+                    .retain(|pe| pe.control_index != parameter_index);
+                dbg!(&self.node_control_edges[node_id.key()]);
             }
         }
         self.recalculation_required = true;
@@ -1170,14 +1177,14 @@ impl<F: Float> Graph<F> {
                                 }
                             }
                         }
-                        for (_k, input_edges) in &mut self.node_parameter_edges {
+                        for (_k, input_edges) in &mut self.node_control_edges {
                             for edge in input_edges.iter_mut() {
                                 if let NodeKeyOrGraph::Node(source) = &edge.source {
                                     if *source == key {
-                                        *edge = ParameterEdge {
+                                        *edge = ControlEdge {
                                             source: input_edge.source,
                                             channel_in_source: input_edge.channel_in_source,
-                                            parameter_index: edge.parameter_index,
+                                            control_index: edge.control_index,
                                         };
                                     }
                                 }
@@ -1290,7 +1297,10 @@ impl<F: Float> Graph<F> {
                     id: source_id,
                     channel: source_channel,
                 },
-                Sink::Parameter { id: sink_id, param },
+                Sink::Control {
+                    id: sink_id,
+                    control: param,
+                },
             ) => self.connect_to_parameter_internal(
                 NodeOrGraph::Node(source_id),
                 source_channel,
@@ -1302,7 +1312,7 @@ impl<F: Float> Graph<F> {
                 Source::GraphInput {
                     channel: source_channel,
                 },
-                Sink::Parameter { id, param },
+                Sink::Control { id, control: param },
             ) => self.connect_to_parameter_internal(
                 NodeOrGraph::Graph,
                 source_channel,
@@ -1525,14 +1535,14 @@ impl<F: Float> Graph<F> {
             return Err(GraphError::NodeNotFound);
         };
         let param_index = match param.into() {
-            knaster_core::Param::Index(param_i) => {
+            Param::Index(param_i) => {
                 if param_i as u16 >= node.data.parameters {
                     return Err(ParameterError::ParameterIndexOutOfBounds.into());
                 } else {
                     param_i
                 }
             }
-            knaster_core::Param::Desc(desc) => {
+            Param::Desc(desc) => {
                 match node.parameter_descriptions().position(|d| d == desc) {
                     Some(param_i) => param_i,
                     _ => {
@@ -1564,18 +1574,11 @@ impl<F: Float> Graph<F> {
             }
         }
     }
-    /// Set a parameter value on a node.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the node is not found in the graph or the `param` is not a valid parameter for the node.
-    pub fn set_control(
+    fn get_node_control(
         &self,
         node: impl Into<NodeId>,
         control: impl Into<Param>,
-        value: impl Into<ParameterValue>,
-        t: impl Into<Time>,
-    ) -> Result<(), GraphError> {
+    ) -> Result<(NodeKey, usize), GraphError> {
         let node_id = node.into();
         if !node_id.graph == self.graph_id {
             return Err(GraphError::WrongSinkNodeGraph {
@@ -1587,16 +1590,21 @@ impl<F: Float> Graph<F> {
         let Some(node) = nodes.get(node_id.key()) else {
             return Err(GraphError::NodeNotFound);
         };
-        let param_index = match control.into() {
-            knaster_core::Param::Index(param_i) => {
-                if param_i as u16 >= node.data.parameters {
+        let control_index = match control.into() {
+            Param::Index(control_i) => {
+                if control_i as u16 >= node.data.controls {
                     return Err(ParameterError::ParameterIndexOutOfBounds.into());
                 } else {
-                    param_i
+                    control_i
                 }
             }
-            knaster_core::Param::Desc(desc) => {
-                match node.parameter_descriptions().position(|d| d == desc) {
+            Param::Desc(desc) => {
+                match node
+                    .data
+                    .control_metadata
+                    .iter()
+                    .position(|m| m.name_str() == desc)
+                {
                     Some(param_i) => param_i,
                     _ => {
                         // Fail
@@ -1605,14 +1613,55 @@ impl<F: Float> Graph<F> {
                 }
             }
         };
+        Ok((node_id.key(), control_index))
+    }
+    /// Set a parameter value on a node.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node is not found in the graph or the `param` is not a valid parameter for the node.
+    pub fn set_control(
+        &self,
+        node: impl Into<NodeId>,
+        control: impl Into<Param>,
+        value: impl Into<PFloat>,
+        t: impl Into<Time>,
+    ) -> Result<(), GraphError> {
+        let (node_key, control_index) = self.get_node_control(node, control)?;
         let value = value.into();
         self.graph_gen_communicator
             .scheduling_event_producer
             .send(crate::SchedulingEvent {
-                node_key: node_id.key(),
-                kind: SchedulingEventKind::Parameter {
-                    index: param_index as usize,
+                node_key,
+                kind: SchedulingEventKind::Control {
+                    index: control_index,
                     value,
+                },
+                token: None,
+                time: Some(t.into()),
+            })?;
+        Ok(())
+    }
+    /// Set a parameter value on a node.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node is not found in the graph or the `param` is not a valid parameter for the node.
+    pub fn set_control_smoothing(
+        &self,
+        node: impl Into<NodeId>,
+        control: impl Into<Param>,
+        smoothing: impl Into<ControlSmoothing>,
+        t: impl Into<Time>,
+    ) -> Result<(), GraphError> {
+        let (node_key, control_index) = self.get_node_control(node, control)?;
+        self.graph_gen_communicator
+            .scheduling_event_producer
+            .send(crate::SchedulingEvent {
+                node_key,
+                kind: SchedulingEventKind::ControlSmoothing {
+                    index: control_index,
+                    smoothing: smoothing.into(),
                 },
                 token: None,
                 time: Some(t.into()),
@@ -1746,17 +1795,17 @@ impl<F: Float> Graph<F> {
     /// list of all the buffer to parameter mappings for the current Graph.
     /// Since buffers may reallocate, we set all of the parameter buffers every
     /// time the schedule is updated.
-    fn generate_ar_parameter_changes(
+    fn generate_ar_control_changes(
         &mut self,
-    ) -> (Vec<ArParameterChange<F>>, Vec<GraphInToArParameterEdge>) {
+    ) -> (Vec<ArControlChange<F>>, Vec<GraphInToArControlEdge>) {
         let mut apc = Vec::new();
-        let mut graph_input_to_node_parameters = Vec::new();
-        for (node_key, edges) in &self.node_parameter_edges {
+        let mut graph_input_to_node_controls = Vec::new();
+        for (node_key, edges) in &self.node_control_edges {
             for edge in edges {
-                let ParameterEdge {
+                let ControlEdge {
                     source,
                     channel_in_source,
-                    parameter_index,
+                    control_index,
                 } = *edge;
 
                 if let Some(node_index) = self.node_order.iter().position(|k| *k == node_key) {
@@ -1771,16 +1820,16 @@ impl<F: Float> Graph<F> {
                             // channels of data of size `self.block_size`.
                             let buffer =
                                 unsafe { buffer.add(channel_in_source as usize * self.block_size) };
-                            apc.push(ArParameterChange {
+                            apc.push(ArControlChange {
                                 node: node_index,
-                                parameter_index: parameter_index as usize,
+                                control_index: control_index as usize,
                                 buffer,
                             });
                         }
                         NodeKeyOrGraph::Graph => {
-                            graph_input_to_node_parameters.push(GraphInToArParameterEdge {
+                            graph_input_to_node_controls.push(GraphInToArControlEdge {
                                 node: node_index,
-                                parameter_index: parameter_index as usize,
+                                control_index: control_index as usize,
                                 graph_input_index: channel_in_source as usize,
                             })
                         }
@@ -1788,7 +1837,7 @@ impl<F: Float> Graph<F> {
                 }
             }
         }
-        (apc, graph_input_to_node_parameters)
+        (apc, graph_input_to_node_controls)
     }
 
     /// `graph_inputs_to_nodes`: (node_index_in_order, Vec<(graph_input_channel, node_input_channel))
@@ -1800,7 +1849,7 @@ impl<F: Float> Graph<F> {
         let tasks = self.generate_tasks().into_boxed_slice();
         let output_task = self.generate_output_tasks();
         let (ar_parameter_changes, graph_input_to_ar_parameter_edges) =
-            self.generate_ar_parameter_changes();
+            self.generate_ar_control_changes();
         TaskData {
             applied: applied_flag,
             tasks,
@@ -1839,7 +1888,7 @@ impl<F: Float> Graph<F> {
             }
         }
         // Add parameter edges as dependents
-        for (_key, edges) in &self.node_parameter_edges {
+        for (_key, edges) in &self.node_control_edges {
             for edge in edges {
                 if let NodeKeyOrGraph::Node(source_key) = edge.source {
                     (unsafe { &mut *self.nodes.get() })[source_key].num_output_dependents += 1;
@@ -1884,9 +1933,9 @@ impl<F: Float> Graph<F> {
                     }
                 }
             }
-            // Also parameter inputs
-            let param_edges = &self.node_parameter_edges[key];
-            for edge in param_edges {
+            // Also control inputs
+            let control_edges = &self.node_control_edges[key];
+            for edge in control_edges {
                 if let NodeKeyOrGraph::Node(source_key) = edge.source {
                     let block = self.get_nodes()[source_key].node_output;
                     if let crate::node::NodeOutput::Offset(block) = block {
@@ -1986,7 +2035,7 @@ impl<F: Float> Graph<F> {
 
         // Remove all edges leading to the node
         if let Some(_edges) = self.node_input_edges.remove(node_key) {}
-        self.node_parameter_edges.remove(node_key);
+        self.node_control_edges.remove(node_key);
         // Remove all output edges leading from the node
         for (_k, input_edges) in &mut self.node_input_edges {
             for edge_opt in input_edges.iter_mut() {
@@ -2015,8 +2064,8 @@ impl<F: Float> Graph<F> {
                 }
             }
         }
-        // Remove all parameter edge outputs from the node
-        for (_k, input_edges) in &mut self.node_parameter_edges {
+        // Remove all control edge outputs from the node
+        for (_k, input_edges) in &mut self.node_control_edges {
             let mut i = 0;
             while i < input_edges.len() {
                 let edge = input_edges[i];
@@ -2088,7 +2137,7 @@ impl<F: Float> Graph<F> {
                 }
             }
             let mut input_parameter_edges = Vec::new();
-            if let Some(edges) = self.node_parameter_edges.get(node_key) {
+            if let Some(edges) = self.node_control_edges.get(node_key) {
                 for edge in edges {
                     input_parameter_edges.push(EdgeInspection {
                         source: match edge.source {
@@ -2096,7 +2145,7 @@ impl<F: Float> Graph<F> {
                             NodeKeyOrGraph::Graph => EdgeSource::Graph,
                         },
                         from_index: edge.channel_in_source,
-                        to_index: edge.parameter_index as u16,
+                        to_index: edge.control_index as u16,
                         is_feedback: false,
                     });
                 }
@@ -2111,6 +2160,7 @@ impl<F: Float> Graph<F> {
                 input_parameter_edges,
                 parameter_descriptions: node.parameter_descriptions().collect(),
                 parameter_hints: node.parameter_hints().collect(),
+                control_metadata: node.data.control_metadata.clone(),
                 unconnected: self.disconnected_nodes.contains(&node_key),
                 is_graph: None,
             });
@@ -2248,7 +2298,7 @@ impl<F: Float> Graph<F> {
                             "Node {node_key:?} has no input edges. This should not be possible since all nodes except graph inputs should have at least one input edge. This may indicate a bug in the graph construction or node order calculation."
                         );
                     }
-                    let param_input_edges = &self.node_parameter_edges[node_key];
+                    let param_input_edges = &self.node_control_edges[node_key];
                     for edge in param_input_edges.iter() {
                         if let NodeKeyOrGraph::Node(source) = edge.source {
                             if !visited.contains(&source) {
@@ -2295,8 +2345,8 @@ impl<F: Float> Graph<F> {
                     }
                 }
                 // TODO: When float parameters are split from other parameters, chain the iterators above instead
-                for parameter_edge in &self.node_parameter_edges[key] {
-                    if let NodeKeyOrGraph::Node(source) = parameter_edge.source {
+                for control_edge in &self.node_control_edges[key] {
+                    if let NodeKeyOrGraph::Node(source) = control_edge.source {
                         if source == last_connected_node_index && !visited.contains(&source) {
                             last_connected_node_index = key;
                             found_later_node = true;
@@ -2543,6 +2593,9 @@ pub enum GraphError {
     #[error(transparent)]
     #[allow(missing_docs)]
     ParameterError(#[from] ParameterError),
+    #[error(transparent)]
+    #[allow(missing_docs)]
+    ControlError(#[from] ControlError),
     #[error("There was an error sending the change: `{0}`")]
     #[allow(missing_docs)]
     PushChangeError(String),
@@ -2787,8 +2840,8 @@ mod tests {
                 ..Default::default()
             });
         let asr = graph.push_with_done_action(EnvAsr::new(0.0, 0.0), Done::FreeSelf);
-        asr.param("attack_time").value(0.0);
-        asr.param("release_time").value(0.0);
+        asr.control("attack_time").value(0.0);
+        asr.control("release_time").value(0.0);
         asr.param("t_restart").trig();
         asr.param("t_release").trig();
         graph.commit_changes().unwrap();

@@ -51,14 +51,14 @@ fn main() -> Result<()> {
     g.edit(|g| {
         for _i in 0..600 {
             let env = EnvAr::new(0.01, 0.1);
-            let env = g.push(env);
-            let sine = g.push(
+            let mut env = g.push(env);
+            let mut sine = g.push(
                 SinWt::new(rng.random_range(3000.0..10000.0)).wr_mul(rng.random_range(0.01..0.015)),
             );
+            envs.push(env.param("t_restart"));
+            freqs.push(sine.control("freq"));
             let pan = g.push(Pan2::new(rng.random_range(-1.0..1.0)));
             ((env * sine) >> pan).to_graph_out();
-            envs.push(env.param("t_restart"));
-            freqs.push(sine.param("freq"));
         }
     });
     let mut loops = 0;

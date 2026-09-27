@@ -48,11 +48,11 @@ impl From<NodeOrGraph> for NodeKeyOrGraph {
 // }
 
 #[derive(Clone, Debug, Copy)]
-pub(crate) struct ParameterEdge {
+pub(crate) struct ControlEdge {
     pub(crate) source: NodeKeyOrGraph,
     /// what the first channel to pipe is in the source
     pub(crate) channel_in_source: u16,
-    pub(crate) parameter_index: u16,
+    pub(crate) control_index: u16,
 }
 
 // /// Edge containing all metadata for a feedback connection since a feedback

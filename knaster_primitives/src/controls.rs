@@ -44,7 +44,11 @@ pub enum ControlPurpose {
     #[allow(missing_docs)]
     Amplitude,
     #[allow(missing_docs)]
+    Decibel,
+    #[allow(missing_docs)]
     Offset,
     #[allow(missing_docs)]
     Seconds,
+    #[allow(missing_docs)]
+    Pan,
 }

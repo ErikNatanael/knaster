@@ -71,34 +71,35 @@ impl<F: Float, Channels: Size> BufferReader<F, Channels> {
         self
     }
 
-    #[param]
     #[allow(missing_docs)]
-    pub fn rate(&mut self, v: f64) {
-        self.rate = v;
+    #[control(default = 1.0)]
+    pub fn rate(&mut self, v: F) {
+        self.rate = v.to_f64();
     }
     #[param]
     #[allow(missing_docs)]
     pub fn looping(&mut self, value: bool) {
         self.looping = value;
     }
-    #[param]
+    // TODO: Set these as Seconds directly via a Parameter
+    #[control(default = 0.0)]
     #[allow(missing_docs)]
-    pub fn start_s(&mut self, start_s: PFloat) {
-        let start_time = Seconds::from_secs_f64(start_s);
+    pub fn start_s(&mut self, start_s: F) {
+        let start_time = Seconds::from_secs_f64(start_s.to_f64());
         self.start_frame = start_time.to_samples_f64(self.buffer.sample_rate());
         self.end_frame = self.start_frame + self.dur_frame;
     }
-    #[param]
+    #[control(default = 1.0)]
     #[allow(missing_docs)]
-    pub fn duration_s(&mut self, duration_s: PFloat) {
-        let dur_time = Seconds::from_secs_f64(duration_s);
+    pub fn duration_s(&mut self, duration_s: F) {
+        let dur_time = Seconds::from_secs_f64(duration_s.to_f64());
         self.dur_frame = dur_time.to_samples_f64(self.buffer.sample_rate());
         self.end_frame = self.start_frame + self.dur_frame;
     }
-    #[param]
+    #[control(default = 1.0)]
     #[allow(missing_docs)]
-    pub fn end_s(&mut self, end_s: PFloat) {
-        let end_time = Seconds::from_secs_f64(end_s);
+    pub fn end_s(&mut self, end_s: F) {
+        let end_time = Seconds::from_secs_f64(end_s.to_f64());
         self.end_frame = end_time.to_samples_f64(self.buffer.sample_rate());
     }
     #[param]

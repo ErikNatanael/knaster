@@ -34,7 +34,7 @@ use crate::{SchedulingEventKind, Time};
 
 use ecow::EcoString;
 use knaster_core::controls::ControlMetadata;
-use knaster_core::{Done, PFloat, ParameterSmoothing, ParameterValue, Seconds};
+use knaster_core::{ControlSmoothing, Done, PFloat, ParameterValue, Seconds};
 use knaster_core::{Float, Param, Size, UGen, numeric_array::NumericArray, typenum::*};
 use knaster_core_dsp::math::MathUGen;
 use knaster_core_dsp::util::Constant;
@@ -174,6 +174,18 @@ impl<'b, F: Float> GraphEdit<'b, F> {
         t: Time,
     ) -> Result<(), GraphError> {
         self.graph.read().set(node, param, value, t)?;
+        Ok(())
+    }
+    /// Set a control value on a node. Note that this operation is sent to the audio thread
+    /// instantly, unlike changes to the graph structure which take effect when the [`GraphEdit`] is dropped.
+    pub fn set_control(
+        &self,
+        node: impl Into<NodeId>,
+        control: impl Into<Param>,
+        value: impl Into<PFloat>,
+        t: Time,
+    ) -> Result<(), GraphError> {
+        self.graph.read().set_control(node, control, value, t)?;
         Ok(())
     }
     /// Free a node from the graph. This will remove the node and any of its dependent nodes from the graph.
@@ -852,6 +864,7 @@ impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, RoutingHandle3<U>> {
     }
 }
 /// Handle to a node which can be used to edit aspects of that
+#[derive(Clone)]
 pub struct NodeHandle3<U: UGen> {
     node_id: NodeId,
     ugen: PhantomData<U>,
@@ -884,7 +897,7 @@ impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, NodeHandle3<U>> {
         if let NodeOrGraph::Node(source_node) = input.0 {
             if let Err(e) = g.connect(
                 Source::node(source_node, input.1),
-                Sink::param(self.nodes.node_id, p),
+                Sink::control(self.nodes.node_id, p),
                 ConnectionOptions::default().replace(),
             ) {
                 log::error!("Failed to connect signal to parameter: {e}");
@@ -982,6 +995,42 @@ impl<'a, 'b, F: Float, U: UGen<Sample = F>> SH<'a, 'b, F, NodeHandle3<U>> {
         }
     }
 }
+impl<U: UGen> Static for NodeHandle3<U> {
+    type Outputs = U::Outputs;
+
+    type Inputs = U::Inputs;
+
+    type DynamicType = DynamicHandle3;
+
+    fn iter_outputs(&self) -> ChannelIter<Self::Outputs> {
+        let mut channels = ChannelIterBuilder::new();
+        for i in 0..U::Outputs::U16 {
+            channels.push(NodeOrGraph::Node(self.node_id), i);
+        }
+        channels
+            .into_channel_iter()
+            .expect("all the channels should be initialised")
+    }
+
+    fn iter_inputs(&self) -> ChannelIter<Self::Inputs> {
+        let mut channels = ChannelIterBuilder::new();
+        for i in 0..U::Inputs::U16 {
+            channels.push(NodeOrGraph::Node(self.node_id), i);
+        }
+        channels
+            .into_channel_iter()
+            .expect("all the channels should be initialised")
+    }
+
+    fn dynamic<F: Float>(&self, graph: &GraphRef<F>) -> Self::DynamicType {
+        let data = graph.read().node_data(self.node_id).unwrap();
+        DynamicHandle3 {
+            node_id: self.node_id,
+            outputs: data.outputs,
+            inputs: data.inputs,
+        }
+    }
+}
 impl<'a, 'b, F: Float> From<DH<'a, 'b, F, DynamicHandle3>> for NodeId {
     fn from(value: DH<'a, 'b, F, DynamicHandle3>) -> Self {
         value.nodes.node_id
@@ -1023,7 +1072,7 @@ impl<'a, 'b, F: Float> DH<'a, 'b, F, DynamicHandle3> {
         if let NodeOrGraph::Node(source_node) = input.0 {
             if let Err(e) = g.connect(
                 Source::node(source_node, input.1),
-                Sink::param(self.nodes.node_id, p),
+                Sink::control(self.nodes.node_id, p),
                 ConnectionOptions::default().replace(),
             ) {
                 log::error!("Failed to connect signal to parameter: {e}");
@@ -2064,14 +2113,12 @@ pub struct Control {
 }
 impl Control {
     /// Set the value of the parameter.
-    pub fn set(&mut self, value: PFloat) -> Result<(), GraphError> {
-        let value = value.into();
+    pub fn set(&mut self, value: impl Into<PFloat>) -> Result<(), GraphError> {
         self.sender.send(crate::SchedulingEvent {
             node_key: self.node.key(),
             kind: SchedulingEventKind::Control {
                 index: self.index as usize,
-                value: Some(value),
-                smoothing: None,
+                value: value.into(),
             },
             token: None,
             time: None,
@@ -2080,13 +2127,11 @@ impl Control {
     }
     /// Set the value of the control with the given `Time` setting.
     pub fn set_time(&mut self, value: PFloat, t: impl Into<Time>) -> Result<(), GraphError> {
-        let value = value.into();
         self.sender.send(crate::SchedulingEvent {
             node_key: self.node.key(),
             kind: SchedulingEventKind::Control {
                 index: self.index as usize,
-                value: Some(value),
-                smoothing: None,
+                value,
             },
             token: None,
             time: Some(t.into()),
@@ -2095,13 +2140,11 @@ impl Control {
     }
     /// Set the value of the control _at_ the given time in [`Seconds`], in absolute time.
     pub fn set_at(&mut self, value: PFloat, t: impl Into<Seconds>) -> Result<(), GraphError> {
-        let value = value.into();
         self.sender.send(crate::SchedulingEvent {
             node_key: self.node.key(),
             kind: SchedulingEventKind::Control {
                 index: self.index as usize,
-                value: Some(value),
-                smoothing: None,
+                value,
             },
             token: None,
             time: Some(Time::at(t.into())),
@@ -2111,10 +2154,9 @@ impl Control {
     /// Set the value of the control _after_ the given time in [`Seconds`], in relative time to
     /// when it it scheduled on the audio thread.
     pub fn set_after(&mut self, value: PFloat, t: impl Into<Seconds>) -> Result<(), GraphError> {
-        let value = value.into();
         self.sender.send(crate::SchedulingEvent {
             node_key: self.node.key(),
-            kind: SchedulingEventKind::Parameter {
+            kind: SchedulingEventKind::Control {
                 index: self.index as usize,
                 value,
             },
@@ -2122,6 +2164,18 @@ impl Control {
             time: Some(Time::after(t.into())),
         })?;
         Ok(())
+    }
+    /// Set a smoothing setting for this control
+    pub fn smooth(&mut self, smoothing: ControlSmoothing) -> Result<(), GraphError> {
+        self.sender.send(crate::SchedulingEvent {
+            node_key: self.node.key(),
+            kind: SchedulingEventKind::ControlSmoothing {
+                index: self.index as usize,
+                smoothing,
+            },
+            token: None,
+            time: None,
+        })
     }
 }
 // /// Statically allocated collection of parameters to which changes can be scheduled.
@@ -2265,10 +2319,10 @@ mod tests {
 
                 let t = Time::at(Seconds::from_secs_f64(2.5));
                 // p.set("freq", 400., t).unwrap();
-                let mut freq = sine.param("freq");
+                let mut freq = sine.control("freq");
                 freq.set_time(400., t).unwrap();
 
-                let _freq = sine.try_param("freq").unwrap();
+                let _freq = sine.try_control("freq").unwrap();
                 let sine = sine.route();
 
                 let a = sine * sine2 * c;
@@ -2301,7 +2355,7 @@ mod tests {
                 // Retreive a handle to the node
                 let handle = graph.handle(kept_sine).unwrap();
                 let handle2 = graph.handle_from_name("MySine").unwrap();
-                assert_eq!(handle.clone().id(), handle2.clone().id());
+                assert_eq!(handle.id(), handle2.id());
                 let lpf = graph.handle(kept_lpf).unwrap();
                 // Use the handle to connect it to another node
                 let new_sine = graph.push(SinWt::new(200.)).route();
@@ -2330,11 +2384,11 @@ mod tests {
 
         g.edit(|g| {
             let n1 = g.push(TestInPlusParamUGen::new()).name("n1").route();
-            g.set(n1, 0, 0.5, Time::asap()).unwrap();
+            g.set_control(n1, 0, 0.5, Time::asap()).unwrap();
             let n2 = g.push(TestInPlusParamUGen::new()).name("n2").route();
-            g.set(n2, 0, 1.25, Time::asap()).unwrap();
+            g.set_control(n2, 0, 1.25, Time::asap()).unwrap();
             let n3 = g.push(TestInPlusParamUGen::new()).name("n3").route();
-            g.set(n3, 0, 0.125, Time::asap()).unwrap();
+            g.set_control(n3, 0, 0.125, Time::asap()).unwrap();
             (n1 >> n2 >> n3).to_graph_out();
         });
 

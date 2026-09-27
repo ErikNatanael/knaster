@@ -44,8 +44,8 @@ impl<F: Float> Constant<F> {
         Self { value }
     }
     /// Set the value of the constant
-    #[param]
-    pub fn value(&mut self, value: PFloat) {
+    #[control(default = 0.0)]
+    pub fn value(&mut self, value: F) {
         self.value = F::new(value);
     }
     #[allow(missing_docs)]

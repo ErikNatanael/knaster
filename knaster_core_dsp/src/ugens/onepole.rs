@@ -132,10 +132,10 @@ impl<F: Float> OnePoleLpf<F> {
         [self.op.process_lp(input[0])]
     }
 
-    #[param(kind = Frequency)]
-    fn cutoff_freq(&mut self, ctx: &AudioCtx, freq: PFloat) {
+    #[control(default = 1000.0, purpose = Frequency)]
+    fn cutoff_freq(&mut self, ctx: &AudioCtx, freq: F) {
         self.op
-            .set_freq_lowpass(F::new(freq), F::from(ctx.sample_rate()).unwrap())
+            .set_freq_lowpass(freq, F::from(ctx.sample_rate()).unwrap())
     }
 }
 
@@ -169,8 +169,8 @@ impl<F: Float> OnePoleHpf<F> {
         [self.op.process_hp(input[0])]
     }
 
-    #[param(kind = Frequency)]
-    fn cutoff_freq(&mut self, ctx: &AudioCtx, freq: PFloat) {
+    #[control(default = 100.0, purpose = Frequency)]
+    fn cutoff_freq(&mut self, ctx: &AudioCtx, freq: F) {
         self.op
             .set_freq_highpass(F::new(freq), F::from(ctx.sample_rate()).unwrap())
     }

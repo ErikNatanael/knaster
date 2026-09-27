@@ -1,7 +1,40 @@
 //! Control (float parameter) metadata
 
 use knaster_primitives::{ControlPurpose, ControlRange, Float};
+use thiserror::Error;
 
+/// Error related to knaster parameters
+#[derive(Debug, Clone, Error)]
+pub enum ControlError {
+    #[error("Control name `{0}` not found")]
+    #[allow(missing_docs)]
+    NameNotFound(heapless::String<16>),
+    #[error("The control index is out of bounds.")]
+    #[allow(missing_docs)]
+    IndexOutOfBounds,
+    #[error(
+        "The graph within which the node you are trying to set controls for does not exist anymore."
+    )]
+    #[allow(missing_docs)]
+    GraphWasFreed,
+}
+
+impl ControlError {
+    /// Create a ControlError::NameNotFound
+    pub fn name_not_found(name: &str) -> Self {
+        let name = truncate(name, 16);
+        let name =
+            heapless::String::try_from(name).expect("name should fit because we have truncated it");
+        Self::NameNotFound(name)
+    }
+}
+
+fn truncate(s: &str, max_chars: usize) -> &str {
+    match s.char_indices().nth(max_chars) {
+        None => s,
+        Some((idx, _)) => &s[..idx],
+    }
+}
 /// Metadata about a control.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ControlMetadata<F: Float> {

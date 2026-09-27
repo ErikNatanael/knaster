@@ -1,7 +1,7 @@
 // Fundamental types
 #[allow(unused)]
 pub use knaster_graph::{
-    Beats, Done, Float, Frame, PFloat, PInteger, PTrigger, ParameterHint, ParameterSmoothing,
+    Beats, ControlSmoothing, Done, Float, Frame, PFloat, PInteger, PTrigger, ParameterHint,
     ParameterType, ParameterValue, Seconds, Size, Time, UGen,
     audio_backend::AudioBackend,
     graph::{GraphOptions, NodeId},

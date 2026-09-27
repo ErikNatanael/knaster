@@ -1,5 +1,5 @@
 use knaster_core::{
-    AudioCtx, Block, BlockRead, Float, Frame, ParameterHint, ParameterSmoothing, ParameterValue,
+    AudioCtx, Block, BlockRead, ControlSmoothing, Float, Frame, ParameterHint, ParameterValue,
     PartialBlock, Rate, UGen, UGenFlags, numeric_array::NumericArray, typenum::*,
 };
 
@@ -11,7 +11,7 @@ use knaster_core::{
 pub struct WrSmoothParams<T: UGen> {
     ugen: T,
     controls: NumericArray<Rate, T::Controls>,
-    smoothing: NumericArray<ParameterSmoothing, T::Controls>,
+    smoothing: NumericArray<ControlSmoothing, T::Controls>,
     smoothing_state: NumericArray<ParameterSmoothingState<T::Sample>, T::Controls>,
 }
 
@@ -30,13 +30,13 @@ impl<T: UGen> WrSmoothParams<T> {
     pub fn set_smoothing(
         &mut self,
         index: usize,
-        smoothing: ParameterSmoothing,
+        smoothing: ControlSmoothing,
         new_rate: Rate,
         sample_rate: f64,
     ) {
         self.smoothing[index] = smoothing;
         match smoothing {
-            ParameterSmoothing::None => match self.smoothing_state[index] {
+            ControlSmoothing::None => match self.smoothing_state[index] {
                 ParameterSmoothingState::None { .. } => (),
                 ParameterSmoothingState::Linear {
                     start_value,
@@ -51,7 +51,7 @@ impl<T: UGen> WrSmoothParams<T> {
                     self.smoothing_state[index] = ParameterSmoothingState::None { current_value };
                 }
             },
-            ParameterSmoothing::Linear(new_duration) => {
+            ControlSmoothing::Linear(new_duration) => {
                 let new_duration_in_frames = (new_duration as f64 * sample_rate) as usize;
                 match self.smoothing_state[index] {
                     ParameterSmoothingState::None { current_value } => {
@@ -215,7 +215,7 @@ impl<T: UGen> UGen for WrSmoothParams<T> {
     }
 
     fn control(&mut self, ctx: &mut AudioCtx, index: usize, value: Self::Sample) {
-        if index >= T::Parameters::USIZE {
+        if index >= T::Controls::USIZE {
             return;
         }
         // With an audio rate parameter, ignore other incoming parameter changes

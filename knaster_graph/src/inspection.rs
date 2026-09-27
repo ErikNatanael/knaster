@@ -6,6 +6,7 @@
 use crate::SharedFrameClock;
 use crate::graph::{GraphId, NodeId, NodeKey};
 use crate::handle::{AnyHandle, RawHandle, SchedulingChannelSender};
+use crate::node::NodeControlMetadata;
 use ecow::EcoString;
 use knaster_core::ParameterHint;
 /// no_std_compat prelude import, supporting both std and no_std
@@ -49,6 +50,7 @@ impl GraphInspection {
     pub fn node_handles(&self) -> Vec<AnyHandle> {
         let mut handles = Vec::with_capacity(self.nodes.len());
         for node in &self.nodes {
+            let control_metadata = node.control_metadata.clone();
             handles.push(AnyHandle {
                 raw_handle: RawHandle::new(
                     NodeId {
@@ -62,6 +64,7 @@ impl GraphInspection {
                 parameter_hints: node.parameter_hints.clone(),
                 inputs: node.inputs,
                 outputs: node.outputs,
+                control_metadata,
             });
         }
         handles
@@ -274,6 +277,8 @@ pub struct NodeInspection {
     pub parameter_descriptions: Vec<&'static str>,
     /// Parameter hints for the node
     pub parameter_hints: Vec<ParameterHint>,
+    /// Metadata for all controls
+    pub control_metadata: Vec<NodeControlMetadata>,
     /// Whether the node is unconnected
     pub unconnected: bool,
     /// Whether the node is a graph. If so, its graph id is stored here.

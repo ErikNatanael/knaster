@@ -36,9 +36,9 @@ name = "visualize_graph"
 required-features = ["std", "cpal", "dot"]
 
 [[example]]
-name = "buffer_player"
-required-features = ["std", "cpal"]
+required-features = ["std", "sound-files", "cpal"]
 
+name = "buffer_player"
 [[example]]
 name = "simple_sine"
 required-features = ["std", "cpal"]

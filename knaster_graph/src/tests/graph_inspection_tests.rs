@@ -1,4 +1,4 @@
-use knaster_core::typenum::*;
+use knaster_core::{controls::ControlMetadata, typenum::*};
 use knaster_core_dsp::wrappers_core::UGenWrapperCoreExt;
 
 use crate::{
@@ -25,14 +25,14 @@ fn test_graph_inspection() {
         .map(|_| g.push_internal(TestInPlusParamUGen::new()))
         .collect::<Vec<_>>();
     for n in nodes.iter() {
-        g.set(n, 0, 0.1, Time::asap()).unwrap();
+        g.set_control(n, 0, 0.1, Time::asap()).unwrap();
     }
     let n1 = g.push(TestInPlusParamUGen::new());
-    g.set(&n1, 0, 0.5, Time::asap()).unwrap();
+    g.set_control(&n1, 0, 0.5, Time::asap()).unwrap();
     let n2 = g.push(TestInPlusParamUGen::new().ar_params());
     g.connect(
         Source::node(&n1, 0),
-        Sink::param(&n2, 0),
+        Sink::control(&n2, 0),
         ConnectionOptions::default(),
     )
     .unwrap();
@@ -40,7 +40,7 @@ fn test_graph_inspection() {
     for n in nodes.iter() {
         g.connect(
             Source::node(n, 0),
-            Sink::param(&n3, 0),
+            Sink::control(&n3, 0),
             ConnectionOptions::default(),
         )
         .unwrap();
@@ -63,9 +63,13 @@ fn test_graph_inspection() {
     assert_eq!(n1_inspection.outputs, 1);
     assert_eq!(n1_inspection.input_edges.len(), 0);
     assert_eq!(n1_inspection.input_parameter_edges.len(), 0);
-    assert_eq!(n1_inspection.parameter_descriptions.len(), 1);
+    assert_eq!(n1_inspection.parameter_descriptions, &["t_reset"]);
     assert_eq!(n1_inspection.parameter_hints.len(), 1);
-    assert_eq!(n1_inspection.unconnected, false);
+    assert_eq!(
+        &n1_inspection.control_metadata,
+        &[ControlMetadata::new("number", 0.0, knaster_core::ControlRange::Infinity).into()]
+    );
+    assert!(!n1_inspection.unconnected);
     assert_eq!(n1_inspection.is_graph, None);
 
     let n2_inspection = inspection.get_node(n2.node_id().key()).unwrap();

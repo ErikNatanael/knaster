@@ -92,19 +92,19 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
             return;
         }
         let num_new_task_data = self.new_task_data_consumer.slots();
-        if num_new_task_data > 0 {
-            if let Ok(td_chunk) = self.new_task_data_consumer.read_chunk(num_new_task_data) {
-                for mut td in td_chunk {
-                    td.apply_self_on_audio_thread(ctx, &mut self.current_task_data);
-                    let old_td = crate::core::mem::replace(&mut self.current_task_data, td);
-                    match self.task_data_to_be_dropped_producer.push(old_td) {
-                        Ok(_) => (),
-                        Err(e) => match e {
-                            rtrb::PushError::Full(_) => {
-                                rt_log!(ctx.logger(); "RingBuffer for sending TaskData to be dropped was full. Please increase the size of this ring buffer. The GraphGen will drop the TaskData on the audio thread instead.");
-                            }
-                        },
-                    }
+        if num_new_task_data > 0
+            && let Ok(td_chunk) = self.new_task_data_consumer.read_chunk(num_new_task_data)
+        {
+            for mut td in td_chunk {
+                td.apply_self_on_audio_thread(ctx, &mut self.current_task_data);
+                let old_td = crate::core::mem::replace(&mut self.current_task_data, td);
+                match self.task_data_to_be_dropped_producer.push(old_td) {
+                    Ok(_) => (),
+                    Err(e) => match e {
+                        rtrb::PushError::Full(_) => {
+                            rt_log!(ctx.logger(); "RingBuffer for sending TaskData to be dropped was full. Please increase the size of this ring buffer. The GraphGen will drop the TaskData on the audio thread instead.");
+                        }
+                    },
                 }
             }
         }
@@ -201,9 +201,7 @@ impl<F: Float, Inputs: Size, Outputs: Size> UGen for GraphGen<F, Inputs, Outputs
             let ugen = &mut tasks[edge.node].ugen;
             let channel = input.channel_as_slice(edge.graph_input_index as usize);
             let graph_input_ptr = channel.as_ptr();
-            unsafe {
-                ugen.set_ar_param_buffer(ctx, edge.parameter_index as usize, graph_input_ptr)
-            };
+            unsafe { ugen.set_ar_param_buffer(ctx, edge.control_index as usize, graph_input_ptr) };
         }
 
         let mut new_flags = UGenFlags::default();
@@ -315,11 +313,10 @@ fn apply_parameter_change<'a, F: Float>(
                         }
                         g.param_apply(ctx, index, value);
                     }
-                    crate::SchedulingEventKind::Control {
-                        index,
-                        value,
-                        smoothing,
-                    } => {
+                    crate::SchedulingEventKind::Control { index, value } => {
+                        std::dbg!(std::format!(
+                            "graph_gen set control index {index} to value {value} after delay {delay_in_block}"
+                        ));
                         if delay_in_block > 0 {
                             g.set_delay_within_block_for_param(
                                 ctx,
@@ -327,14 +324,18 @@ fn apply_parameter_change<'a, F: Float>(
                                 delay_in_block as u16,
                             );
                         }
-                        if let Some(smoothing) = smoothing {
-                            // TODO: Set control smoothing correctly
-                            g.param_apply(ctx, index, smoothing.into());
-                            todo!("Control smoothin not yet correctly implemented");
+                        g.control(ctx, index, F::new(value));
+                    }
+                    crate::SchedulingEventKind::ControlSmoothing { index, smoothing } => {
+                        if delay_in_block > 0 {
+                            g.set_delay_within_block_for_param(
+                                ctx,
+                                g.parameters() as usize + index,
+                                delay_in_block as u16,
+                            );
                         }
-                        if let Some(value) = value {
-                            g.control(ctx, index, F::new(value));
-                        }
+                        // TODO: Set control smoothing correctly
+                        g.param_apply(ctx, index, smoothing.into());
                     }
                 }
                 return None;

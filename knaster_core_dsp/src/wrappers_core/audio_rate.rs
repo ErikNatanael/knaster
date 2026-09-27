@@ -11,7 +11,7 @@ use knaster_core::{
 /// wrap a [`UGen`] for audio rate parameter changes to take effect.
 pub struct WrArParams<T: UGen> {
     ugen: T,
-    buffers: NumericArray<Option<*const T::Sample>, T::Parameters>,
+    buffers: NumericArray<Option<*const T::Sample>, T::Controls>,
     // Keeps track of where we are in a block if processing sample-by-sample
     block_index: usize,
 }
@@ -49,9 +49,8 @@ impl<T: UGen> UGen for WrArParams<T> {
     ) -> Frame<Self::Sample, Self::Outputs> {
         for (param, buffer) in self.buffers.iter().enumerate() {
             if let Some(ptr) = buffer {
-                let value = unsafe { *ptr.add(self.block_index) }.to_f64() as PFloat;
-                self.ugen
-                    .param_apply(ctx, param, ParameterValue::Float(value))
+                let value = unsafe { *ptr.add(self.block_index) };
+                self.ugen.control(ctx, param, value)
             }
         }
         self.block_index = (self.block_index + 1) % ctx.block_size();
@@ -79,15 +78,14 @@ impl<T: UGen> UGen for WrArParams<T> {
         index: usize,
         buffer: *const T::Sample,
     ) {
-        if index >= T::Parameters::USIZE {
+        if index >= T::Controls::USIZE {
             return;
         }
         if buffer.is_null() {
-            debug_assert!(index < T::Parameters::USIZE);
+            debug_assert!(index < T::Controls::USIZE);
             self.buffers[index] = None;
-            return;
         } else {
-            debug_assert!(index < T::Parameters::USIZE);
+            debug_assert!(index < T::Controls::USIZE);
             self.buffers[index] = Some(buffer);
         }
     }

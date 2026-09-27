@@ -24,30 +24,18 @@ pub enum ParameterType {
 #[derive(Copy, Clone, Debug)]
 pub enum ParameterValue {
     #[allow(missing_docs)]
-    Float(PFloat),
-    #[allow(missing_docs)]
     Trigger,
     #[allow(missing_docs)]
     Integer(PInteger),
     #[allow(missing_docs)]
     Bool(bool),
     /// The smoothing setting for a Float parameter. Smoothing is not built into all UGens, you generally need a Wrapper to do smoothing for you.
-    Smoothing(ParameterSmoothing, Rate),
+    Smoothing(ControlSmoothing, Rate),
 }
 
 impl<T: PIntegerConvertible> From<T> for ParameterValue {
     fn from(val: T) -> Self {
         ParameterValue::Integer(val.into())
-    }
-}
-impl From<f32> for ParameterValue {
-    fn from(val: f32) -> Self {
-        ParameterValue::Float(val as PFloat)
-    }
-}
-impl From<f64> for ParameterValue {
-    fn from(val: f64) -> Self {
-        ParameterValue::Float(val as PFloat)
     }
 }
 impl From<PTrigger> for ParameterValue {
@@ -61,20 +49,6 @@ impl From<bool> for ParameterValue {
     }
 }
 impl ParameterValue {
-    /// Get the parameter value as a [`PFloat`] if it is a float value, otherwise None.
-    pub fn float(self) -> Option<PFloat> {
-        match self {
-            ParameterValue::Float(value) => Some(value),
-            _ => None,
-        }
-    }
-    /// Get the parameter value as the float type `F` if it is a float value, otherwise None.
-    pub fn f<F: Float>(self) -> Option<F> {
-        match self {
-            ParameterValue::Float(value) => Some(F::new(value)),
-            _ => None,
-        }
-    }
     /// Get the parameter value as a PInteger if it is an integer value, otherwise None.
     pub fn integer(self) -> Option<PInteger> {
         match self {
@@ -92,7 +66,6 @@ impl ParameterValue {
     /// Get the type of the parameter value
     pub fn ty(self) -> ParameterType {
         match self {
-            ParameterValue::Float(_) => ParameterType::Float,
             ParameterValue::Trigger => ParameterType::Trigger,
             ParameterValue::Integer(_) => ParameterType::Integer,
             ParameterValue::Smoothing(_, _) => ParameterType::Float,
@@ -105,20 +78,20 @@ impl ParameterValue {
 ///
 /// Used to interpolate parameter changes over time when the UGen is wrapped in a [`WrSmoothParams`]
 #[derive(Copy, Clone, Debug, Default)]
-pub enum ParameterSmoothing {
+pub enum ControlSmoothing {
     /// No smoothing
     #[default]
     None,
     /// Linear smoothing over the given number of seconds
     Linear(f32),
 }
-impl From<ParameterSmoothing> for ParameterValue {
-    fn from(val: ParameterSmoothing) -> Self {
+impl From<ControlSmoothing> for ParameterValue {
+    fn from(val: ControlSmoothing) -> Self {
         ParameterValue::Smoothing(val, Rate::BlockRate)
     }
 }
-impl From<(ParameterSmoothing, Rate)> for ParameterValue {
-    fn from(val: (ParameterSmoothing, Rate)) -> Self {
+impl From<(ControlSmoothing, Rate)> for ParameterValue {
+    fn from(val: (ControlSmoothing, Rate)) -> Self {
         ParameterValue::Smoothing(val.0, val.1)
     }
 }

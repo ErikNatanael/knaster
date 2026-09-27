@@ -134,7 +134,7 @@ fn graph_inputs_to_parameters() {
     graph
         .connect(
             Source::graph(1),
-            Sink::param(n0.node_id(), 0),
+            Sink::control(n0.node_id(), 0),
             ConnectionOptions::default(),
         )
         .unwrap();
@@ -148,7 +148,7 @@ fn graph_inputs_to_parameters() {
     graph
         .connect(
             Source::graph(2),
-            Sink::param(n1.node_id(), 0),
+            Sink::control(n1.node_id(), 0),
             ConnectionOptions::default(),
         )
         .unwrap();
@@ -202,8 +202,8 @@ fn graph_inputs_to_nodes_to_outputs() {
         .unwrap();
     let g0 = graph.push(TestInPlusParamUGen::new());
     let g1 = graph.push(TestInPlusParamUGen::new());
-    g0.param("number").value(0.75).send().unwrap();
-    g1.param("number").value(0.5).send().unwrap();
+    g0.control("number").value(0.75).send().unwrap();
+    g1.control("number").value(0.5).send().unwrap();
 
     graph
         .connect(
@@ -263,10 +263,10 @@ fn graph_inputs_to_nodes_to_outputs_graph_edit() {
             .from_inputs([0, 0])
             .unwrap()
             .to_graph_out_channels([1, 2]);
-        let g0 = graph.push(TestInPlusParamUGen::new());
-        let g1 = graph.push(TestInPlusParamUGen::new());
-        g0.param("number").set(0.75).unwrap();
-        g1.param("number").set(0.5).unwrap();
+        let mut g0 = graph.push(TestInPlusParamUGen::new());
+        let mut g1 = graph.push(TestInPlusParamUGen::new());
+        g0.control("number").set(0.75).unwrap();
+        g1.control("number").set(0.5).unwrap();
         g0.to_graph_out_channels(2);
         graph
             .from_inputs(2)
@@ -294,7 +294,7 @@ fn graph_inputs_to_nodes_to_outputs_graph_edit() {
 }
 
 #[test]
-fn multichannel_nodes() {
+fn multichannel_nodes_graph_edit() {
     let block_size = 16;
     let (mut graph, mut audio_processor, _log_receiver) =
         AudioProcessor::new::<U3, U2>(AudioProcessorOptions {
@@ -305,12 +305,12 @@ fn multichannel_nodes() {
         });
 
     let (v0_0, _v0_1, v1_0, _v1_1, m) = graph.edit(|graph| {
-        let v0_0 = graph.push(TestNumUGen::new(0.125));
-        let v0_1 = graph.push(TestNumUGen::new(1.));
-        let v1_0 = graph.push(TestNumUGen::new(0.5));
-        let v1_1 = graph.push(TestNumUGen::new(4.125));
+        let v0_0 = graph.push(TestNumUGen::new(0.125)).route();
+        let v0_1 = graph.push(TestNumUGen::new(1.)).route();
+        let v1_0 = graph.push(TestNumUGen::new(0.5)).route();
+        let v1_1 = graph.push(TestNumUGen::new(4.125)).route();
         // two channel output
-        let m = graph.push(MathUGen::<f64, U2, Add>::new());
+        let m = graph.push(MathUGen::<f64, U2, Add>::new()).route();
         (v0_0 | v0_1 | v1_0 | v1_1).to(m).to_graph_out();
         (v0_0.id(), v0_1.id(), v1_0.id(), v1_1.id(), m.id())
     });
@@ -366,9 +366,9 @@ fn feedback_nodes() {
 
     // These are connected in the most common case where a feedback edge is required
     let n0 = g.push(TestInPlusParamUGen::new());
-    n0.param(0).value(1.25).send().unwrap();
+    n0.control(0).value(1.25).send().unwrap();
     let n1 = g.push(TestInPlusParamUGen::new());
-    n1.param(0).value(0.125).send().unwrap();
+    n1.control(0).value(0.125).send().unwrap();
 
     g.connect(
         Source::node(&n0, 0),
@@ -417,10 +417,12 @@ fn feedback_nodes_graph_edit() {
 
     g.edit(|g| {
         // These are connected in the most common case where a feedback edge is required
-        let n0 = g.push(TestInPlusParamUGen::new());
-        n0.param(0).set(1.25).unwrap();
-        let n1 = g.push(TestInPlusParamUGen::new());
-        n1.param(0).set(0.125).unwrap();
+        let mut n0 = g.push(TestInPlusParamUGen::new());
+        n0.control(0).set(1.25).unwrap();
+        let mut n1 = g.push(TestInPlusParamUGen::new());
+        n1.control(0).set(0.125).unwrap();
+        let n0 = n0.route();
+        let n1 = n1.route();
 
         n0.to(n1).to_feedback(n0);
         n1.to_graph_out();
@@ -454,10 +456,10 @@ fn feedback_nodes2() {
     g.edit(|g| {
         // These could just as well be connected without feedback edge, but the delay should still be
         // applied
-        let n2 = g.push(TestInPlusParamUGen::new());
-        n2.param(0).set(1.25).unwrap();
-        let n3 = g.push(TestInPlusParamUGen::new());
-        n3.param(0).set(0.125).unwrap();
+        let mut n2 = g.push(TestInPlusParamUGen::new());
+        n2.control(0).set(1.25).unwrap();
+        let mut n3 = g.push(TestInPlusParamUGen::new());
+        n3.control(0).set(0.125).unwrap();
         n2.to_feedback(n3).to_graph_out();
     });
 
@@ -481,11 +483,11 @@ fn disconnect() {
         });
 
     let n1 = g.push(TestInPlusParamUGen::new());
-    g.set(&n1, 0, 0.5, Time::asap()).unwrap();
+    g.set_control(&n1, 0, 0.5, Time::asap()).unwrap();
     let n2 = g.push(TestInPlusParamUGen::new());
-    g.set(&n2, 0, 1.25, Time::asap()).unwrap();
+    g.set_control(&n2, 0, 1.25, Time::asap()).unwrap();
     let n3 = g.push(TestInPlusParamUGen::new());
-    g.set(&n3, 0, 0.125, Time::asap()).unwrap();
+    g.set_control(&n3, 0, 0.125, Time::asap()).unwrap();
     g.connect(
         Source::node(&n1, 0),
         Sink::node(&n2, 0),
@@ -536,11 +538,11 @@ fn disconnect_summed_nodes() {
             ..Default::default()
         });
     let n1 = g.push(TestInPlusParamUGen::new());
-    g.set(&n1, 0, 0.5, Time::asap()).unwrap();
+    g.set_control(&n1, 0, 0.5, Time::asap()).unwrap();
     let n2 = g.push(TestInPlusParamUGen::new());
-    g.set(&n2, 0, 1.25, Time::asap()).unwrap();
+    g.set_control(&n2, 0, 1.25, Time::asap()).unwrap();
     let n3 = g.push(TestInPlusParamUGen::new());
-    g.set(&n3, 0, 0.125, Time::asap()).unwrap();
+    g.set_control(&n3, 0, 0.125, Time::asap()).unwrap();
 
     g.connect(
         Source::node(&n1, 0),
@@ -589,11 +591,11 @@ fn disconnect_from_parameter() {
             ..Default::default()
         });
     let n1 = g.push(TestInPlusParamUGen::new());
-    g.set(&n1, 0, 0.5, Time::asap()).unwrap();
+    g.set_control(&n1, 0, 0.5, Time::asap()).unwrap();
     let n2 = g.push(TestInPlusParamUGen::new().ar_params());
     g.connect(
         Source::node(&n1, 0),
-        Sink::param(&n2, 0),
+        Sink::control(&n2, 0),
         ConnectionOptions::default(),
     )
     .unwrap();
@@ -612,28 +614,28 @@ fn disconnect_from_parameter() {
         .map(|_| g.push_internal(TestInPlusParamUGen::new()))
         .collect::<Vec<_>>();
     for n in nodes.iter() {
-        g.set(n, 0, 0.125, Time::asap()).unwrap();
+        g.set_control(n, 0, 0.125, Time::asap()).unwrap();
     }
     for n in nodes.iter() {
         g.connect(
             Source::node(n, 0),
-            Sink::param(&n3, 0),
+            Sink::control(&n3, 0),
             ConnectionOptions::default(),
         )
         .unwrap();
     }
 
     // Remove the parameter input to n2
-    g.disconnect(Source::node(&n1, 0), Sink::param(&n2, 0))
+    g.disconnect(Source::node(&n1, 0), Sink::control(&n2, 0))
         .unwrap();
     g.commit_changes().unwrap();
-    g.set(&n2, 0, 0.0, Time::asap()).unwrap();
+    g.set_control(&n2, 0, 0.0, Time::asap()).unwrap();
     assert_next_frame_eq_0_0(&mut audio_processor, 0.0).unwrap();
 
     // Connect n3 to n2
     g.connect(
         Source::node(&n3, 0),
-        Sink::param(&n2, 0),
+        Sink::control(&n2, 0),
         ConnectionOptions::default(),
     )
     .unwrap();
@@ -643,24 +645,24 @@ fn disconnect_from_parameter() {
 
     // Disconnect all the nodes from n3 in a roundabout order
     let n = nodes.remove(5);
-    g.disconnect(Source::node(&n, 0), Sink::param(&n3, 0))
+    g.disconnect(Source::node(&n, 0), Sink::control(&n3, 0))
         .unwrap();
     g.commit_changes().unwrap();
     assert_next_frame_eq_0_0(&mut audio_processor, 0.125 * 9.).unwrap();
 
     let n = nodes.remove(8);
-    g.disconnect(Source::node(&n, 0), Sink::param(&n3, 0))
+    g.disconnect(Source::node(&n, 0), Sink::control(&n3, 0))
         .unwrap();
     g.commit_changes().unwrap();
     assert_next_frame_eq_0_0(&mut audio_processor, 0.125 * 8.).unwrap();
 
     let n = nodes.remove(0);
-    g.disconnect(Source::node(&n, 0), Sink::param(&n3, 0))
+    g.disconnect(Source::node(&n, 0), Sink::control(&n3, 0))
         .unwrap();
     g.commit_changes().unwrap();
     assert_next_frame_eq_0_0(&mut audio_processor, 0.125 * 7.).unwrap();
     for (i, n) in nodes.into_iter().enumerate() {
-        g.disconnect(Source::node(&n, 0), Sink::param(&n3, 0))
+        g.disconnect(Source::node(&n, 0), Sink::control(&n3, 0))
             .unwrap();
         g.commit_changes().unwrap();
         if i == 6 {
@@ -689,7 +691,7 @@ fn graph_inputs_to_nodes() {
     graph
         .connect(
             Source::graph(0),
-            Sink::param(&n1, 0),
+            Sink::control(&n1, 0),
             ConnectionOptions::default(),
         )
         .unwrap();
@@ -709,7 +711,7 @@ fn graph_inputs_to_nodes() {
     assert_eq!(output.read(0, 0), 0.75);
 
     graph
-        .disconnect(Source::graph(0), Sink::param(&n1, 0))
+        .disconnect(Source::graph(0), Sink::control(&n1, 0))
         .unwrap();
     graph.commit_changes().unwrap();
 
@@ -724,7 +726,7 @@ fn graph_inputs_to_nodes() {
     graph
         .connect(
             Source::graph(0),
-            Sink::param(&n1, 0),
+            Sink::control(&n1, 0),
             ConnectionOptions::default(),
         )
         .unwrap();
@@ -739,7 +741,7 @@ fn graph_inputs_to_nodes() {
         .disconnect_outputs_from_source(Source::graph(0))
         .unwrap();
     graph.commit_changes().unwrap();
-    graph.set(&n1, 0, 0.1, Time::asap()).unwrap();
+    graph.set_control(&n1, 0, 0.1, Time::asap()).unwrap();
 
     let input_allocation = vec![0.25; 16 * 3];
     let input_pointers = [input_allocation.as_ptr()];
@@ -751,7 +753,7 @@ fn graph_inputs_to_nodes() {
     graph
         .connect(
             Source::graph(0),
-            Sink::param(&n1, 0),
+            Sink::control(&n1, 0),
             ConnectionOptions::default(),
         )
         .unwrap();
@@ -763,10 +765,10 @@ fn graph_inputs_to_nodes() {
 
     // Disconnect by disconnect_inputs_to_sink
     graph
-        .disconnect_inputs_to_sink(Sink::param(&n1, 0))
+        .disconnect_inputs_to_sink(Sink::control(&n1, 0))
         .unwrap();
     graph.commit_changes().unwrap();
-    graph.set(&n1, 0, 0.0, Time::asap()).unwrap();
+    graph.set_control(&n1, 0, 0.0, Time::asap()).unwrap();
 
     unsafe { audio_processor.run_raw_ptr_inputs(&input_pointers) };
     let output = audio_processor.output_block();
@@ -784,9 +786,9 @@ fn connection_replace_to_node_sink() {
         });
 
     let source1 = g.push(TestInPlusParamUGen::new());
-    g.set(&source1, 0, 1.0, Time::asap()).unwrap();
+    g.set_control(&source1, 0, 1.0, Time::asap()).unwrap();
     let source2 = g.push(TestInPlusParamUGen::new());
-    g.set(&source2, 0, 2.0, Time::asap()).unwrap();
+    g.set_control(&source2, 0, 2.0, Time::asap()).unwrap();
     let sink = g.push(TestInPlusParamUGen::new());
 
     // Initial connection: source1 -> sink
@@ -830,9 +832,9 @@ fn connection_replace_to_graph_sink() {
         });
 
     let source1 = g.push(TestInPlusParamUGen::new());
-    g.set(&source1, 0, 1.5, Time::asap()).unwrap();
+    g.set_control(&source1, 0, 1.5, Time::asap()).unwrap();
     let source2 = g.push(TestInPlusParamUGen::new());
-    g.set(&source2, 0, 3.5, Time::asap()).unwrap();
+    g.set_control(&source2, 0, 3.5, Time::asap()).unwrap();
 
     // Initial connection: source1 -> graph output 0
     g.connect(
@@ -869,15 +871,15 @@ fn connection_replace_to_param_sink() {
         });
 
     let source1 = g.push(TestInPlusParamUGen::new());
-    g.set(&source1, 0, 0.25, Time::asap()).unwrap();
+    g.set_control(&source1, 0, 0.25, Time::asap()).unwrap();
     let source2 = g.push(TestInPlusParamUGen::new());
-    g.set(&source2, 0, 0.75, Time::asap()).unwrap();
+    g.set_control(&source2, 0, 0.75, Time::asap()).unwrap();
     let param_target = g.push(TestInPlusParamUGen::new().ar_params());
 
     // Initial connection: source1 -> param_target's parameter 0
     g.connect(
         Source::node(&source1, 0),
-        Sink::param(&param_target, 0),
+        Sink::control(&param_target, 0),
         ConnectionOptions::default(),
     )
     .unwrap();
@@ -894,7 +896,7 @@ fn connection_replace_to_param_sink() {
     // Replace connection with source2 -> param_target's parameter 0
     g.connect(
         Source::node(&source2, 0),
-        Sink::param(&param_target, 0),
+        Sink::control(&param_target, 0),
         ConnectionOptions::default().replace(),
     )
     .unwrap();

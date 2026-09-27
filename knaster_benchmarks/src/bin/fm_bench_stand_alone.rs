@@ -20,7 +20,7 @@ pub fn main() {
         let mut last: Option<DH<_, _>> = None;
         for i in 0..256 {
             let c = g.push(Constant::new(0.05));
-            let s = g.push(SinWt::new(220. + i as f32));
+            let s = g.push(SinWt::new(220. + i as f32)).route();
             if let Some(l) = last.take() {
                 let add: DH<_, _> = l.clone() * 440.0;
                 let mul: DH<_, _> = s.dynamic() * l;

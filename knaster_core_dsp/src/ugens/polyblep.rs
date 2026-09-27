@@ -159,13 +159,13 @@ impl<F: Float> PolyBlep<F> {
     }
 
     /// Set the frequency in Hz
-    #[param(kind = Frequency)]
-    pub fn freq(&mut self, freq_in_hz: PFloat) {
+    #[control(default = 220.0, purpose = Frequency)]
+    pub fn freq(&mut self, freq_in_hz: F) {
         self.set_freq(F::new(freq_in_hz));
     }
     /// Set the pulse width (ignored for waveforms that don't use it)
-    #[param]
-    pub fn pulse_width(&mut self, pulse_width: PFloat) {
+    #[control(default = 0.0)]
+    pub fn pulse_width(&mut self, pulse_width: F) {
         self.pulse_width = F::new(pulse_width);
     }
     /// Set the waveform

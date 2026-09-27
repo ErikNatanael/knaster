@@ -3,6 +3,10 @@
 //! This example shows how to use the [`BufferReader`] UGen to play a stereo buffer.
 //!
 //! If you want to load your own sound file, uncomment line 39 and comment out line 41.
+//!
+//! Required features:
+//! - sound_files
+//! - std
 use std::f64::consts::{PI, TAU};
 use std::sync::Arc;
 use std::time::Duration;
@@ -41,9 +45,12 @@ fn main() -> Result<()> {
     // let buffer = generate_stereo_buffer(sr);
     let g = &mut top_level_graph;
     let (mut t_restart, mut loop_param, mut start_secs, mut end_secs) = g.edit(|g| {
-        let play = g.push(BufferReader::<_, U2>::new(Arc::new(buffer), 1.0, false));
+        let mut play = g.push(BufferReader::<_, U2>::new(Arc::new(buffer), 1.0, false));
         let amp = g.push(Constant::new(0.5));
-        (play * amp.out([0, 0])).to_graph_out();
+        {
+            let play = play.route();
+            (play * amp.out([0, 0])).to_graph_out();
+        }
         // g.connect(&amp, [0, 0], [2, 3], &mult)?;
         // g.connect(&play, [0, 1], [0, 1], &mult)?;
         // g.connect(&mult, [0, 1], [0, 1], g.internal())?;

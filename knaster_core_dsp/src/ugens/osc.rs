@@ -40,14 +40,14 @@ mod wavetable_vec {
     impl<F: Float> OscWt<F> {
         /// Set the frequency of the oscillation. This will be overwritten by the
         /// input frequency if used as a UGen.
-        #[param]
-        pub fn freq(&mut self, freq: PFloat) {
-            self.freq = F::new(freq);
+        #[control(default = 220.0, purpose = Frequency)]
+        pub fn freq(&mut self, freq: F) {
+            self.freq = freq;
             self.step = (self.freq.to_f64() * self.freq_to_phase_inc) as u32;
         }
         /// Set the phase offset in a range 0-1
-        #[param]
-        pub fn phase_offset(&mut self, offset: PFloat) {
+        #[control(default = 0.0, purpose = Phase)]
+        pub fn phase_offset(&mut self, offset: F) {
             self.phase_offset = WavetablePhase((offset.to_f64() * FRACTIONAL_PART as f64) as u32);
         }
         /// Reset the phase of the oscillator.
@@ -123,14 +123,14 @@ mod wavetable_vec {
         }
         /// Set the frequency of the oscillation. This will be overwritten by the
         /// input frequency if used as a UGen.
-        #[param]
-        pub fn freq(&mut self, freq: PFloat) {
-            self.freq = F::new(freq);
+        #[control(default = 220.0, purpose = Frequency)]
+        pub fn freq(&mut self, freq: F) {
+            self.freq = freq;
             self.phase_increment = (self.freq.to_f64() * self.freq_to_phase_inc) as u32;
         }
         /// Set the phase offset in a range 0-1
-        #[param]
-        pub fn phase_offset(&mut self, offset: PFloat) {
+        #[control(default = 0.0, purpose = Phase)]
+        pub fn phase_offset(&mut self, offset: F) {
             self.phase_offset = WavetablePhase((offset.to_f64() * FRACTIONAL_PART as f64) as u32);
         }
         /// Reset the phase of the oscillator.
@@ -143,7 +143,7 @@ mod wavetable_vec {
             self.reset_phase();
             self.freq_to_phase_inc =
                 TABLE_SIZE as f64 * FRACTIONAL_PART as f64 * (1.0 / sample_rate as f64);
-            self.freq(self.freq.to_f64()); // init any frequency set before init was called
+            self.freq(self.freq); // init any frequency set before init was called
         }
         /// Generate the next sample given the current settings.
         #[inline(always)]
@@ -188,18 +188,18 @@ impl<F: Float> Phasor<F> {
         }
     }
     /// Set the frequency
-    #[param]
-    pub fn freq(&mut self, freq: f64) {
+    #[control(default = 1.0, purpose = Frequency)]
+    pub fn freq(&mut self, freq: F) {
         if self.freq_to_phase_step_mult == 0.0 {
-            self.step = freq;
+            self.step = freq.to_f64();
         } else {
-            self.step = freq * self.freq_to_phase_step_mult;
+            self.step = freq.to_f64() * self.freq_to_phase_step_mult;
         }
     }
     /// Initialize the coefficient to convert from frequency to phase step
     pub fn init(&mut self, sample_rate: u32, _block_size: usize) {
         self.freq_to_phase_step_mult = 1.0_f64 / (sample_rate as f64);
-        self.freq(self.step);
+        self.freq(F::new(self.step));
     }
     #[allow(missing_docs)]
     pub fn process(&mut self) -> [F; 1] {
@@ -236,13 +236,13 @@ impl<F: Float> SinNumeric<F> {
         }
     }
     #[allow(missing_docs)]
-    #[param]
-    pub fn freq(&mut self, freq: PFloat, ctx: &AudioCtx) {
-        self.phase_increment = F::new(freq) / F::new(ctx.sample_rate() as f32);
+    #[control(default = 220.0, purpose = Frequency)]
+    pub fn freq(&mut self, freq: F, ctx: &AudioCtx) {
+        self.phase_increment = freq / F::new(ctx.sample_rate() as f32);
     }
     #[allow(missing_docs)]
-    #[param]
-    pub fn phase_offset(&mut self, phase_offset: PFloat) {
+    #[control(default = 0.0, purpose = Phase)]
+    pub fn phase_offset(&mut self, phase_offset: F) {
         self.phase_offset = F::new(phase_offset);
     }
     #[allow(missing_docs)]

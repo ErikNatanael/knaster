@@ -57,26 +57,27 @@ fn main() -> Result<()> {
             let freq = rng.random_range(200.0..800.);
             dbg!(freq);
             let mut osc1 = WrSmoothParams::new(SinNumeric::new(freq));
-            osc1.param(ctx, "freq", freq)?;
-            let osc1 = graph.push(osc1.wr_mul(0.2));
-            osc1.param("freq").set(freq)?;
+            osc1.control_named(ctx, "freq", freq)?;
+            let mut osc1 = graph.push(osc1.wr_mul(0.2));
+            osc1.control("freq").set(freq)?;
             let mut osc2 = SinNumeric::new(freq * 1.5);
-            osc2.param(ctx, "freq", freq * 1.5)?;
-            let osc2 = graph.push(osc2.wr_mul(0.2));
-            let osc3 = graph.push(SinNumeric::new(freq * 4.).wr_mul(0.2));
-            osc3.param("freq").set(freq * 4.)?;
-            let env = graph.push_with_done_action(EnvAsr::new(0.2, 0.2), Done::FreeParent);
-            env.param("attack_time").set(0.2)?;
-            env.param("release_time").set(0.2)?;
+            osc2.control_named(ctx, "freq", freq * 1.5)?;
+            let mut osc2 = graph.push(osc2.wr_mul(0.2));
+            let mut osc3 = graph.push(SinNumeric::new(freq * 4.).wr_mul(0.2));
+            osc3.control("freq").set(freq * 4.)?;
+            let mut env = graph.push_with_done_action(EnvAsr::new(0.2, 0.2), Done::FreeParent);
+            env.control("attack_time").set(0.2)?;
+            env.control("release_time").set(0.2)?;
             env.param("t_restart").set(knaster_graph::PTrigger)?;
             env.param("t_release")
                 .trig_after(Seconds::from_secs_f64(0.5))?;
-            let modulator = graph.push(SinNumeric::new(0.5).wr_powi(2).wr_mul(5000.).wr_add(freq));
-            modulator.param("freq").set(0.5)?;
-            let random_lin_modulator =
+            let mut modulator =
+                graph.push(SinNumeric::new(0.5).wr_powi(2).wr_mul(5000.).wr_add(freq));
+            modulator.control("freq").set(0.5)?;
+            let mut random_lin_modulator =
                 graph.push(RandomLin::new(4.0).wr_powi(2).wr_mul(5000.).wr_add(100.));
-            random_lin_modulator.param("freq").set(4.0)?;
-            let lpf = graph.push(OnePoleHpf::new().ar_params());
+            random_lin_modulator.control("freq").set(4.0)?;
+            let mut lpf = graph.push(OnePoleHpf::new().ar_params());
             // graph.connect_node_to_parameter(&modulator, &lpf, 0, "cutoff_freq", false)?;
             lpf.link("cutoff_freq", random_lin_modulator);
             // graph.connect_to_parameter(&random_lin_modulator, 0, "cutoff_freq", &lpf)?;

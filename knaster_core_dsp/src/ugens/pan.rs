@@ -23,9 +23,9 @@ impl<F: Float> Pan2<F> {
         }
     }
     /// Set the pan value in the range (-1.0, 1.0)
-    #[param]
-    pub fn pan(&mut self, pan: f32) {
-        self.pan = pan * 0.5 + 0.5;
+    #[control(default = 0.0, purpose = Pan)]
+    pub fn pan(&mut self, pan: F) {
+        self.pan = pan.to_f32() * 0.5 + 0.5;
     }
     #[allow(missing_docs)]
     pub fn process(&mut self, input: [F; 1]) -> [F; 2] {

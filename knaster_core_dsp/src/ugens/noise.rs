@@ -4,8 +4,10 @@
 
 use crate::core::marker::PhantomData;
 use crate::core::sync::atomic::AtomicU64;
+use knaster_core::AudioCtx;
 use knaster_core::Float;
-use knaster_core::{AudioCtx, PFloat, UGenFlags, impl_ugen};
+use knaster_core::UGenFlags;
+use knaster_core::impl_ugen;
 
 /// Used to seed random number generating Gens to create a deterministic result as long as all Gens are created in the same order from start.
 static NEXT_SEED: AtomicU64 = AtomicU64::new(0);
@@ -205,8 +207,8 @@ impl<F: Float> RandomLin<F> {
         [out]
     }
     /// Set the frequency of producing new random numbers
-    #[param]
-    pub fn freq(&mut self, value: PFloat) {
+    #[control(default = 2.0)]
+    pub fn freq(&mut self, value: F) {
         if self.freq_to_phase_inc == F::ZERO {
             // freq is stored in phase_step until init
             self.phase_step = F::new(value);

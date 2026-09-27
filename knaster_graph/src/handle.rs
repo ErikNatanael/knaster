@@ -7,10 +7,11 @@ use crate::{
     LiveChangeSender, SchedulingEvent, SchedulingToken, SharedFrameClock, Time,
     core::marker::PhantomData,
     graph::{GraphError, NodeId, NodeOrGraph},
+    node::NodeControlMetadata,
 };
 use knaster_core::{
-    PFloat, Param, ParameterError, ParameterHint, ParameterSmoothing, ParameterValue, Seconds,
-    UGen, typenum::Unsigned,
+    ControlSmoothing, PFloat, Param, ParameterError, ParameterHint, ParameterValue, Seconds, UGen,
+    controls::ControlMetadata, numeric_array::NumericArray, typenum::Unsigned,
 };
 /// no_std_compat prelude import, supporting both std and no_std
 use std::prelude::v1::*;
@@ -92,6 +93,7 @@ pub struct AnyHandle {
     pub(crate) raw_handle: RawHandle,
     pub(crate) parameters: Vec<&'static str>,
     pub(crate) parameter_hints: Vec<ParameterHint>,
+    pub(crate) control_metadata: Vec<NodeControlMetadata>,
     pub(crate) inputs: u16,
     pub(crate) outputs: u16,
 }
@@ -138,24 +140,30 @@ impl LiveChangeSender for RawHandle {
 /// Handle with type data intact, without owning a T. Enables interacting with a
 /// live node in a Graph, e.g. freeing and parameter changes. Allows local error
 /// checking.
-pub struct Handle<T> {
+pub struct Handle<T: UGen> {
     _phantom: PhantomData<fn(&mut T) -> ()>,
     pub(crate) raw_handle: RawHandle,
+    pub(crate) control_metadata: NumericArray<ControlMetadata<T::Sample>, T::Controls>,
 }
-impl<T> Clone for Handle<T> {
+impl<T: UGen> Clone for Handle<T> {
     fn clone(&self) -> Self {
         Self {
             _phantom: self._phantom,
             raw_handle: self.raw_handle.clone(),
+            control_metadata: self.control_metadata.clone(),
         }
     }
 }
 
 impl<T: UGen> Handle<T> {
-    pub(crate) fn new(untyped_handle: RawHandle) -> Self {
+    pub(crate) fn new(
+        untyped_handle: RawHandle,
+        control_metadata: NumericArray<ControlMetadata<T::Sample>, T::Controls>,
+    ) -> Self {
         Self {
             _phantom: PhantomData,
             raw_handle: untyped_handle,
+            control_metadata,
         }
     }
     /// Convert this handle into an [`AnyHandle`].
@@ -166,6 +174,7 @@ impl<T: UGen> Handle<T> {
             parameter_hints: T::param_hints().into_iter().collect(),
             inputs: T::Inputs::U16,
             outputs: T::Outputs::U16,
+            control_metadata: self.control_metadata.into_iter().map(Into::into).collect(),
         }
     }
     /// Get the number of inputs of this node.
@@ -175,6 +184,23 @@ impl<T: UGen> Handle<T> {
     /// Get the number of outputs of this node.
     pub fn outputs(&self) -> usize {
         T::Outputs::USIZE
+    }
+    pub fn control_index(&self, param: impl Into<Param>) -> Result<usize, ParameterError> {
+        let param = param.into();
+        match param {
+            Param::Index(param_i) => Ok(param_i),
+            Param::Desc(desc) => {
+                if let Some(index) = self
+                    .control_metadata
+                    .iter()
+                    .position(|d| d.name_str() == desc)
+                {
+                    Ok(index)
+                } else {
+                    Err(ParameterError::DescriptionNotFound(desc))
+                }
+            }
+        }
     }
 }
 // impl<T> From<&Handle<T>> for NodeId {
@@ -219,6 +245,17 @@ pub trait HandleTrait: Sized {
             }
         }
     }
+    /// Create a control change.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a control description is given that doesn't exist on this node.
+    fn control(&self, control: impl Into<Param>) -> ControlChange2 {
+        self.try_control(control).unwrap()
+    }
+    /// Create a parameter change. Returns an error if a parameter descriptioni is given that
+    /// doesn't match any parameter on this node.
+    fn try_control(&self, control: impl Into<Param>) -> Result<ControlChange2, ParameterError>;
     /// Get the [`NodeId`] of this node.
     fn node_id(&self) -> NodeId;
     /// Get the number of inputs of this node.
@@ -312,6 +349,14 @@ impl<T: UGen> HandleTrait for Handle<T> {
             self.parameter_index(param)?,
         ))
     }
+
+    fn try_control(&self, control: impl Into<Param>) -> Result<ControlChange2, ParameterError> {
+        Ok(ControlChange2::new(
+            self,
+            self.node_id(),
+            self.control_index(control)?,
+        ))
+    }
 }
 impl HandleTrait for AnyHandle {
     // fn set<C: Into<ParameterChange>>(&self, change: C) -> Result<(), GraphError> {
@@ -342,6 +387,14 @@ impl HandleTrait for AnyHandle {
     //     self.raw_handle.send(event)
     // }
 
+    fn try_param(&self, param: impl Into<Param>) -> Result<ParameterChange2, ParameterError> {
+        Ok(ParameterChange2::new(
+            self,
+            self.node_id(),
+            self.parameter_index(param)?,
+        ))
+    }
+
     fn node_id(&self) -> NodeId {
         self.raw_handle.node_id()
     }
@@ -354,14 +407,6 @@ impl HandleTrait for AnyHandle {
         self.outputs
     }
 
-    fn current_frame_time(&self) -> Seconds {
-        self.raw_handle.current_frame_time()
-    }
-
-    fn can_send(&self) -> bool {
-        self.raw_handle.is_alive()
-    }
-
     fn parameters(&self) -> Vec<&'static str> {
         self.parameters.clone()
     }
@@ -370,12 +415,16 @@ impl HandleTrait for AnyHandle {
         self.parameter_hints.clone()
     }
 
-    fn try_param(&self, param: impl Into<Param>) -> Result<ParameterChange2, ParameterError> {
-        Ok(ParameterChange2::new(
-            self,
-            self.node_id(),
-            self.parameter_index(param)?,
-        ))
+    fn current_frame_time(&self) -> Seconds {
+        self.raw_handle.current_frame_time()
+    }
+
+    fn can_send(&self) -> bool {
+        self.raw_handle.is_alive()
+    }
+
+    fn try_control(&self, control: impl Into<Param>) -> Result<ControlChange2, ParameterError> {
+        todo!()
     }
 }
 impl LiveChangeSender for AnyHandle {
@@ -469,7 +518,7 @@ pub struct ControlChange2<'a> {
     node_id: NodeId,
     param: usize,
     value: Option<PFloat>,
-    smoothing: Option<ParameterSmoothing>,
+    smoothing: Option<ControlSmoothing>,
     token: Option<SchedulingToken>,
     time: Option<Time>,
     was_sent: bool,
@@ -493,7 +542,7 @@ impl<'a> ControlChange2<'a> {
         self
     }
     /// Set the smoothing setting for the parameter.
-    pub fn smooth(mut self, v: impl Into<ParameterSmoothing>) -> Self {
+    pub fn smooth(mut self, v: impl Into<ControlSmoothing>) -> Self {
         self.smoothing = Some(v.into());
         self
     }
@@ -515,17 +564,29 @@ impl<'a> ControlChange2<'a> {
     }
     fn send_inner(&mut self) -> Result<(), GraphError> {
         self.was_sent = true;
-
-        self.sender.schedule_change(SchedulingEvent {
-            node_key: self.node_id.key(),
-            token: self.token.take(),
-            time: self.time.take(),
-            kind: crate::SchedulingEventKind::Control {
-                index: self.param,
-                value: self.value,
-                smoothing: self.smoothing,
-            },
-        })
+        if let Some(smoothing) = self.smoothing {
+            self.sender.schedule_change(SchedulingEvent {
+                node_key: self.node_id.key(),
+                token: self.token.clone(),
+                time: self.time.clone(),
+                kind: crate::SchedulingEventKind::ControlSmoothing {
+                    index: self.param,
+                    smoothing,
+                },
+            })?;
+        }
+        if let Some(value) = self.value {
+            self.sender.schedule_change(SchedulingEvent {
+                node_key: self.node_id.key(),
+                token: self.token.take(),
+                time: self.time.take(),
+                kind: crate::SchedulingEventKind::Control {
+                    index: self.param,
+                    value: value,
+                },
+            })?;
+        }
+        Ok(())
     }
     /// Send the parameter change.
     pub fn send(mut self) -> Result<(), GraphError> {

@@ -38,7 +38,7 @@ impl<F: Float> UGen for TestInPlusParamUGen<F> {
     type Sample = F;
     type Inputs = U1;
     type Outputs = U1;
-    type Parameters = U0;
+    type Parameters = U1;
     type Controls = U1;
 
     fn process(
@@ -52,21 +52,24 @@ impl<F: Float> UGen for TestInPlusParamUGen<F> {
 
     fn param_descriptions()
     -> knaster_core::numeric_array::NumericArray<&'static str, Self::Parameters> {
-        [].into()
+        ["t_reset"].into()
     }
 
     fn param_hints()
     -> knaster_core::numeric_array::NumericArray<knaster_core::ParameterHint, Self::Parameters>
     {
-        [].into()
+        [ParameterHint::Trigger].into()
     }
 
     fn param_apply(
         &mut self,
         _ctx: &mut AudioCtx,
-        _index: usize,
+        index: usize,
         _value: knaster_core::ParameterValue,
     ) {
+        if index == 0 {
+            self.number = F::ZERO;
+        }
     }
 
     fn control_metadata(

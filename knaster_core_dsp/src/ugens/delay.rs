@@ -30,9 +30,9 @@ impl<F: Float> SampleDelay<F> {
         }
     }
     /// Set delay time in seconds
-    #[param]
-    pub fn delay_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
-        self.delay_samples = (seconds * ctx.sample_rate() as PFloat) as usize;
+    #[control(purpose = Seconds, default = 0.1)]
+    pub fn delay_time(&mut self, ctx: &mut AudioCtx, seconds: F) {
+        self.delay_samples = (seconds * F::new(ctx.sample_rate() as f64)).to_f64() as usize;
     }
     fn process(&mut self, _ctx: &mut AudioCtx, _flags: &mut UGenFlags, input: [F; 1]) -> [F; 1] {
         self.buffer[self.write_position] = input[0];
@@ -133,9 +133,9 @@ impl<F: Float> AllpassDelay<F> {
         [out]
     }
     /// Set delay time in seconds
-    #[param]
-    pub fn delay_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
-        let delay_frames = seconds * ctx.sample_rate() as PFloat;
+    #[control(default = 0.1)]
+    pub fn delay_time(&mut self, ctx: &mut AudioCtx, seconds: F) {
+        let delay_frames = seconds.to_f64() * ctx.sample_rate() as f64;
         if (delay_frames as usize) < self.buffer.len() {
             self.set_delay_in_frames(F::new(delay_frames));
         }
@@ -228,15 +228,15 @@ impl<F: Float> AllpassFeedbackDelay<F> {
         }
     }
     /// Set delay time in seconds
-    #[param]
-    pub fn delay_time(&mut self, ctx: &mut AudioCtx, seconds: PFloat) {
-        self.set_delay_in_frames(F::new(seconds * ctx.sample_rate() as f64));
+    #[control(default = 0.1)]
+    pub fn delay_time(&mut self, ctx: &mut AudioCtx, seconds: F) {
+        self.set_delay_in_frames(seconds * F::new(ctx.sample_rate() as f64));
         self.previous_delay_time = F::new(seconds);
     }
     /// Set delay feedback
-    #[param]
-    pub fn feedback(&mut self, feedback: PFloat) {
-        self.feedback = F::new(feedback);
+    #[control(default = 0.0)]
+    pub fn feedback(&mut self, feedback: F) {
+        self.feedback = feedback;
     }
     fn init(&mut self, sample_rate: u32, _block_size: usize) {
         self.allpass_delay.init(sample_rate, _block_size);

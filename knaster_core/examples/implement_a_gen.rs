@@ -18,7 +18,8 @@ fn main() -> Result<()> {
     // set the frequency directly:
     osc.freq(200., ctx.sample_rate() as f32);
     // We can also use the Parameterable trait interface
-    osc.param(&mut ctx, "freq", 200.)?;
+    osc.control(&mut ctx, 0, 200.);
+    osc.control_named(&mut ctx, "freq", 200.);
 
     // # Generating audio
     // We can generate frames one by one:
