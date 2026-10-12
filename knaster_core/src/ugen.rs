@@ -328,7 +328,9 @@ pub trait UGen {
         index: usize,
         buffer: *const Self::Sample,
     ) {
-        rt_log!(ctx.logger(); "Warning: Audio rate parameter buffer set, but did not reach a WrArParams and will have no effect.");
+        if !buffer.is_null() {
+            rt_log!(ctx.logger(); "Warning: Audio rate parameter buffer set, but did not reach a WrArParams and will have no effect.");
+        }
     }
     /// Sets a delay to what frame within the next block the next parameter
     /// change should take effect.
