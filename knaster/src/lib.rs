@@ -11,6 +11,7 @@ mod core {
 pub mod math_ugens;
 pub mod prelude;
 pub mod preludef32;
+pub mod preludef64;
 pub(crate) mod subprelude_fundamental_types;
 use core::boxed::Box;
 
