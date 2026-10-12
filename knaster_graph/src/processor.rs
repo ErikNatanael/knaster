@@ -4,10 +4,10 @@
 //! in an [`AudioBackend`], placed in a different audio callback to produce blocks of audio, or manually called in a non-realtime
 //! context for non-realtime processing.
 
-use knaster_core::Seconds;
 use knaster_core::log::ArLogReceiver;
 use knaster_core::typenum::U1;
 use knaster_core::{AudioCtx, Float, Size, UGenFlags, typenum::NonZero};
+use knaster_core::{Block, Seconds};
 
 use crate::SharedFrameClock;
 use crate::dynugen::DynUGen;
